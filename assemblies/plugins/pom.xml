@@ -200,12 +200,6 @@
         </dependency>
         <dependency>
             <groupId>org.apache.hop</groupId>
-            <artifactId>hop-action-msgboxinfo</artifactId>
-            <version>${project.version}</version>
-            <type>zip</type>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hop</groupId>
             <artifactId>hop-action-mssqlbulkload</artifactId>
             <version>${project.version}</version>
             <type>zip</type>
@@ -771,6 +765,12 @@
         </dependency>
         <dependency>
             <groupId>org.apache.hop</groupId>
+            <artifactId>hop-tech-minio</artifactId>
+            <version>${project.version}</version>
+            <type>zip</type>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hop</groupId>
             <artifactId>hop-tech-neo4j</artifactId>
             <version>${project.version}</version>
             <type>zip</type>
@@ -802,6 +802,12 @@
         <dependency>
             <groupId>org.apache.hop</groupId>
             <artifactId>hop-transform-addsequence</artifactId>
+            <version>${project.version}</version>
+            <type>zip</type>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hop</groupId>
+            <artifactId>hop-transform-addsnowflakeid</artifactId>
             <version>${project.version}</version>
             <type>zip</type>
         </dependency>
@@ -1678,6 +1684,12 @@
         <dependency>
             <groupId>org.apache.hop</groupId>
             <artifactId>hop-transform-zipfile</artifactId>
+            <version>${project.version}</version>
+            <type>zip</type>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hop</groupId>
+            <artifactId>hop-valuetypes-uuid</artifactId>
             <version>${project.version}</version>
             <type>zip</type>
         </dependency>

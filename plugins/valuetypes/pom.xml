@@ -28,5 +28,7 @@
     <artifactId>hop-plugins-valuetypes</artifactId>
     <packaging>pom</packaging>
     <name>Hop Plugins Value Types</name>
-
+    <modules>
+        <module>uuid</module>
+    </modules>
 </project>

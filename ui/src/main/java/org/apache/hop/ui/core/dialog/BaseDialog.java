@@ -415,7 +415,7 @@ public abstract class BaseDialog extends Dialog {
 
     String filename = null;
     if (!doIt.get() || dialog.open() != null) {
-      filename = FilenameUtils.concat(dialog.getFilterPath(), dialog.getFileName());
+      filename = buildFilename(dialog.getFilterPath(), dialog.getFileName());
       try {
         HopGuiFileOpenedExtension openedExtension =
             new HopGuiFileOpenedExtension(dialog, variables, filename);
@@ -436,6 +436,25 @@ public abstract class BaseDialog extends Dialog {
       }
     }
     return filename;
+  }
+
+  private static String buildFilename(String filterPath, String fileName) {
+    if (StringUtils.isEmpty(filterPath)) {
+      return fileName;
+    }
+    // Is this reading from a VFS URL?
+    //
+    if (filterPath.contains("://") || filterPath.contains(":///")) {
+      // Strip filterPath from fileName (these are equal when selecting a folder)
+      fileName = fileName.replace(filterPath, "");
+      if (filterPath.endsWith("/")) {
+        return filterPath + fileName;
+      } else {
+        return filterPath + "/" + fileName;
+      }
+    } else {
+      return FilenameUtils.concat(filterPath, fileName);
+    }
   }
 
   public static String presentDirectoryDialog(Shell shell) {
@@ -658,9 +677,9 @@ public abstract class BaseDialog extends Dialog {
     //
     addDefaultListeners(shell, okConsumer);
 
-    // Set default icons on tab items to make them more manageable.
+    // Add spaces on tab items to make them more manageable
     //
-    setDefaultIconsOnTabs(shell);
+    addSpacesOnTabs(shell);
 
     // Set the size as well...
     //
@@ -680,18 +699,18 @@ public abstract class BaseDialog extends Dialog {
     }
   }
 
-  public static void setDefaultIconsOnTabs(Composite composite) {
+  public static void addSpacesOnTabs(Composite composite) {
     if (composite == null || composite.isDisposed()) {
       return;
     }
 
     for (Control control : composite.getChildren()) {
-      // Some of these are composites so check first
+      // Some of these are composites, so check first
       //
       if (control instanceof CTabFolder cTabFolder) {
         for (CTabItem item : cTabFolder.getItems()) {
-          if (item.getImage() == null) {
-            item.setImage(GuiResource.getInstance().getImageHop());
+          if (item.getText() != null) {
+            item.setText("  " + item.getText() + "  ");
           }
         }
       }
