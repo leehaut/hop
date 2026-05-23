@@ -18,43 +18,160 @@
 package org.apache.hop.ui.hopgui;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.apache.hop.core.Const;
 import org.apache.hop.core.extension.ExtensionPointHandler;
 import org.apache.hop.core.extension.HopExtensionPoint;
+import org.apache.hop.core.gui.plugin.GuiRegistry;
+import org.apache.hop.core.gui.plugin.key.KeyboardShortcut;
+import org.apache.hop.core.logging.LogChannel;
+import org.apache.hop.history.AuditManager;
+import org.apache.hop.history.AuditState;
 import org.apache.hop.ui.core.PropsUi;
 import org.eclipse.rap.rwt.RWT;
 import org.eclipse.rap.rwt.application.AbstractEntryPoint;
+import org.eclipse.rap.rwt.client.service.JavaScriptExecutor;
+import org.eclipse.rap.rwt.client.service.JavaScriptLoader;
 import org.eclipse.rap.rwt.client.service.StartupParameters;
+import org.eclipse.rap.rwt.service.ResourceManager;
+import org.eclipse.rap.rwt.service.UISessionEvent;
+import org.eclipse.rap.rwt.service.UISessionListener;
 import org.eclipse.rap.rwt.widgets.WidgetUtil;
+import org.eclipse.swt.SWT;
+import org.eclipse.swt.SWTException;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Display;
 
 public class HopWebEntryPoint extends AbstractEntryPoint {
 
+  /** Audit group/type/name for Hop Web theme preference (per-user in audit folder). */
+  public static final String AUDIT_GROUP_HOP_WEB = "hop-web";
+
+  public static final String AUDIT_TYPE_PREFERENCES = "preferences";
+  public static final String AUDIT_NAME_THEME = "theme";
+  public static final String AUDIT_KEY_DARK_MODE = "darkMode";
+  public static final String AUDIT_KEY_FOLLOW_SYSTEM = "followSystem";
+
   @Override
   protected void createContents(Composite parent) {
+    // So drill-down and other GUI checks can use Const.getHopPlatformRuntime() from any thread
+    System.setProperty(Const.HOP_PLATFORM_RUNTIME, "GUI");
+
+    String path = null;
+    try {
+      if (RWT.getRequest() != null) {
+        path = RWT.getRequest().getRequestURI();
+      }
+    } catch (Exception ignored) {
+      // ignore
+    }
+    boolean onDarkPath = path != null && path.contains("/ui-dark");
+
+    // Redirect to /ui or /ui-dark if user's saved theme preference (in audit) doesn't match current
+    // path. When followSystem is true, we don't redirect by darkMode; we run system check below.
+    AuditState themeState = null;
+    try {
+      themeState =
+          AuditManager.retrieveState(
+              LogChannel.UI, AUDIT_GROUP_HOP_WEB, AUDIT_TYPE_PREFERENCES, AUDIT_NAME_THEME);
+      if (themeState != null && !themeState.extractBoolean(AUDIT_KEY_FOLLOW_SYSTEM, true)) {
+        boolean preferDark = themeState.extractBoolean(AUDIT_KEY_DARK_MODE, false);
+        if (preferDark && !onDarkPath) {
+          parent.getDisplay().asyncExec(() -> redirectToTheme(true));
+          return;
+        }
+        if (!preferDark && onDarkPath) {
+          parent.getDisplay().asyncExec(() -> redirectToTheme(false));
+          return;
+        }
+      }
+    } catch (Exception e) {
+      LogChannel.UI.logDebug("Could not read Hop Web theme preference from audit", e);
+    }
+
+    // When no saved preference or user chose "Follow system", use system light/dark
+    // (prefers-color-scheme)
+    if (themeState == null || themeState.extractBoolean(AUDIT_KEY_FOLLOW_SYSTEM, true)) {
+      parent.getDisplay().asyncExec(() -> runSystemThemeRedirectCheck(onDarkPath));
+    }
+
+    // Sync PropsUi dark mode with the theme for this entry point (/ui = light, /ui-dark = dark)
+    try {
+      PropsUi.getInstance().setDarkMode(onDarkPath);
+    } catch (Exception e) {
+      PropsUi.getInstance().setDarkMode(false);
+    }
+
+    // Detect client OS from User-Agent so Const.isOSX() reflects the user's machine
+    RapClientOsProvider.detectAndStoreClientMac();
+    Const.setClientOsProvider(new RapClientOsProvider());
+
+    ResourceManager resourceManager = RWT.getResourceManager();
+    JavaScriptLoader jsLoader = RWT.getClient().getService(JavaScriptLoader.class);
+
+    // Load canvas zoom handler and Monaco editor client script
+    String jsLocation = resourceManager.getLocation("js/canvas-zoom.js");
+    jsLoader.require(jsLocation);
+    jsLoader.require(resourceManager.getLocation("js/monaco-editor.js"));
+    // Map Mac Command key to Ctrl so RAP ACTIVE_KEYS (CTRL+S etc.) match when user presses Cmd+S
+    String macKeysLocation = resourceManager.getLocation("js/mac-command-keys.js");
+    jsLoader.require(macKeysLocation);
+
+    // Configure keyboard shortcuts for RAP dynamically from annotations
+    // ACTIVE_KEYS tells RAP to send these key combinations to the server
+    // CANCEL_KEYS prevents the browser from handling these shortcuts
+    // Note: CTRL automatically maps to Command key on Mac
+    Display display = parent.getDisplay();
+    String[] allShortcuts = buildKeyboardShortcuts();
+    display.setData(RWT.ACTIVE_KEYS, allShortcuts);
+    display.setData(RWT.CANCEL_KEYS, allShortcuts);
+
     // Transferring Widget Data for client-side canvas drawing instructions
     WidgetUtil.registerDataKeys("props");
     WidgetUtil.registerDataKeys("mode");
     WidgetUtil.registerDataKeys("nodes");
     WidgetUtil.registerDataKeys("hops");
     WidgetUtil.registerDataKeys("notes");
-    // WidgetUtil.registerDataKeys("svg");
+    WidgetUtil.registerDataKeys("startHopNode");
+    WidgetUtil.registerDataKeys("resizeDirection");
 
     //  The following options are session specific.
     //
     StartupParameters serviceParams = RWT.getClient().getService(StartupParameters.class);
     List<String> args = new ArrayList<>();
-    String[] options = {"user", "pass", "file"};
+    String[] options = {"user", "pass", "project", "file"};
     for (String option : options) {
       if (serviceParams.getParameter(option) != null) {
         args.add("-" + option + "=" + serviceParams.getParameter(option));
       }
     }
 
-    // Execute Spoon.createContents
     HopGui.getInstance().setCommandLineArguments(args);
     HopGui.getInstance().setShell(parent.getShell());
     HopGui.getInstance().setProps(PropsUi.getInstance());
+
+    // When user changes theme in Configuration → GUI options, redirect so the new theme takes
+    // effect. Boolean null = "follow system" (run system redirect, don't use dark flag).
+    HopGui.getInstance()
+        .setWebThemeRedirectCallback(
+            dark -> {
+              try {
+                if (dark == null) {
+                  saveThemePreferenceToAudit(true, null);
+                  runSystemThemeRedirectCheck(PropsUi.getInstance().isDarkMode());
+                } else {
+                  saveThemePreferenceToAudit(false, dark);
+                  redirectToTheme(dark);
+                }
+              } catch (Exception e) {
+                LogChannel.UI.logError("Failed to redirect for theme change", e);
+              }
+            });
+
     try {
       ExtensionPointHandler.callExtensionPoint(
           HopGui.getInstance().getLog(),
@@ -68,5 +185,283 @@ public class HopWebEntryPoint extends AbstractEntryPoint {
     }
 
     HopGui.getInstance().open();
+
+    // URL params were only for initial project/file; clear so they don't affect CLI/run.
+    HopGui.getInstance().setCommandLineArguments(new ArrayList<>());
+
+    HopWebUrlHelper.setUrlUpdater(new RapHopWebUrlUpdater());
+
+    // Persist open tabs when the session ends (browser close, timeout, etc.).
+    // We use the session-cached audit manager so no request is needed.
+    // Skip if the UI is already disposed (beforeDestroy runs during teardown).
+    RWT.getUISession()
+        .addUISessionListener(
+            new UISessionListener() {
+              @Override
+              public void beforeDestroy(UISessionEvent event) {
+                try {
+                  HopGui hopGui = HopGui.getInstance();
+                  if (hopGui == null || hopGui.auditDelegate == null) {
+                    return;
+                  }
+                  if (hopGui.getShell() != null && hopGui.getShell().isDisposed()) {
+                    return;
+                  }
+                  hopGui.auditDelegate.writeLastOpenFiles();
+                } catch (SWTException e) {
+                  if (e.code != SWT.ERROR_WIDGET_DISPOSED) {
+                    LogChannel.UI.logError("Error persisting open files on session end", e);
+                  }
+                } catch (Exception e) {
+                  LogChannel.UI.logError("Error persisting open files on session end", e);
+                }
+              }
+            });
+  }
+
+  /**
+   * When there is no saved theme preference, run a client script to check prefers-color-scheme and
+   * redirect to /ui or /ui-dark so the UI follows system light/dark mode. Preserves query string
+   * and hash so project/file params and tab state recovery are not lost.
+   */
+  private void runSystemThemeRedirectCheck(boolean onDarkPath) {
+    String script =
+        "var onDark = "
+            + onDarkPath
+            + "; var wantsDark = window.matchMedia('(prefers-color-scheme: dark)').matches;"
+            + " if (wantsDark !== onDark) { var base = window.location.pathname.replace(/\\/ui-dark$|\\/ui$/, '');"
+            + " if (base.length && !base.endsWith('/')) base += '/';"
+            + " var q = window.location.search || ''; var h = window.location.hash || '';"
+            + " window.location.href = (base || '/') + (wantsDark ? 'ui-dark' : 'ui') + q + h; }";
+    try {
+      JavaScriptExecutor executor = RWT.getClient().getService(JavaScriptExecutor.class);
+      executor.execute(script);
+    } catch (Exception e) {
+      LogChannel.UI.logDebug("Could not run system theme redirect check", e);
+    }
+  }
+
+  /**
+   * Redirect the browser to /ui or /ui-dark so the theme takes effect. Preserves the current query
+   * string and hash so project, user, file params (and thus namespace and tab state recovery) are
+   * not lost.
+   */
+  private void redirectToTheme(boolean dark) {
+    String contextPath = "";
+    try {
+      if (RWT.getRequest() != null && RWT.getRequest().getContextPath() != null) {
+        contextPath = RWT.getRequest().getContextPath();
+      }
+    } catch (Exception ignored) {
+      // ignore
+    }
+    if (!contextPath.endsWith("/")) {
+      contextPath += "/";
+    }
+    String path = dark ? "ui-dark" : "ui";
+    String url = contextPath + path;
+    String escaped = url.replace("\\", "\\\\").replace("'", "\\'");
+    // Preserve query string and hash so project/file/user params survive redirect and tab state can
+    // be restored
+    JavaScriptExecutor executor = RWT.getClient().getService(JavaScriptExecutor.class);
+    executor.execute(
+        "var q = window.location.search || ''; var h = window.location.hash || '';"
+            + " window.location.href = '"
+            + escaped
+            + "' + q + h;");
+  }
+
+  /** Save the user's theme preference to the audit folder (per-user when authenticated). */
+  private void saveThemePreferenceToAudit(boolean darkMode) {
+    saveThemePreferenceToAudit(false, Boolean.valueOf(darkMode));
+  }
+
+  /**
+   * Save theme preference to audit. When followSystem is true, darkMode is ignored (can be null).
+   */
+  private void saveThemePreferenceToAudit(boolean followSystem, Boolean darkMode) {
+    Map<String, Object> state = new HashMap<>();
+    state.put(AUDIT_KEY_FOLLOW_SYSTEM, Boolean.valueOf(followSystem));
+    if (darkMode != null) {
+      state.put(AUDIT_KEY_DARK_MODE, darkMode);
+    }
+    AuditManager.storeState(
+        LogChannel.UI, AUDIT_GROUP_HOP_WEB, AUDIT_TYPE_PREFERENCES, AUDIT_NAME_THEME, state);
+  }
+
+  /**
+   * Build keyboard shortcuts for RAP from all @GuiKeyboardShortcut and @GuiOsxKeyboardShortcut
+   * annotations
+   *
+   * @return Array of shortcut strings in RAP format (e.g., "CTRL+C", "ALT+F1")
+   */
+  private String[] buildKeyboardShortcuts() {
+    Set<String> shortcuts = new HashSet<>();
+
+    // Get all keyboard shortcuts from GuiRegistry
+    GuiRegistry registry = GuiRegistry.getInstance();
+    Map<String, List<KeyboardShortcut>> allShortcuts = registry.getAllKeyboardShortcuts();
+
+    if (allShortcuts == null) {
+      return new String[0];
+    }
+
+    // Convert each shortcut to RAP format. Only include shortcuts for the client's OS so macOS
+    // users get Cmd-based shortcuts and others get Ctrl-based.
+    boolean clientIsMac = Const.isOSX();
+    for (Map.Entry<String, List<KeyboardShortcut>> entry : allShortcuts.entrySet()) {
+      List<KeyboardShortcut> shortcutList = entry.getValue();
+      if (shortcutList != null) {
+        for (KeyboardShortcut shortcut : shortcutList) {
+          if (shortcut.isOsx() != clientIsMac) {
+            continue;
+          }
+          String rapShortcut = convertToRapFormat(shortcut);
+          if (rapShortcut != null && !rapShortcut.isEmpty()) {
+            shortcuts.add(rapShortcut);
+          }
+        }
+      }
+    }
+
+    return shortcuts.toArray(new String[0]);
+  }
+
+  /**
+   * Convert a KeyboardShortcut to RAP format for ACTIVE_KEYS / CANCEL_KEYS. RAP only supports CTRL,
+   * ALT, SHIFT (not META), so we use CTRL+ for all command/control shortcuts; on Mac the browser
+   * typically maps Cmd to CTRL when sending to the server.
+   *
+   * @param shortcut The keyboard shortcut to convert
+   * @return RAP format string (e.g., "CTRL+C", "ALT+SHIFT+F1") or null if invalid
+   */
+  private String convertToRapFormat(KeyboardShortcut shortcut) {
+    if (shortcut.getKeyCode() == 0) {
+      return null;
+    }
+
+    int keyCode = shortcut.getKeyCode();
+    // Never register unmodified SPACE as a shortcut - it would capture every space key press
+    // and prevent typing space in text fields (see RAP ACTIVE_KEYS behavior).
+    if ((keyCode == ' ' || keyCode == 32)
+        && !shortcut.isAlt()
+        && !shortcut.isControl()
+        && !shortcut.isCommand()
+        && !shortcut.isShift()) {
+      return null;
+    }
+
+    StringBuilder sb = new StringBuilder();
+
+    if (shortcut.isAlt()) {
+      sb.append("ALT+");
+    }
+    if (shortcut.isControl() || shortcut.isCommand()) {
+      sb.append("CTRL+");
+    }
+    if (shortcut.isShift()) {
+      sb.append("SHIFT+");
+    }
+
+    // Convert keyCode to character or special key name
+    // Character keys (a-z, A-Z)
+    if (keyCode >= 65 && keyCode <= 90) {
+      sb.append((char) keyCode);
+    } else if (keyCode >= 97 && keyCode <= 122) {
+      sb.append(Character.toUpperCase((char) keyCode));
+    }
+    // Digit keys (0-9)
+    else if (keyCode >= 48 && keyCode <= 57) {
+      sb.append((char) keyCode);
+    }
+    // Special characters
+    else if (keyCode == '+'
+        || keyCode == '-'
+        || keyCode == '*'
+        || keyCode == '/'
+        || keyCode == '=') {
+      sb.append((char) keyCode);
+    }
+    // SWT special keys (have bit 24 set)
+    else if ((keyCode & (1 << 24)) != 0) {
+      String specialKey = convertSwtKeyToRap(keyCode & 0xFFFF);
+      if (specialKey != null) {
+        sb.append(specialKey);
+      } else {
+        return null; // Unknown special key
+      }
+    }
+    // DEL key
+    else if (keyCode == SWT.DEL || keyCode == 127) {
+      sb.append("DEL");
+    }
+    // ESC key
+    else if (keyCode == SWT.ESC || keyCode == 27) {
+      sb.append("ESC");
+    }
+    // Space
+    else if (keyCode == ' ' || keyCode == 32) {
+      sb.append("SPACE");
+    } else {
+      // Unknown key code, skip it
+      return null;
+    }
+
+    return sb.toString();
+  }
+
+  /**
+   * Convert SWT special key codes to RAP format
+   *
+   * @param swtKey SWT key code (with bit 24 masked off)
+   * @return RAP key name or null if not supported
+   */
+  private String convertSwtKeyToRap(int swtKey) {
+    switch (swtKey) {
+      case 1:
+        return "ARROW_UP";
+      case 2:
+        return "ARROW_DOWN";
+      case 3:
+        return "ARROW_LEFT";
+      case 4:
+        return "ARROW_RIGHT";
+      case 5:
+        return "PAGE_UP";
+      case 6:
+        return "PAGE_DOWN";
+      case 7:
+        return "HOME";
+      case 8:
+        return "END";
+      case 9:
+        return "INSERT";
+      case 10:
+        return "F1";
+      case 11:
+        return "F2";
+      case 12:
+        return "F3";
+      case 13:
+        return "F4";
+      case 14:
+        return "F5";
+      case 15:
+        return "F6";
+      case 16:
+        return "F7";
+      case 17:
+        return "F8";
+      case 18:
+        return "F9";
+      case 19:
+        return "F10";
+      case 20:
+        return "F11";
+      case 21:
+        return "F12";
+      default:
+        return null;
+    }
   }
 }

@@ -45,7 +45,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import org.apache.commons.lang.StringUtils;
+import lombok.Getter;
+import lombok.Setter;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.Counter;
@@ -60,6 +62,7 @@ import org.apache.hop.core.encryption.Encr;
 import org.apache.hop.core.exception.HopDatabaseBatchException;
 import org.apache.hop.core.exception.HopDatabaseException;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.exception.HopValueException;
 import org.apache.hop.core.extension.ExtensionPointHandler;
 import org.apache.hop.core.extension.HopExtensionPoint;
@@ -118,6 +121,14 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
   private static final String CONST_ERROR_UPDATING_BATCH = "Error updating batch";
 
   private int rowlimit;
+
+  /**
+   * When positive, applied to statements created in {@link #openQuery(String, IRowMeta, Object[],
+   * int, boolean)} via {@link Statement#setQueryTimeout(int)} (whole seconds). Zero leaves the JDBC
+   * driver default (typically unlimited). Intended for short-lived GUI preview connections.
+   */
+  private int statementQueryTimeoutSeconds;
+
   private int commitsize;
 
   private Connection connection;
@@ -149,8 +160,8 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
   /** The copy is equal to opened at the time of creation. */
   private volatile int copy;
 
-  private String connectionGroup;
-  private String partitionId;
+  @Getter @Setter private String connectionGroup;
+  @Getter @Setter private String partitionId;
 
   private IVariables variables = new Variables();
 
@@ -158,7 +169,9 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
 
   private String containerObjectId;
 
-  private int nrExecutedCommits;
+  @Getter @Setter private int nrExecutedCommits;
+
+  private SshTunnelManager sshTunnelManager;
 
   private static final List<IValueMeta> valueMetaPluginClasses;
 
@@ -169,9 +182,10 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
           valueMetaPluginClasses,
           (o1, o2) ->
               // Reverse the sort list
-              (Integer.valueOf(o1.getType()).compareTo(Integer.valueOf(o2.getType()))) * -1);
+              (Integer.valueOf(o1.getType()).compareTo(o2.getType())) * -1);
     } catch (Exception e) {
-      throw new RuntimeException("Unable to get list of instantiated value meta plugin classes", e);
+      throw new HopRuntimeException(
+          "Unable to get list of instantiated value meta plugin classes", e);
     }
   }
 
@@ -199,6 +213,7 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
     dbmd = null;
 
     rowlimit = 0;
+    statementQueryTimeoutSeconds = 0;
 
     written = 0;
 
@@ -208,7 +223,7 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
       ExtensionPointHandler.callExtensionPoint(
           log, variables, HopExtensionPoint.DatabaseCreated.id, this);
     } catch (Exception e) {
-      throw new RuntimeException(
+      throw new HopRuntimeException(
           "Error calling extension point while creating database connection", e);
     }
 
@@ -257,6 +272,23 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
    */
   public void setQueryLimit(int rows) {
     rowlimit = rows;
+  }
+
+  /**
+   * Sets the JDBC {@link Statement#setQueryTimeout(int)} (seconds) for statements opened by {@link
+   * #openQuery(String, IRowMeta, Object[], int, boolean)} until {@link #disconnect()}. Use {@code
+   * 0} to use the driver default.
+   *
+   * @param seconds query timeout in whole seconds; values {@code < 0} are treated as {@code 0}
+   */
+  public void setStatementQueryTimeoutSeconds(int seconds) {
+    this.statementQueryTimeoutSeconds = Math.max(0, seconds);
+  }
+
+  private void applyStatementQueryTimeout(Statement statement) throws SQLException {
+    if (statement != null && statementQueryTimeoutSeconds > 0) {
+      statement.setQueryTimeout(statementQueryTimeoutSeconds);
+    }
   }
 
   /**
@@ -435,7 +467,24 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
     }
 
     try {
-      String url = resolve(databaseMeta.getURL(this));
+      // Open SSH tunnel if configured
+      String url;
+      if (databaseMeta.isSshTunnelEnabled() && !Utils.isEmpty(databaseMeta.getSshTunnelHost())) {
+        sshTunnelManager = new SshTunnelManager();
+        int localPort = sshTunnelManager.openTunnel(this, databaseMeta, log);
+
+        // Build URL using tunnel endpoint (localhost + forwarded port)
+        String tunnelUrl =
+            databaseMeta
+                .getIDatabase()
+                .getURL(
+                    "localhost",
+                    String.valueOf(localPort),
+                    resolve(databaseMeta.getDatabaseName()));
+        url = resolve(tunnelUrl);
+      } else {
+        url = resolve(databaseMeta.getURL(this));
+      }
       log.logDebug("Connecting to database using URL: " + url);
 
       String username = resolve(databaseMeta.getUsername());
@@ -587,6 +636,7 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
                 + hde.getMessage());
         log.logError(Const.getStackTracker(hde));
       }
+      statementQueryTimeoutSeconds = 0;
     }
   }
 
@@ -608,6 +658,14 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
       }
     } catch (SQLException e) {
       throw new HopDatabaseException("Error disconnecting from database '" + this + "'", e);
+    } finally {
+      // Close SSH tunnel after JDBC connection is closed.
+      // This must be here (not in disconnect()) because grouped connections
+      // use closeConnectionOnly() directly and would otherwise leak tunnels.
+      if (sshTunnelManager != null) {
+        sshTunnelManager.closeTunnel(log);
+        sshTunnelManager = null;
+      }
     }
   }
 
@@ -1013,7 +1071,7 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
       try {
         rs = pstmtSeq.executeQuery();
         if (rs.next()) {
-          retval = Long.valueOf(rs.getLong(1));
+          retval = rs.getLong(1);
         }
       } finally {
         if (rs != null) {
@@ -1541,7 +1599,7 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
         log.snap(Metrics.METRIC_DATABASE_PREPARE_SQL_STOP, databaseMeta.getName());
 
         log.snap(Metrics.METRIC_DATABASE_SQL_VALUES_START, databaseMeta.getName());
-        setValues(params, data); // set the dates etc!
+        setValues(params, data); // set the dates etc.
         log.snap(Metrics.METRIC_DATABASE_SQL_VALUES_STOP, databaseMeta.getName());
 
         if (canWeSetFetchSize(pstmt)) {
@@ -1559,6 +1617,8 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
         if (rowlimit > 0 && databaseMeta.supportsSetMaxRows()) {
           pstmt.setMaxRows(rowlimit);
         }
+
+        applyStatementQueryTimeout(pstmt);
 
         log.snap(Metrics.METRIC_DATABASE_EXECUTE_SQL_START, databaseMeta.getName());
         res = pstmt.executeQuery();
@@ -1580,6 +1640,8 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
         if (rowlimit > 0 && databaseMeta.supportsSetMaxRows()) {
           selStmt.setMaxRows(rowlimit);
         }
+
+        applyStatementQueryTimeout(selStmt);
 
         log.snap(Metrics.METRIC_DATABASE_EXECUTE_SQL_START, databaseMeta.getName());
         res = selStmt.executeQuery(databaseMeta.stripCR(sql));
@@ -2104,6 +2166,7 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
           try {
             fields = getQueryFieldsFallback(sql, param, inform, data);
           } catch (HopDatabaseException ignore) {
+            // Do nothing
           }
         }
       }
@@ -2164,25 +2227,19 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
       String comments = columns.getString("REMARKS");
       String type = columns.getString("SOURCE_DATA_TYPE");
       int size = columns.getInt("COLUMN_SIZE");
-      if (type.equals("Integer") || type.equals("Long")) {
-        valueMeta = new ValueMetaInteger();
-      } else if (type.equals("BigDecimal") || type.equals("BigNumber")) {
-        valueMeta = new ValueMetaBigNumber();
-      } else if (type.equals("Double") || type.equals("Number")) {
-        valueMeta = new ValueMetaNumber();
-      } else if (type.equals("String")) {
-        valueMeta = new ValueMetaString();
-      } else if (type.equals("Date")) {
-        valueMeta = new ValueMetaDate();
-      } else if (type.equals("Boolean")) {
-        valueMeta = new ValueMetaBoolean();
-      } else if (type.equals("Binary")) {
-        valueMeta = new ValueMetaBinary();
-      } else if (type.equals("Timestamp")) {
-        valueMeta = new ValueMetaTimestamp();
-      } else if (type.equals("Internet Address")) {
-        valueMeta = new ValueMetaInternetAddress();
-      }
+      valueMeta =
+          switch (type) {
+            case "Integer", "Long" -> new ValueMetaInteger();
+            case "BigDecimal", "BigNumber" -> new ValueMetaBigNumber();
+            case "Double", "Number" -> new ValueMetaNumber();
+            case "String" -> new ValueMetaString();
+            case "Date" -> new ValueMetaDate();
+            case "Boolean" -> new ValueMetaBoolean();
+            case "Binary" -> new ValueMetaBinary();
+            case "Timestamp" -> new ValueMetaTimestamp();
+            case "Internet Address" -> new ValueMetaInternetAddress();
+            default -> valueMeta;
+          };
       if (valueMeta != null) {
         valueMeta.setName(name);
         valueMeta.setComments(comments);
@@ -3214,35 +3271,25 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
         int sqltype = pmd.getParameterType(i);
         int length = pmd.getPrecision(i);
         int precision = pmd.getScale(i);
-        IValueMeta val;
-
-        switch (sqltype) {
-          case java.sql.Types.CHAR, java.sql.Types.VARCHAR:
-            val = new ValueMetaString(name);
-            break;
-          case java.sql.Types.BIGINT,
-              java.sql.Types.INTEGER,
-              java.sql.Types.NUMERIC,
-              java.sql.Types.SMALLINT,
-              java.sql.Types.TINYINT:
-            val = new ValueMetaInteger(name);
-            break;
-          case java.sql.Types.DECIMAL,
-              java.sql.Types.DOUBLE,
-              java.sql.Types.FLOAT,
-              java.sql.Types.REAL:
-            val = new ValueMetaNumber(name);
-            break;
-          case java.sql.Types.DATE, java.sql.Types.TIME, java.sql.Types.TIMESTAMP:
-            val = new ValueMetaDate(name);
-            break;
-          case java.sql.Types.BOOLEAN, java.sql.Types.BIT:
-            val = new ValueMetaBoolean(name);
-            break;
-          default:
-            val = new ValueMetaNone(name);
-            break;
-        }
+        IValueMeta val =
+            switch (sqltype) {
+              case java.sql.Types.CHAR, java.sql.Types.VARCHAR -> new ValueMetaString(name);
+              case java.sql.Types.BIGINT,
+                      java.sql.Types.INTEGER,
+                      java.sql.Types.NUMERIC,
+                      java.sql.Types.SMALLINT,
+                      java.sql.Types.TINYINT ->
+                  new ValueMetaInteger(name);
+              case java.sql.Types.DECIMAL,
+                      java.sql.Types.DOUBLE,
+                      java.sql.Types.FLOAT,
+                      java.sql.Types.REAL ->
+                  new ValueMetaNumber(name);
+              case java.sql.Types.DATE, java.sql.Types.TIME, java.sql.Types.TIMESTAMP ->
+                  new ValueMetaDate(name);
+              case java.sql.Types.BOOLEAN, java.sql.Types.BIT -> new ValueMetaBoolean(name);
+              default -> new ValueMetaNone(name);
+            };
 
         if (val.isNumeric() && (length > 18 || precision > 18)) {
           val = new ValueMetaBigNumber(name);
@@ -3250,12 +3297,8 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
 
         par.addValueMeta(val);
       }
-    } catch (AbstractMethodError e) {
+    } catch (AbstractMethodError | Exception e) {
       // Oops: probably the database or JDBC doesn't support it.
-      return null;
-    } catch (SQLException e) {
-      return null;
-    } catch (Exception e) {
       return null;
     }
 
@@ -3335,7 +3378,7 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
           // A "select max(x)" on a table with no matching rows will return
           // null.
           if (tmp != null) {
-            previous = tmp.longValue();
+            previous = tmp;
           } else {
             previous = 0L;
           }
@@ -3345,14 +3388,14 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
                   + schemaTable);
         }
         counter = new Counter(previous + 1, 1);
-        nextValue = Long.valueOf(counter.getAndNext());
+        nextValue = counter.getAndNext();
 
         Counters.getInstance().setCounter(lookup, counter);
       } else {
         throw new HopDatabaseException("Couldn't find maximum key value from table " + schemaTable);
       }
     } else {
-      nextValue = Long.valueOf(counter.getAndNext());
+      nextValue = counter.getAndNext();
     }
 
     return nextValue;
@@ -4051,34 +4094,6 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
   }
 
   /**
-   * @return the connectionGroup
-   */
-  public String getConnectionGroup() {
-    return connectionGroup;
-  }
-
-  /**
-   * @param connectionGroup the connectionGroup to set
-   */
-  public void setConnectionGroup(String connectionGroup) {
-    this.connectionGroup = connectionGroup;
-  }
-
-  /**
-   * @return the partitionId
-   */
-  public String getPartitionId() {
-    return partitionId;
-  }
-
-  /**
-   * @param partitionId the partitionId to set
-   */
-  public void setPartitionId(String partitionId) {
-    this.partitionId = partitionId;
-  }
-
-  /**
    * @return the copy
    */
   public int getCopy() {
@@ -4182,16 +4197,16 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
         Object v = null;
         switch (resulttype) {
           case IValueMeta.TYPE_BOOLEAN:
-            v = Boolean.valueOf(cstmt.getBoolean(pos));
+            v = cstmt.getBoolean(pos);
             break;
           case IValueMeta.TYPE_NUMBER:
-            v = Double.valueOf(cstmt.getDouble(pos));
+            v = cstmt.getDouble(pos);
             break;
           case IValueMeta.TYPE_BIGNUMBER:
             v = cstmt.getBigDecimal(pos);
             break;
           case IValueMeta.TYPE_INTEGER:
-            v = Long.valueOf(cstmt.getLong(pos));
+            v = cstmt.getLong(pos);
             break;
           case IValueMeta.TYPE_STRING:
             v = cstmt.getString(pos);
@@ -4227,16 +4242,16 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
           Object v = null;
           switch (argtype[i]) {
             case IValueMeta.TYPE_BOOLEAN:
-              v = Boolean.valueOf(cstmt.getBoolean(pos + i));
+              v = cstmt.getBoolean(pos + i);
               break;
             case IValueMeta.TYPE_NUMBER:
-              v = Double.valueOf(cstmt.getDouble(pos + i));
+              v = cstmt.getDouble(pos + i);
               break;
             case IValueMeta.TYPE_BIGNUMBER:
               v = cstmt.getBigDecimal(pos + i);
               break;
             case IValueMeta.TYPE_INTEGER:
-              v = Long.valueOf(cstmt.getLong(pos + i));
+              v = cstmt.getLong(pos + i);
               break;
             case IValueMeta.TYPE_STRING:
               v = cstmt.getString(pos + i);
@@ -4425,12 +4440,12 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
                       .append(fieldDateFormatters[i].format(date))
                       .append("', 'YYYY/MM/DD HH24:MI:SS')");
                 } else {
-                  ins.append("'" + fields.getString(r, i) + "'");
+                  ins.append("'").append(fields.getString(r, i)).append("'");
                 }
               } else {
                 try {
                   java.text.SimpleDateFormat formatter = new java.text.SimpleDateFormat(dateFormat);
-                  ins.append("'" + formatter.format(fields.getDate(r, i)) + "'");
+                  ins.append("'").append(formatter.format(fields.getDate(r, i))).append("'");
                 } catch (Exception e) {
                   throw new HopDatabaseException("Error : ", e);
                 }
@@ -4612,20 +4627,6 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
   }
 
   /**
-   * @return the nrExecutedCommits
-   */
-  public int getNrExecutedCommits() {
-    return nrExecutedCommits;
-  }
-
-  /**
-   * @param nrExecutedCommits the nrExecutedCommits to set
-   */
-  public void setNrExecutedCommits(int nrExecutedCommits) {
-    this.nrExecutedCommits = nrExecutedCommits;
-  }
-
-  /**
    * Execute an SQL statement inside a file on the database connection (has to be open)
    *
    * @param filename the file containing the SQL to execute
@@ -4663,7 +4664,7 @@ public class Database implements IVariables, ILoggingObject, AutoCloseable {
         if (Utils.isEmpty(sLine)) {
           sql.append(Const.CR);
         } else {
-          sql.append(Const.CR + sLine);
+          sql.append(Const.CR).append(sLine);
         }
       }
 

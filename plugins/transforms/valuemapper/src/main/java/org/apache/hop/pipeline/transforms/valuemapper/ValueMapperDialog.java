@@ -17,8 +17,10 @@
 
 package org.apache.hop.pipeline.transforms.valuemapper;
 
+import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.row.IRowMeta;
+import org.apache.hop.core.row.value.ValueMetaFactory;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.i18n.BaseMessages;
@@ -34,11 +36,11 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CCombo;
 import org.eclipse.swt.events.FocusEvent;
 import org.eclipse.swt.events.FocusListener;
-import org.eclipse.swt.events.ModifyListener;
+import org.eclipse.swt.events.SelectionAdapter;
+import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.graphics.Cursor;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
-import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
@@ -48,19 +50,23 @@ import org.eclipse.swt.widgets.Text;
 public class ValueMapperDialog extends BaseTransformDialog {
   private static final Class<?> PKG = ValueMapperMeta.class;
 
-  private Text wTransformName;
-
   private CCombo wFieldName;
 
   private Text wTargetFieldName;
 
   private TextVar wNonMatchDefault;
 
+  private Label wlNonMatchDefault;
+
   private TableView wFields;
 
   private final ValueMapperMeta input;
 
   private boolean gotPreviousFields = false;
+
+  private CCombo wTargetType;
+
+  private Button wKeepOriginalOnNonMatch;
 
   public ValueMapperDialog(
       Shell parent,
@@ -73,51 +79,11 @@ public class ValueMapperDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "ValueMapperDialog.DialogTitle"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
-    ModifyListener lsMod = e -> input.setChanged();
     changed = input.hasChanged();
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "ValueMapperDialog.DialogTitle"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // Some buttons
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wCancel}, margin, null);
-
-    // TransformName line
-    Label wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "ValueMapperDialog.TransformName.Label"));
-    PropsUi.setLook(wlTransformName);
-    FormData fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    FormData fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
 
     // Fieldname line
     Label wlFieldname = new Label(shell, SWT.RIGHT);
@@ -126,15 +92,14 @@ public class ValueMapperDialog extends BaseTransformDialog {
     FormData fdlFieldname = new FormData();
     fdlFieldname.left = new FormAttachment(0, 0);
     fdlFieldname.right = new FormAttachment(middle, -margin);
-    fdlFieldname.top = new FormAttachment(wTransformName, margin);
+    fdlFieldname.top = new FormAttachment(wSpacer, margin);
     wlFieldname.setLayoutData(fdlFieldname);
 
     wFieldName = new CCombo(shell, SWT.BORDER | SWT.READ_ONLY);
     PropsUi.setLook(wFieldName);
-    wFieldName.addModifyListener(lsMod);
     FormData fdFieldname = new FormData();
     fdFieldname.left = new FormAttachment(middle, 0);
-    fdFieldname.top = new FormAttachment(wTransformName, margin);
+    fdFieldname.top = new FormAttachment(wSpacer, margin);
     fdFieldname.right = new FormAttachment(100, 0);
     wFieldName.setLayoutData(fdFieldname);
     wFieldName.addFocusListener(
@@ -165,41 +130,78 @@ public class ValueMapperDialog extends BaseTransformDialog {
     wlTargetFieldname.setLayoutData(fdlTargetFieldname);
     wTargetFieldName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wTargetFieldName);
-    wTargetFieldName.addModifyListener(lsMod);
     FormData fdTargetFieldname = new FormData();
     fdTargetFieldname.left = new FormAttachment(middle, 0);
     fdTargetFieldname.top = new FormAttachment(wFieldName, margin);
     fdTargetFieldname.right = new FormAttachment(100, 0);
     wTargetFieldName.setLayoutData(fdTargetFieldname);
 
+    wKeepOriginalOnNonMatch = new Button(shell, SWT.CHECK);
+    wKeepOriginalOnNonMatch.setText(
+        BaseMessages.getString(PKG, "ValueMapperDialog.KeepOriginalOnNonMatch.Label"));
+    wKeepOriginalOnNonMatch.setToolTipText(
+        BaseMessages.getString(PKG, "ValueMapperDialog.KeepOriginalOnNonMatch.Tooltip"));
+    PropsUi.setLook(wKeepOriginalOnNonMatch);
+    FormData fdKeepOriginal = new FormData();
+    fdKeepOriginal.left = new FormAttachment(middle, 0);
+    fdKeepOriginal.top = new FormAttachment(wTargetFieldName, margin);
+    fdKeepOriginal.right = new FormAttachment(100, 0);
+    wKeepOriginalOnNonMatch.setLayoutData(fdKeepOriginal);
+    wKeepOriginalOnNonMatch.addSelectionListener(
+        new SelectionAdapter() {
+          @Override
+          public void widgetSelected(SelectionEvent e) {
+            updateNonMatchDefaultEnabled();
+          }
+        });
+
     // Non match default line
-    Label wlNonMatchDefault = new Label(shell, SWT.RIGHT);
+    wlNonMatchDefault = new Label(shell, SWT.RIGHT);
     wlNonMatchDefault.setText(
         BaseMessages.getString(PKG, "ValueMapperDialog.NonMatchDefault.Label"));
     PropsUi.setLook(wlNonMatchDefault);
     FormData fdlNonMatchDefault = new FormData();
     fdlNonMatchDefault.left = new FormAttachment(0, 0);
     fdlNonMatchDefault.right = new FormAttachment(middle, -margin);
-    fdlNonMatchDefault.top = new FormAttachment(wTargetFieldName, margin);
+    fdlNonMatchDefault.top = new FormAttachment(wKeepOriginalOnNonMatch, margin);
     wlNonMatchDefault.setLayoutData(fdlNonMatchDefault);
     wNonMatchDefault = new TextVar(variables, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wNonMatchDefault);
-    wNonMatchDefault.addModifyListener(lsMod);
     FormData fdNonMatchDefault = new FormData();
     fdNonMatchDefault.left = new FormAttachment(middle, 0);
-    fdNonMatchDefault.top = new FormAttachment(wTargetFieldName, margin);
+    fdNonMatchDefault.top = new FormAttachment(wKeepOriginalOnNonMatch, margin);
     fdNonMatchDefault.right = new FormAttachment(100, 0);
     wNonMatchDefault.setLayoutData(fdNonMatchDefault);
+
+    // Type of value
+    /*
+     * Type of Value: String, Number, Date, Boolean, Integer
+     */
+    Label wlValueType = new Label(shell, SWT.RIGHT);
+    wlValueType.setText(BaseMessages.getString(PKG, "ValueMapperDialog.TargetType.Label"));
+    FormData fdlValueType = new FormData();
+    fdlValueType.left = new FormAttachment(0, 0);
+    fdlValueType.right = new FormAttachment(middle, -margin);
+    fdlValueType.top = new FormAttachment(wNonMatchDefault, margin);
+    wlValueType.setLayoutData(fdlValueType);
+    wTargetType = new CCombo(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER | SWT.READ_ONLY);
+    wTargetType.setItems(ValueMetaFactory.getValueMetaNames());
+    PropsUi.setLook(wTargetType);
+    FormData fdValueType = new FormData();
+    fdValueType.left = new FormAttachment(middle, 0);
+    fdValueType.top = new FormAttachment(wNonMatchDefault, margin);
+    fdValueType.right = new FormAttachment(100, 0);
+    wTargetType.setLayoutData(fdValueType);
 
     Label wlFields = new Label(shell, SWT.NONE);
     wlFields.setText(BaseMessages.getString(PKG, "ValueMapperDialog.Fields.Label"));
     PropsUi.setLook(wlFields);
     FormData fdlFields = new FormData();
     fdlFields.left = new FormAttachment(0, 0);
-    fdlFields.top = new FormAttachment(wNonMatchDefault, margin);
+    fdlFields.top = new FormAttachment(wlValueType, margin);
     wlFields.setLayoutData(fdlFields);
 
-    final int FieldsCols = 2;
+    final int FieldsCols = 3;
     final int FieldsRows = input.getValues().size();
 
     ColumnInfo[] colinf = new ColumnInfo[FieldsCols];
@@ -214,6 +216,12 @@ public class ValueMapperDialog extends BaseTransformDialog {
             ColumnInfo.COLUMN_TYPE_TEXT,
             false);
     colinf[1].setUsingVariables(true);
+    colinf[2] =
+        new ColumnInfo(
+            BaseMessages.getString(PKG, "ValueMapperDialog.Fields.Column.EmptyStringEqualsNull"),
+            ColumnInfo.COLUMN_TYPE_CCOMBO,
+            "Y",
+            "N");
 
     wFields =
         new TableView(
@@ -222,19 +230,19 @@ public class ValueMapperDialog extends BaseTransformDialog {
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
             colinf,
             FieldsRows,
-            lsMod,
+            null,
             props);
 
     FormData fdFields = new FormData();
     fdFields.left = new FormAttachment(0, 0);
     fdFields.top = new FormAttachment(wlFields, margin);
     fdFields.right = new FormAttachment(100, 0);
-    fdFields.bottom = new FormAttachment(wOk, -2 * margin);
+    fdFields.bottom = new FormAttachment(wOk, -margin);
     wFields.setLayoutData(fdFields);
 
     getData();
     input.setChanged(changed);
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -266,8 +274,6 @@ public class ValueMapperDialog extends BaseTransformDialog {
 
   /** Copy information from the meta-data input to the dialog fields. */
   public void getData() {
-    wTransformName.setText(transformName);
-
     if (input.getFieldToUse() != null) {
       wFieldName.setText(input.getFieldToUse());
     }
@@ -277,6 +283,11 @@ public class ValueMapperDialog extends BaseTransformDialog {
     if (input.getNonMatchDefault() != null) {
       wNonMatchDefault.setText(input.getNonMatchDefault());
     }
+    if (input.getTargetType() != null) {
+      wTargetType.setText(input.getTargetType());
+    }
+    wKeepOriginalOnNonMatch.setSelection(input.isKeepOriginalValueOnNonMatch());
+    updateNonMatchDefaultEnabled();
 
     int i = 0;
     for (Values v : input.getValues()) {
@@ -290,13 +301,11 @@ public class ValueMapperDialog extends BaseTransformDialog {
       if (tgt != null) {
         item.setText(2, tgt);
       }
+      item.setText(3, v.isEmptyStringEqualsNull() ? "Y" : "N");
     }
 
     wFields.setRowNums();
     wFields.optWidth(true);
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   private void cancel() {
@@ -315,15 +324,25 @@ public class ValueMapperDialog extends BaseTransformDialog {
     input.setFieldToUse(wFieldName.getText());
     input.setTargetField(wTargetFieldName.getText());
     input.setNonMatchDefault(wNonMatchDefault.getText());
+    input.setKeepOriginalValueOnNonMatch(wKeepOriginalOnNonMatch.getSelection());
+    input.setTargetType(wTargetType.getText());
 
     input.getValues().clear();
     for (TableItem item : wFields.getNonEmptyItems()) {
       Values v = new Values();
       v.setSource(Utils.isEmpty(item.getText(1)) ? null : item.getText(1));
       v.setTarget(item.getText(2));
+      String esn = item.getText(3);
+      v.setEmptyStringEqualsNull(Utils.isEmpty(esn) || Const.toBoolean(esn));
       input.getValues().add(v);
     }
 
     dispose();
+  }
+
+  private void updateNonMatchDefaultEnabled() {
+    boolean keep = wKeepOriginalOnNonMatch.getSelection();
+    wNonMatchDefault.setEnabled(!keep);
+    wlNonMatchDefault.setEnabled(!keep);
   }
 }

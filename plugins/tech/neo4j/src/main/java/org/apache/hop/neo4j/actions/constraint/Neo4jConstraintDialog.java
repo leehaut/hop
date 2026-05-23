@@ -18,7 +18,7 @@
 package org.apache.hop.neo4j.actions.constraint;
 
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
@@ -26,14 +26,13 @@ import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.neo4j.shared.NeoConnection;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.dialog.BaseDialog;
+import org.apache.hop.ui.core.dialog.EnterTextDialog;
 import org.apache.hop.ui.core.dialog.ErrorDialog;
 import org.apache.hop.ui.core.dialog.MessageBox;
 import org.apache.hop.ui.core.widget.ColumnInfo;
 import org.apache.hop.ui.core.widget.MetaSelectionLine;
 import org.apache.hop.ui.core.widget.TableView;
-import org.apache.hop.ui.pipeline.transform.BaseTransformDialog;
 import org.apache.hop.ui.workflow.action.ActionDialog;
-import org.apache.hop.ui.workflow.dialog.WorkflowDialog;
 import org.apache.hop.workflow.WorkflowMeta;
 import org.apache.hop.workflow.action.IAction;
 import org.apache.hop.workflow.action.IActionDialog;
@@ -41,13 +40,9 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
-import org.eclipse.swt.layout.FormLayout;
-import org.eclipse.swt.widgets.Button;
-import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 public class Neo4jConstraintDialog extends ActionDialog implements IActionDialog {
   private static final Class<?> PKG = Neo4jConstraintDialog.class;
@@ -56,7 +51,6 @@ public class Neo4jConstraintDialog extends ActionDialog implements IActionDialog
 
   private boolean changed;
 
-  private Text wName;
   private MetaSelectionLine<NeoConnection> wConnection;
   private TableView wUpdates;
 
@@ -72,42 +66,12 @@ public class Neo4jConstraintDialog extends ActionDialog implements IActionDialog
 
   @Override
   public IAction open() {
-    Shell parent = getParent();
-
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MIN | SWT.MAX);
-    PropsUi.setLook(shell);
-    WorkflowDialog.setShellImage(shell, meta);
-
+    createShell(BaseMessages.getString(PKG, "Neo4jConstraintDialog.Dialog.Title"), meta);
     ModifyListener lsMod = e -> meta.setChanged();
     changed = meta.hasChanged();
 
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "Neo4jConstraintDialog.Dialog.Title"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    Label wlName = new Label(shell, SWT.RIGHT);
-    wlName.setText(BaseMessages.getString(PKG, "Neo4jConstraintDialog.ActionName.Label"));
-    PropsUi.setLook(wlName);
-    FormData fdlName = new FormData();
-    fdlName.left = new FormAttachment(0, 0);
-    fdlName.right = new FormAttachment(middle, -margin);
-    fdlName.top = new FormAttachment(0, margin);
-    wlName.setLayoutData(fdlName);
-    wName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    PropsUi.setLook(wName);
-    wName.addModifyListener(lsMod);
-    FormData fdName = new FormData();
-    fdName.left = new FormAttachment(middle, 0);
-    fdName.top = new FormAttachment(0, margin);
-    fdName.right = new FormAttachment(100, 0);
-    wName.setLayoutData(fdName);
-    Control lastControl = wName;
+    int middle = this.middle;
+    int margin = this.margin;
 
     wConnection =
         new MetaSelectionLine<>(
@@ -123,22 +87,13 @@ public class Neo4jConstraintDialog extends ActionDialog implements IActionDialog
     FormData fdConnection = new FormData();
     fdConnection.left = new FormAttachment(0, 0);
     fdConnection.right = new FormAttachment(100, 0);
-    fdConnection.top = new FormAttachment(lastControl, margin);
+    fdConnection.top = new FormAttachment(wSpacer, margin);
     wConnection.setLayoutData(fdConnection);
     try {
       wConnection.fillItems();
     } catch (Exception e) {
       new ErrorDialog(shell, "Error", "Error getting list of connections", e);
     }
-
-    // Add buttons first, then the script field can use dynamic sizing
-    //
-    Button wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    Button wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
 
     Label wlUpdates = new Label(shell, SWT.LEFT);
     wlUpdates.setText(BaseMessages.getString(PKG, "Neo4jConstraintDialog.ConstraintUpdates.Label"));
@@ -198,24 +153,90 @@ public class Neo4jConstraintDialog extends ActionDialog implements IActionDialog
     fdCypher.left = new FormAttachment(0, 0);
     fdCypher.right = new FormAttachment(100, 0);
     fdCypher.top = new FormAttachment(wlUpdates, margin);
-    fdCypher.bottom = new FormAttachment(wOk, -margin * 2);
     wUpdates.setLayoutData(fdCypher);
 
-    // Put these buttons at the bottom
-    //
-    BaseTransformDialog.positionBottomButtons(
-        shell,
-        new Button[] {
-          wOk, wCancel,
-        },
-        margin,
-        null);
+    buildButtonBar()
+        .custom(
+            BaseMessages.getString(PKG, "Neo4jConstraintDialog.Button.ShowCypher"),
+            e -> showCypherPreview())
+        .ok(e -> ok())
+        .cancel(e -> cancel())
+        .build(wUpdates);
 
     getData();
-
+    focusActionName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return meta;
+  }
+
+  private void showCypherPreview() {
+    // Get current data from dialog
+    List<TableItem> items = wUpdates.getNonEmptyItems();
+    if (items.isEmpty()) {
+      MessageBox mb = new MessageBox(shell, SWT.OK | SWT.ICON_INFORMATION);
+      mb.setText(BaseMessages.getString(PKG, "Neo4jConstraintDialog.NoConstraints.Title"));
+      mb.setMessage(BaseMessages.getString(PKG, "Neo4jConstraintDialog.NoConstraints.Message"));
+      mb.open();
+      return;
+    }
+
+    // Build Cypher preview for all constraint updates
+    StringBuilder cypherPreview = new StringBuilder();
+    cypherPreview
+        .append("-- Generated Cypher statements for constraint operations")
+        .append(Const.CR)
+        .append(Const.CR);
+
+    for (int i = 0; i < items.size(); i++) {
+      TableItem item = items.get(i);
+      try {
+        UpdateType type = UpdateType.getType(item.getText(1));
+        ObjectType objectType = ObjectType.getType(item.getText(2));
+        ConstraintType constraintType = ConstraintType.getType(item.getText(3));
+        String constraintName = item.getText(4);
+        String objectName = item.getText(5);
+        String objectProperties = item.getText(6);
+
+        ConstraintUpdate constraintUpdate =
+            new ConstraintUpdate(
+                type, objectType, constraintType, constraintName, objectName, objectProperties);
+
+        String cypher;
+        if (type == UpdateType.CREATE) {
+          cypher = Neo4jConstraint.generateCreateConstraintCypher(constraintUpdate);
+        } else {
+          cypher = Neo4jConstraint.generateDropConstraintCypher(constraintUpdate);
+        }
+
+        cypherPreview.append("-- Constraint ").append(i + 1).append(Const.CR);
+        cypherPreview.append(cypher).append(Const.CR).append(Const.CR);
+      } catch (Exception e) {
+        cypherPreview
+            .append("-- Error generating Cypher for constraint ")
+            .append(i + 1)
+            .append(": ")
+            .append(e.getMessage())
+            .append(Const.CR)
+            .append(Const.CR);
+      }
+    }
+
+    // Show in read-only dialog
+    EnterTextDialog dialog =
+        new EnterTextDialog(
+            shell,
+            BaseMessages.getString(PKG, "Neo4jConstraintDialog.ShowCypher.Title"),
+            BaseMessages.getString(PKG, "Neo4jConstraintDialog.ShowCypher.Message"),
+            cypherPreview.toString(),
+            true);
+    dialog.setReadOnly();
+    dialog.open();
+  }
+
+  @Override
+  protected void onActionNameModified() {
+    meta.setChanged();
   }
 
   private void cancel() {

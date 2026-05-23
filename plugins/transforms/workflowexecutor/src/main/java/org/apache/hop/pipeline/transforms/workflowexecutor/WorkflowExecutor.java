@@ -20,7 +20,7 @@ package org.apache.hop.pipeline.transforms.workflowexecutor;
 import com.google.common.annotations.VisibleForTesting;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.Result;
 import org.apache.hop.core.ResultFile;
@@ -150,10 +150,9 @@ public class WorkflowExecutor extends BaseTransform<WorkflowExecutorMeta, Workfl
       if (data.groupSize < 0) {
         if (data.groupFieldIndex >= 0) { // grouping by field
           Object groupFieldData = row[data.groupFieldIndex];
-          if (data.prevGroupFieldData != null) {
-            if (data.groupFieldMeta.compare(data.prevGroupFieldData, groupFieldData) != 0) {
-              executeWorkflow();
-            }
+          if (data.prevGroupFieldData != null
+              && data.groupFieldMeta.compare(data.prevGroupFieldData, groupFieldData) != 0) {
+            executeWorkflow();
           }
           data.prevGroupFieldData = groupFieldData;
         } else if (data.groupTime > 0) { // grouping by execution time
@@ -171,11 +170,9 @@ public class WorkflowExecutor extends BaseTransform<WorkflowExecutorMeta, Workfl
 
       // Grouping by size.
       // If group buffer size exceeds specified limit, then execute workflow and flush group buffer.
-      if (data.groupSize > 0) {
+      if (data.groupSize > 0 && data.groupBuffer.size() >= data.groupSize) {
         // Pass all input rows...
-        if (data.groupBuffer.size() >= data.groupSize) {
-          executeWorkflow();
-        }
+        executeWorkflow();
       }
 
       return true;
@@ -229,40 +226,40 @@ public class WorkflowExecutor extends BaseTransform<WorkflowExecutorMeta, Workfl
       int idx = 0;
 
       if (!Utils.isEmpty(meta.getExecutionTimeField())) {
-        outputRow[idx++] = Long.valueOf(System.currentTimeMillis() - data.groupTimeStart);
+        outputRow[idx++] = System.currentTimeMillis() - data.groupTimeStart;
       }
       if (!Utils.isEmpty(meta.getExecutionResultField())) {
-        outputRow[idx++] = Boolean.valueOf(result.isResult());
+        outputRow[idx++] = result.isResult();
       }
       if (!Utils.isEmpty(meta.getExecutionNrErrorsField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrErrors());
+        outputRow[idx++] = result.getNrErrors();
       }
       if (!Utils.isEmpty(meta.getExecutionLinesReadField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrLinesRead());
+        outputRow[idx++] = result.getNrLinesRead();
       }
       if (!Utils.isEmpty(meta.getExecutionLinesWrittenField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrLinesWritten());
+        outputRow[idx++] = result.getNrLinesWritten();
       }
       if (!Utils.isEmpty(meta.getExecutionLinesInputField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrLinesInput());
+        outputRow[idx++] = result.getNrLinesInput();
       }
       if (!Utils.isEmpty(meta.getExecutionLinesOutputField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrLinesOutput());
+        outputRow[idx++] = result.getNrLinesOutput();
       }
       if (!Utils.isEmpty(meta.getExecutionLinesRejectedField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrLinesRejected());
+        outputRow[idx++] = result.getNrLinesRejected();
       }
       if (!Utils.isEmpty(meta.getExecutionLinesUpdatedField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrLinesUpdated());
+        outputRow[idx++] = result.getNrLinesUpdated();
       }
       if (!Utils.isEmpty(meta.getExecutionLinesDeletedField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrLinesDeleted());
+        outputRow[idx++] = result.getNrLinesDeleted();
       }
       if (!Utils.isEmpty(meta.getExecutionFilesRetrievedField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrFilesRetrieved());
+        outputRow[idx++] = result.getNrFilesRetrieved();
       }
       if (!Utils.isEmpty(meta.getExecutionExitStatusField())) {
-        outputRow[idx++] = Long.valueOf(result.getExitStatus());
+        outputRow[idx++] = (long) result.getExitStatus();
       }
       if (!Utils.isEmpty(meta.getExecutionLogTextField())) {
         String channelId = data.executorWorkflow.getLogChannelId();
@@ -379,10 +376,10 @@ public class WorkflowExecutor extends BaseTransform<WorkflowExecutorMeta, Workfl
     //
     List<WorkflowExecutorParameters> parameters = meta.getParameters();
 
-    for (int i = 0; i < parameters.size(); i++) {
-      String variableName = parameters.get(i).getVariable();
-      String variableInput = parameters.get(i).getInput();
-      String fieldName = parameters.get(i).getField();
+    for (WorkflowExecutorParameters parameter : parameters) {
+      String variableName = parameter.getVariable();
+      String variableInput = parameter.getInput();
+      String fieldName = parameter.getField();
       String variableValue = null;
       if (StringUtils.isNotEmpty(variableName)) {
         // The value is provided by a field in an input row

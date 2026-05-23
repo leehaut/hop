@@ -42,7 +42,7 @@ import org.apache.beam.sdk.metrics.MetricResult;
 import org.apache.beam.sdk.metrics.MetricResults;
 import org.apache.beam.sdk.metrics.MetricsFilter;
 import org.apache.beam.sdk.util.ThrowingSupplier;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.beam.metadata.RunnerType;
 import org.apache.hop.beam.pipeline.HopPipelineMetaToBeamPipelineConverter;
 import org.apache.hop.beam.util.BeamConst;
@@ -50,6 +50,7 @@ import org.apache.hop.core.Const;
 import org.apache.hop.core.IRowSet;
 import org.apache.hop.core.Result;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.extension.ExtensionPointHandler;
 import org.apache.hop.core.extension.HopExtensionPoint;
 import org.apache.hop.core.logging.ILogChannel;
@@ -98,6 +99,8 @@ public abstract class BeamPipelineEngine extends Variables
 
   static MetricResults EMPTY_METRIC_RESULTS =
       new DefaultMetricResults(
+          Collections.emptyList(),
+          Collections.emptyList(),
           Collections.emptyList(),
           Collections.emptyList(),
           Collections.emptyList(),
@@ -306,19 +309,15 @@ public abstract class BeamPipelineEngine extends Variables
 
     RunnerType runnerType = beamEngineRunConfiguration.getRunnerType();
     try {
-      switch (runnerType) {
-        case Direct:
-          return DirectRunner.fromOptions(pipeline.getOptions()).run(pipeline);
-        case Flink:
-          return FlinkRunner.fromOptions(pipeline.getOptions()).run(pipeline);
-        case DataFlow:
-          return DataflowRunner.fromOptions(pipeline.getOptions()).run(pipeline);
-        case Spark:
-          return SparkRunner.fromOptions(pipeline.getOptions()).run(pipeline);
-        default:
-          throw new HopException(
-              "Execution on runner '" + runnerType.name() + "' is not supported yet.");
-      }
+      return switch (runnerType) {
+        case Direct -> DirectRunner.fromOptions(pipeline.getOptions()).run(pipeline);
+        case Flink -> FlinkRunner.fromOptions(pipeline.getOptions()).run(pipeline);
+        case DataFlow -> DataflowRunner.fromOptions(pipeline.getOptions()).run(pipeline);
+        case Spark -> SparkRunner.fromOptions(pipeline.getOptions()).run(pipeline);
+        default ->
+            throw new HopException(
+                "Execution on runner '" + runnerType.name() + "' is not supported yet.");
+      };
     } catch (Throwable e) {
       throw new HopException("Error executing pipeline with runner " + runnerType.name(), e);
     }
@@ -347,6 +346,8 @@ public abstract class BeamPipelineEngine extends Variables
         //
         try {
           beamPipelineResults = executePipeline(beamPipeline);
+          ExtensionPointHandler.callExtensionPoint(
+              logChannel, this, HopExtensionPoint.PipelineStart.id, this);
         } catch (Throwable e) {
           hasStartupErrors.set(true);
 
@@ -385,6 +386,9 @@ public abstract class BeamPipelineEngine extends Variables
                 });
         beamThread.start();
 
+        ExtensionPointHandler.callExtensionPoint(
+            logChannel, this, HopExtensionPoint.PipelineStart.id, this);
+
         // Keep track of when this thread is done...
         //
         new Thread(
@@ -403,7 +407,7 @@ public abstract class BeamPipelineEngine extends Variables
                       ExecutorUtil.cleanup(refreshTimer);
                     }
                   } catch (Exception e) {
-                    throw new RuntimeException("Error post-processing a beam pipeline", e);
+                    throw new HopRuntimeException("Error post-processing a beam pipeline", e);
                   }
                 })
             .start();
@@ -680,7 +684,8 @@ public abstract class BeamPipelineEngine extends Variables
         evaluatePipelineStatus();
       }
     } catch (Exception e) {
-      throw new RuntimeException("Stopping of pipeline '" + pipelineMeta.getName() + "' failed", e);
+      throw new HopRuntimeException(
+          "Stopping of pipeline '" + pipelineMeta.getName() + "' failed", e);
     }
   }
 
@@ -777,22 +782,18 @@ public abstract class BeamPipelineEngine extends Variables
       // For every transform metric, take the maximum amount
       //
       Long read = engineMetrics.getComponentMetric(component, Pipeline.METRIC_READ);
-      result.setNrLinesRead(Math.max(result.getNrLinesRead(), read == null ? 0 : read.longValue()));
+      result.setNrLinesRead(Math.max(result.getNrLinesRead(), read == null ? 0 : read));
       Long written = engineMetrics.getComponentMetric(component, Pipeline.METRIC_WRITTEN);
-      result.setNrLinesWritten(
-          Math.max(result.getNrLinesWritten(), written == null ? 0 : written.longValue()));
+      result.setNrLinesWritten(Math.max(result.getNrLinesWritten(), written == null ? 0 : written));
       Long input = engineMetrics.getComponentMetric(component, Pipeline.METRIC_INPUT);
-      result.setNrLinesInput(
-          Math.max(result.getNrLinesInput(), input == null ? 0 : input.longValue()));
+      result.setNrLinesInput(Math.max(result.getNrLinesInput(), input == null ? 0 : input));
       Long output = engineMetrics.getComponentMetric(component, Pipeline.METRIC_OUTPUT);
-      result.setNrLinesOutput(
-          Math.max(result.getNrLinesOutput(), output == null ? 0 : output.longValue()));
+      result.setNrLinesOutput(Math.max(result.getNrLinesOutput(), output == null ? 0 : output));
       Long updated = engineMetrics.getComponentMetric(component, Pipeline.METRIC_UPDATED);
-      result.setNrLinesUpdated(
-          Math.max(result.getNrLinesUpdated(), updated == null ? 0 : updated.longValue()));
+      result.setNrLinesUpdated(Math.max(result.getNrLinesUpdated(), updated == null ? 0 : updated));
       Long rejected = engineMetrics.getComponentMetric(component, Pipeline.METRIC_REJECTED);
       result.setNrLinesRejected(
-          Math.max(result.getNrLinesRejected(), rejected == null ? 0 : rejected.longValue()));
+          Math.max(result.getNrLinesRejected(), rejected == null ? 0 : rejected));
     }
 
     result.setStopped(isStopped());
@@ -1043,6 +1044,9 @@ public abstract class BeamPipelineEngine extends Variables
 
   @Override
   public void fireExecutionFinishedListeners() throws HopException {
+    ExtensionPointHandler.callExtensionPoint(
+        logChannel, this, HopExtensionPoint.PipelineFinish.id, this);
+
     synchronized (executionFinishedListeners) {
       for (IExecutionFinishedListener<IPipelineEngine<PipelineMeta>> listener :
           executionFinishedListeners) {
@@ -1155,7 +1159,7 @@ public abstract class BeamPipelineEngine extends Variables
             try {
               updatePipelineState(iLocation);
             } catch (Exception e) {
-              throw new RuntimeException(
+              throw new HopRuntimeException(
                   "Error registering execution info (data and state) at location "
                       + executionInfoLocation.getName(),
                   e);
@@ -1905,7 +1909,7 @@ public abstract class BeamPipelineEngine extends Variables
     } catch (UnsupportedOperationException e) {
       logChannel.logBasic(e.getMessage());
     } catch (Exception e) {
-      throw new RuntimeException(e);
+      throw new HopRuntimeException(e);
     }
     return defaultValue;
   }

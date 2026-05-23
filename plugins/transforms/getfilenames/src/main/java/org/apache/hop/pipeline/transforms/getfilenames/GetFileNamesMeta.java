@@ -20,6 +20,8 @@ package org.apache.hop.pipeline.transforms.getfilenames;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.CheckResult;
 import org.apache.hop.core.ICheckResult;
@@ -27,6 +29,7 @@ import org.apache.hop.core.annotations.Transform;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopTransformException;
 import org.apache.hop.core.fileinput.FileInputList;
+import org.apache.hop.core.fileinput.FileTypeFilter;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.row.value.ValueMetaBoolean;
@@ -56,6 +59,8 @@ import org.apache.hop.resource.ResourceReference;
     categoryDescription = "i18n:org.apache.hop.pipeline.transform:BaseTransform.Category.Input",
     keywords = "i18n::GetFileNamesMeta.keyword",
     documentationUrl = "/pipeline/transforms/getfilenames.html")
+@Getter
+@Setter
 public class GetFileNamesMeta extends BaseTransformMeta<GetFileNames, GetFileNamesData> {
   private static final Class<?> PKG = GetFileNamesMeta.class;
 
@@ -69,7 +74,7 @@ public class GetFileNamesMeta extends BaseTransformMeta<GetFileNames, GetFileNam
   public static final String[] RequiredFilesCode = new String[] {"N", "Y"};
 
   /** Filter indicating file filter */
-  private FileInputList.FileTypeFilter fileTypeFilter;
+  private FileTypeFilter fileTypeFilter;
 
   @HopMetadataProperty(
       key = "file",
@@ -152,153 +157,7 @@ public class GetFileNamesMeta extends BaseTransformMeta<GetFileNames, GetFileNam
     super(); // allocate BaseTransformMeta
     filesList = new ArrayList<>();
     filterItemList = new ArrayList<>();
-  }
-
-  public List<FileItem> getFilesList() {
-    return filesList;
-  }
-
-  public void setFilesList(List<FileItem> filesList) {
-    this.filesList = filesList;
-  }
-
-  public List<FilterItem> getFilterItemList() {
-    return filterItemList;
-  }
-
-  public void setFilterItemList(List<FilterItem> filterItemList) {
-    this.filterItemList = filterItemList;
-  }
-
-  /**
-   * @return the doNotFailIfNoFile flag
-   */
-  public boolean isDoNotFailIfNoFile() {
-    return doNotFailIfNoFile;
-  }
-
-  /**
-   * @param doNotFailIfNoFile the doNotFailIfNoFile to set
-   */
-  public void setDoNotFailIfNoFile(boolean doNotFailIfNoFile) {
-    this.doNotFailIfNoFile = doNotFailIfNoFile;
-  }
-
-  /**
-   * @return the raiseAnExceptionIfNoFile flag
-   */
-  public boolean isRaiseAnExceptionIfNoFile() {
-    return raiseAnExceptionIfNoFile;
-  }
-
-  /**
-   * @param raiseAnExceptionIfNoFile the raiseAnExceptionIfNoFile to set
-   */
-  public void setRaiseAnExceptionIfNoFile(boolean raiseAnExceptionIfNoFile) {
-    this.raiseAnExceptionIfNoFile = raiseAnExceptionIfNoFile;
-  }
-
-  /**
-   * @return Returns the rowNumberField.
-   */
-  public String getRowNumberField() {
-    return rowNumberField;
-  }
-
-  /**
-   * @param dynamicFilenameField The dynamic filename field to set.
-   */
-  public void setDynamicFilenameField(String dynamicFilenameField) {
-    this.dynamicFilenameField = dynamicFilenameField;
-  }
-
-  /**
-   * @param dynamicWildcardField The dynamic wildcard field to set.
-   */
-  public void setDynamicWildcardField(String dynamicWildcardField) {
-    this.dynamicWildcardField = dynamicWildcardField;
-  }
-
-  /**
-   * @param rowNumberField The rowNumberField to set.
-   */
-  public void setRowNumberField(String rowNumberField) {
-    this.rowNumberField = rowNumberField;
-  }
-
-  /**
-   * @return Returns the dynamic filename field (from previous transforms)
-   */
-  public String getDynamicFilenameField() {
-    return dynamicFilenameField;
-  }
-
-  /**
-   * @return Returns the dynamic wildcard field (from previous transforms)
-   */
-  public String getDynamicWildcardField() {
-    return dynamicWildcardField;
-  }
-
-  public String getDynamicExcludeWildcardField() {
-    return this.dynamicExcludeWildcardField;
-  }
-
-  /**
-   * @param dynamicExcludeWildcardField The dynamic excludeWildcard field to set.
-   */
-  public void setDynamicExcludeWildcardField(String dynamicExcludeWildcardField) {
-    this.dynamicExcludeWildcardField = dynamicExcludeWildcardField;
-  }
-
-  /**
-   * @return Returns the includeRowNumber.
-   */
-  public boolean isIncludeRowNumber() {
-    return includeRowNumber;
-  }
-
-  /**
-   * @return Returns the File field.
-   */
-  public boolean isFileField() {
-    return fileField;
-  }
-
-  /**
-   * @param fileField The filefield to set.
-   */
-  public void setFileField(boolean fileField) {
-    this.fileField = fileField;
-  }
-
-  public boolean isDynamicIncludeSubFolders() {
-    return dynamicIncludeSubFolders;
-  }
-
-  public void setDynamicIncludeSubFolders(boolean dynamicIncludeSubFolders) {
-    this.dynamicIncludeSubFolders = dynamicIncludeSubFolders;
-  }
-
-  /**
-   * @param includeRowNumber The includeRowNumber to set.
-   */
-  public void setIncludeRowNumber(boolean includeRowNumber) {
-    this.includeRowNumber = includeRowNumber;
-  }
-
-  /**
-   * @param addResultFile The isaddresult to set.
-   */
-  public void setAddResultFile(boolean addResultFile) {
-    this.addResultFile = addResultFile;
-  }
-
-  /**
-   * @return Returns isaddresult.
-   */
-  public boolean isAddResultFile() {
-    return addResultFile;
+    raiseAnExceptionIfNoFile = true;
   }
 
   public String getRequiredFilesDesc(String tt) {
@@ -312,20 +171,6 @@ public class GetFileNamesMeta extends BaseTransformMeta<GetFileNames, GetFileNam
     }
   }
 
-  /**
-   * @return Returns the rowLimit.
-   */
-  public long getRowLimit() {
-    return rowLimit;
-  }
-
-  /**
-   * @param rowLimit The rowLimit to set.
-   */
-  public void setRowLimit(long rowLimit) {
-    this.rowLimit = rowLimit;
-  }
-
   @Override
   public Object clone() {
     return (GetFileNamesMeta) super.clone();
@@ -334,7 +179,7 @@ public class GetFileNamesMeta extends BaseTransformMeta<GetFileNames, GetFileNam
   @Override
   public void setDefault() {
     doNotFailIfNoFile = false;
-    filterItemList.add(new FilterItem(FileInputList.FileTypeFilter.FILES_AND_FOLDERS.toString()));
+    filterItemList.add(new FilterItem(FileTypeFilter.FILES_AND_FOLDERS.toString()));
     addResultFile = true;
     fileField = false;
     includeRowNumber = false;
@@ -436,11 +281,10 @@ public class GetFileNamesMeta extends BaseTransformMeta<GetFileNames, GetFileNam
     }
   }
 
-  private FileInputList.FileTypeFilter[] buildFileTypeFiltersArray() {
-    FileInputList.FileTypeFilter[] filters = new FileInputList.FileTypeFilter[filesList.size()];
-    FileInputList.FileTypeFilter elementTypeToGet =
-        FileInputList.FileTypeFilter.getByName(
-            getFilterItemList().get(0).getFileTypeFilterSelection());
+  private FileTypeFilter[] buildFileTypeFiltersArray() {
+    FileTypeFilter[] filters = new FileTypeFilter[filesList.size()];
+    FileTypeFilter elementTypeToGet =
+        FileTypeFilter.getByName(getFilterItemList().get(0).getFileTypeFilterSelection());
 
     for (int i = 0; i < filesList.size(); i++) {
       filters[i] = elementTypeToGet;
@@ -451,12 +295,13 @@ public class GetFileNamesMeta extends BaseTransformMeta<GetFileNames, GetFileNam
   public String[] getFilePaths(IVariables variables) {
     return FileInputList.createFilePathList(
         variables,
-        buildFilenamesArray(),
-        buildMasksArray(),
-        buildExcludeMasksArray(),
-        buildFileRequiredArray(),
-        includeSubFolderBoolean(),
-        buildFileTypeFiltersArray());
+        FileInputList.buildInputFiles(
+            buildFilenamesArray(),
+            buildMasksArray(),
+            buildExcludeMasksArray(),
+            buildFileRequiredArray(),
+            includeSubFolderBoolean(),
+            buildFileTypeFiltersArray()));
   }
 
   public FileInputList getFileList(IVariables variables) {
@@ -621,8 +466,8 @@ public class GetFileNamesMeta extends BaseTransformMeta<GetFileNames, GetFileNam
 
     String[] files = getFilePaths(variables);
     if (files != null) {
-      for (int i = 0; i < files.length; i++) {
-        reference.getEntries().add(new ResourceEntry(files[i], ResourceType.FILE));
+      for (String file : files) {
+        reference.getEntries().add(new ResourceEntry(file, ResourceType.FILE));
       }
     }
     return references;
@@ -656,8 +501,7 @@ public class GetFileNamesMeta extends BaseTransformMeta<GetFileNames, GetFileNam
 
         // Replace the filename ONLY (folder or filename)
         //
-        for (int i = 0; i < filesList.size(); i++) {
-          FileItem fi = filesList.get(i);
+        for (FileItem fi : filesList) {
           FileObject fileObject = HopVfs.getFileObject(variables.resolve(fi.getFileName()));
           fi.setFileName(
               iResourceNaming.nameResource(fileObject, variables, Utils.isEmpty(fi.getFileMask())));

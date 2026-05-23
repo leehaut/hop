@@ -20,7 +20,9 @@ package org.apache.hop.projects.project;
 import java.io.File;
 import java.util.Collections;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import lombok.Getter;
+import lombok.Setter;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopException;
@@ -33,7 +35,9 @@ import org.apache.hop.core.vfs.HopVfs;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.projects.config.ProjectsConfig;
 import org.apache.hop.projects.config.ProjectsConfigSingleton;
+import org.apache.hop.projects.gui.ProjectsGuiPlugin;
 import org.apache.hop.projects.util.ProjectsUtil;
+import org.apache.hop.ui.core.ConstUi;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.dialog.BaseDialog;
 import org.apache.hop.ui.core.dialog.ErrorDialog;
@@ -81,6 +85,7 @@ public class ProjectDialog extends Dialog {
   private Text wDescription;
   private Text wCompany;
   private Text wDepartment;
+  private Text wVersion;
 
   private TextVar wMetadataBaseFolder;
   private TextVar wUnitTestsBasePath;
@@ -89,16 +94,17 @@ public class ProjectDialog extends Dialog {
   private TableView wVariables;
 
   private final IVariables variables;
-  private boolean needingProjectRefresh;
 
-  private final Boolean editMode;
+  @Getter @Setter private boolean needingProjectRefresh;
+
+  private final boolean editMode;
 
   public ProjectDialog(
       Shell parent,
       Project project,
       ProjectConfig projectConfig,
       IVariables variables,
-      Boolean editMode) {
+      boolean editMode) {
     super(parent, SWT.DIALOG_TRIM | SWT.APPLICATION_MODAL | SWT.RESIZE);
 
     this.project = project;
@@ -112,11 +118,16 @@ public class ProjectDialog extends Dialog {
     try {
       project.modifyVariables(variables, projectConfig, Collections.emptyList(), null);
     } catch (Exception e) {
-      new ErrorDialog(
-          parent,
-          BaseMessages.getString(PKG, "ProjectDialog.ProjectDefinitionError.Error.Dialog.Header"),
-          BaseMessages.getString(PKG, "ProjectDialog.ProjectDefinitionError.Error.Dialog.Message"),
-          e);
+      if (ProjectsGuiPlugin.extractMissingProjectPath(e) == null) {
+        new ErrorDialog(
+            parent,
+            BaseMessages.getString(PKG, "ProjectDialog.ProjectDefinitionError.Error.Dialog.Header"),
+            BaseMessages.getString(
+                PKG, "ProjectDialog.ProjectDefinitionError.Error.Dialog.Message"),
+            e);
+      }
+      // When the project folder does not exist, allow the dialog to open so the user can
+      // update the path in the configuration.
     }
   }
 
@@ -125,7 +136,14 @@ public class ProjectDialog extends Dialog {
     Shell parent = getParent();
 
     shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.APPLICATION_MODAL | SWT.RESIZE);
-    shell.setImage(GuiResource.getInstance().getImageHopUi());
+    shell.setImage(
+        GuiResource.getInstance()
+            .getImage(
+                "project.svg",
+                PKG.getClassLoader(),
+                ConstUi.SMALL_ICON_SIZE,
+                ConstUi.SMALL_ICON_SIZE));
+
     PropsUi.setLook(shell);
 
     int margin = PropsUi.getMargin() + 2;
@@ -135,7 +153,7 @@ public class ProjectDialog extends Dialog {
     formLayout.marginWidth = PropsUi.getFormMargin();
     formLayout.marginHeight = PropsUi.getFormMargin();
 
-    shell.setLayout(new FormLayout());
+    shell.setLayout(formLayout);
     shell.setText(BaseMessages.getString(PKG, "ProjectDialog.Shell.Name"));
 
     // Buttons go at the bottom of the dialog
@@ -152,7 +170,6 @@ public class ProjectDialog extends Dialog {
     scroll.setLayout(new FillLayout());
     scroll.setExpandHorizontal(true);
     scroll.setExpandVertical(true);
-    scroll.setBackground(shell.getDisplay().getSystemColor(SWT.COLOR_BLACK));
     PropsUi.setLook(scroll);
     shell.setLayoutData(scroll);
 
@@ -302,6 +319,23 @@ public class ProjectDialog extends Dialog {
     wDepartment.setLayoutData(fdDepartment);
     lastControl = wDepartment;
 
+    Label wlVersion = new Label(comp, SWT.RIGHT);
+    PropsUi.setLook(wlVersion);
+    wlVersion.setText(BaseMessages.getString(PKG, "ProjectDialog.Label.Version"));
+    FormData fdlVersion = new FormData();
+    fdlVersion.left = new FormAttachment(0, 0);
+    fdlVersion.right = new FormAttachment(middle, 0);
+    fdlVersion.top = new FormAttachment(lastControl, margin);
+    wlVersion.setLayoutData(fdlVersion);
+    wVersion = new Text(comp, SWT.SINGLE | SWT.BORDER | SWT.LEFT);
+    PropsUi.setLook(wVersion);
+    FormData fdVersion = new FormData();
+    fdVersion.left = new FormAttachment(middle, margin);
+    fdVersion.right = new FormAttachment(99, 0);
+    fdVersion.top = new FormAttachment(wlVersion, 0, SWT.CENTER);
+    wVersion.setLayoutData(fdVersion);
+    lastControl = wVersion;
+
     Label wlMetadataBaseFolder = new Label(comp, SWT.RIGHT);
     PropsUi.setLook(wlMetadataBaseFolder);
     wlMetadataBaseFolder.setText(
@@ -438,6 +472,7 @@ public class ProjectDialog extends Dialog {
     scroll.setMinSize(comp.computeSize(SWT.DEFAULT, SWT.DEFAULT));
     shell.setMinimumSize(comp.getBounds().width, 200);
     shell.setDefaultButton(wOk);
+    wName.setFocus();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return returnValue;
@@ -685,6 +720,7 @@ public class ProjectDialog extends Dialog {
     wDescription.setText(Const.NVL(project.getDescription(), ""));
     wCompany.setText(Const.NVL(project.getCompany(), ""));
     wDepartment.setText(Const.NVL(project.getDepartment(), ""));
+    wVersion.setText(Const.NVL(project.getVersion(), ""));
     wMetadataBaseFolder.setText(Const.NVL(project.getMetadataBaseFolder(), ""));
     wUnitTestsBasePath.setText(Const.NVL(project.getUnitTestsBasePath(), ""));
     wDataSetCsvFolder.setText(Const.NVL(project.getDataSetsCsvFolder(), ""));
@@ -728,6 +764,7 @@ public class ProjectDialog extends Dialog {
     project.setDescription(wDescription.getText());
     project.setCompany(wCompany.getText());
     project.setDepartment(wDepartment.getText());
+    project.setVersion(wVersion.getText());
     project.setMetadataBaseFolder(wMetadataBaseFolder.getText());
     project.setUnitTestsBasePath(wUnitTestsBasePath.getText());
     project.setDataSetsCsvFolder(wDataSetCsvFolder.getText());
@@ -744,31 +781,29 @@ public class ProjectDialog extends Dialog {
       project.getDescribedVariables().add(variable);
     }
 
-    // Update the project to the right absolute configuration file
+    // Update the project to the right absolute configuration file (skip when folder missing so user
+    // can fix path)
     //
     if (StringUtils.isNotEmpty(projectConfig.getProjectHome())
         && StringUtils.isNotEmpty(projectConfig.configFilename)) {
-      project.setConfigFilename(projectConfig.getActualProjectConfigFilename(variables));
+      try {
+        project.setConfigFilename(projectConfig.getActualProjectConfigFilename(variables));
+      } catch (Exception e) {
+        if (ProjectsGuiPlugin.extractMissingProjectPath(e) == null) {
+          throw new HopException(e);
+        }
+        // Project folder does not exist yet; leave config filename unset so user can edit path
+      }
     }
 
-    // Check for infinite loops
+    // Check for infinite loops (skip when parent chain has missing folder so user can fix)
     //
-    project.verifyProjectsChain(projectConfig.getProjectName(), variables);
-  }
-
-  /**
-   * Gets variablesChanged
-   *
-   * @return value of variablesChanged
-   */
-  public boolean isNeedingProjectRefresh() {
-    return needingProjectRefresh;
-  }
-
-  /**
-   * @param needingProjectRefresh The variablesChanged to set
-   */
-  public void setNeedingProjectRefresh(boolean needingProjectRefresh) {
-    this.needingProjectRefresh = needingProjectRefresh;
+    try {
+      project.verifyProjectsChain(projectConfig.getProjectName(), variables);
+    } catch (Exception e) {
+      if (ProjectsGuiPlugin.extractMissingProjectPath(e) == null) {
+        throw new HopException(e);
+      }
+    }
   }
 }

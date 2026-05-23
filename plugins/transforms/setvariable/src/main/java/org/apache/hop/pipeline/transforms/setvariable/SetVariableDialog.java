@@ -28,6 +28,7 @@ import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.TransformMeta;
 import org.apache.hop.ui.core.ConstUi;
+import org.apache.hop.ui.core.FormDataBuilder;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.dialog.BaseDialog;
 import org.apache.hop.ui.core.dialog.ErrorDialog;
@@ -37,22 +38,17 @@ import org.apache.hop.ui.core.widget.TableView;
 import org.apache.hop.ui.pipeline.transform.BaseTransformDialog;
 import org.apache.hop.ui.pipeline.transform.ComponentSelectionListener;
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
-import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 public class SetVariableDialog extends BaseTransformDialog {
   private static final Class<?> PKG = SetVariableMeta.class;
 
   public static final String STRING_USAGE_WARNING_PARAMETER = "SetVariableUsageWarning";
-
-  private Text wTransformName;
 
   private Button wFormat;
 
@@ -75,71 +71,23 @@ public class SetVariableDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "SetVariableDialog.DialogTitle"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).get(e -> get()).cancel(e -> cancel()).build();
 
-    ModifyListener lsMod = e -> input.setChanged();
     changed = input.hasChanged();
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "SetVariableDialog.DialogTitle"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // Some buttons at the bottom
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wGet = new Button(shell, SWT.PUSH);
-    wGet.setText(BaseMessages.getString(PKG, "System.Button.GetFields"));
-    wGet.addListener(SWT.Selection, e -> get());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wGet, wCancel}, margin, null);
-
-    // TransformName line
-    Label wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "SetVariableDialog.TransformName.Label"));
-    PropsUi.setLook(wlTransformName);
-    FormData fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    FormData fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
 
     Label wlFormat = new Label(shell, SWT.RIGHT);
     wlFormat.setText(BaseMessages.getString(PKG, "SetVariableDialog.Format.Label"));
     wlFormat.setToolTipText(BaseMessages.getString(PKG, "SetVariableDialog.Format.Tooltip"));
     PropsUi.setLook(wlFormat);
-    FormData fdlFormat = new FormData();
-    fdlFormat.left = new FormAttachment(0, 0);
-    fdlFormat.right = new FormAttachment(middle, -margin);
-    fdlFormat.top = new FormAttachment(wTransformName, margin);
-    wlFormat.setLayoutData(fdlFormat);
+    wlFormat.setLayoutData(
+        FormDataBuilder.builder().top(wSpacer, margin).left().right(middle, -margin).build());
+
     wFormat = new Button(shell, SWT.CHECK);
     wFormat.setToolTipText(BaseMessages.getString(PKG, "SetVariableDialog.Format.Tooltip"));
     PropsUi.setLook(wFormat);
-    FormData fdFormat = new FormData();
-    fdFormat.left = new FormAttachment(middle, 0);
-    fdFormat.top = new FormAttachment(wlFormat, 0, SWT.CENTER);
-    wFormat.setLayoutData(fdFormat);
+    wFormat.setLayoutData(FormDataBuilder.builder().top(wSpacer, margin).left(middle, 0).build());
     wFormat.addSelectionListener(new ComponentSelectionListener(input));
 
     Label wlFields = new Label(shell, SWT.NONE);
@@ -150,7 +98,7 @@ public class SetVariableDialog extends BaseTransformDialog {
     fdlFields.top = new FormAttachment(wFormat, margin);
     wlFields.setLayoutData(fdlFields);
 
-    final int FieldsRows = input.getVariables().size();
+    final int fieldsRows = input.getVariables().size();
     colinf = new ColumnInfo[4];
     colinf[0] =
         new ColumnInfo(
@@ -184,7 +132,7 @@ public class SetVariableDialog extends BaseTransformDialog {
             shell,
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
             colinf,
-            FieldsRows,
+            fieldsRows,
             lsMod,
             props);
 
@@ -192,7 +140,7 @@ public class SetVariableDialog extends BaseTransformDialog {
     fdFields.left = new FormAttachment(0, 0);
     fdFields.top = new FormAttachment(wlFields, margin);
     fdFields.right = new FormAttachment(100, 0);
-    fdFields.bottom = new FormAttachment(wOk, -2 * margin);
+    fdFields.bottom = new FormAttachment(wOk, -margin);
     wFields.setLayoutData(fdFields);
 
     //
@@ -219,7 +167,7 @@ public class SetVariableDialog extends BaseTransformDialog {
 
     getData();
     input.setChanged(changed);
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -234,8 +182,6 @@ public class SetVariableDialog extends BaseTransformDialog {
 
   /** Copy information from the meta-data input to the dialog fields. */
   public void getData() {
-    wTransformName.setText(transformName);
-
     for (int i = 0; i < input.getVariables().size(); i++) {
       TableItem item = wFields.table.getItem(i);
       VariableItem vi = input.getVariables().get(i);
@@ -262,9 +208,6 @@ public class SetVariableDialog extends BaseTransformDialog {
 
     wFields.setRowNums();
     wFields.optWidth(true);
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   private void cancel() {
@@ -277,8 +220,8 @@ public class SetVariableDialog extends BaseTransformDialog {
     if (Utils.isEmpty(wTransformName.getText())) {
       return;
     }
-
-    transformName = wTransformName.getText(); // return value
+    // return value
+    transformName = wTransformName.getText();
 
     int count = wFields.nrNonEmpty();
 

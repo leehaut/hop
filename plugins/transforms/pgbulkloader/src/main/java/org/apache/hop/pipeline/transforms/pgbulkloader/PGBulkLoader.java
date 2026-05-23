@@ -37,6 +37,7 @@ import org.apache.hop.core.Const;
 import org.apache.hop.core.database.Database;
 import org.apache.hop.core.database.DatabaseMeta;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopValueException;
 import org.apache.hop.core.logging.ILoggingObject;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.IValueMeta;
@@ -129,12 +130,16 @@ public class PGBulkLoader extends BaseTransform<PGBulkLoaderMeta, PGBulkLoaderDa
     try {
       try (ResultSet rs = statement.executeQuery("show client_encoding")) {
         if (!rs.next() || rs.getMetaData().getColumnCount() != 1) {
-          logBasic("Cannot detect client_encoding, using system default encoding");
+          if (isBasic()) {
+            logBasic("Cannot detect client_encoding, using system default encoding");
+          }
           return;
         }
 
         String clientEncodingStr = rs.getString(1);
-        logBasic("Detect client_encoding: " + clientEncodingStr);
+        if (isBasic()) {
+          logBasic("Detect client_encoding: " + clientEncodingStr);
+        }
         clientEncoding = Charset.forName(clientEncodingStr);
       }
     } catch (SQLException | IllegalArgumentException ex) {
@@ -154,7 +159,9 @@ public class PGBulkLoader extends BaseTransform<PGBulkLoaderMeta, PGBulkLoaderDa
 
       processTruncate();
 
-      logBasic("Launching command: " + copyCmd);
+      if (isBasic()) {
+        logBasic("Launching command: " + copyCmd);
+      }
       pgCopyOut = new PGCopyOutputStream((PGConnection) data.db.getConnection(), copyCmd);
 
     } catch (Exception ex) {
@@ -169,7 +176,9 @@ public class PGBulkLoader extends BaseTransform<PGBulkLoaderMeta, PGBulkLoaderDa
     String dbNameOverride = resolve(pgBulkLoaderMeta.getDbNameOverride());
     if (!Utils.isEmpty(dbNameOverride)) {
       dbMeta.setDBName(dbNameOverride.trim());
-      logDebug("DB name overridden to the value: " + dbNameOverride);
+      if (isDebug()) {
+        logDebug("DB name overridden to the value: " + dbNameOverride);
+      }
     }
     return new Database(parentObject, variables, dbMeta);
   }
@@ -187,7 +196,9 @@ public class PGBulkLoader extends BaseTransform<PGBulkLoaderMeta, PGBulkLoaderDa
       DatabaseMeta dm = getPipelineMeta().findDatabase(meta.getConnection(), variables);
       String tableName =
           dm.getQuotedSchemaTableCombination(this, meta.getSchemaName(), meta.getTableName());
-      logBasic("Launching command: " + "TRUNCATE " + tableName);
+      if (isBasic()) {
+        logBasic("Launching command: " + "TRUNCATE " + tableName);
+      }
 
       Statement statement = connection.createStatement();
 
@@ -255,6 +266,20 @@ public class PGBulkLoader extends BaseTransform<PGBulkLoaderMeta, PGBulkLoaderDa
       setOutputDone(); // signal end to receiver(s)
       return false;
     }
+  }
+
+  /**
+   * Encodes a boolean for PostgreSQL COPY text format. {@code t}/{@code f} are accepted; literals
+   * like {@code 1.0} from a numeric conversion are not.
+   */
+  @VisibleForTesting
+  static byte[] booleanFieldBytesForPgCopyText(
+      IValueMeta valueMeta, Object valueData, Charset charset) throws HopValueException {
+    Boolean bool = valueMeta.getBoolean(valueData);
+    if (bool == null) {
+      return null;
+    }
+    return (bool ? "t" : "f").getBytes(charset);
   }
 
   private void writeRowToPostgres(IRowMeta rowMeta, Object[] r) throws HopException {
@@ -382,11 +407,10 @@ public class PGBulkLoader extends BaseTransform<PGBulkLoaderMeta, PGBulkLoaderDa
               }
               break;
             case IValueMeta.TYPE_BOOLEAN:
-              if (valueMeta.isStorageBinaryString()) {
-                pgCopyOut.write((byte[]) valueData);
-              } else {
-                pgCopyOut.write(
-                    Double.toString(valueMeta.getNumber(valueData)).getBytes(clientEncoding));
+              byte[] boolBytes =
+                  booleanFieldBytesForPgCopyText(valueMeta, valueData, clientEncoding);
+              if (boolBytes != null) {
+                pgCopyOut.write(boolBytes);
               }
               break;
             case IValueMeta.TYPE_NUMBER:

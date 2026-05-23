@@ -39,13 +39,18 @@ public class AzureMetadataType extends HopMetadataBase implements Serializable, 
   private static final Class<?> PKG = AzureMetadataType.class;
   @HopMetadataProperty private String description;
   @HopMetadataProperty private String storageAccountName;
+  @HopMetadataProperty private String authenticationType;
 
   @HopMetadataProperty(password = true)
   private String storageAccountKey;
 
   @HopMetadataProperty private String storageAccountEndpoint;
 
+  /** Cache TTL in seconds for list-result caching (same as S3/MinIO). */
+  @HopMetadataProperty private String cacheTtlSeconds;
+
   public AzureMetadataType() {
-    // Do nothing
+    this.authenticationType = "Key"; // Default to Key authentication
+    this.cacheTtlSeconds = "5";
   }
 }

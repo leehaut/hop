@@ -17,17 +17,17 @@
 
 package org.apache.hop.www;
 
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.io.Serial;
 import java.util.UUID;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.vfs2.FileObject;
-import org.apache.hop.core.Const;
 import org.apache.hop.core.annotations.HopServerServlet;
 import org.apache.hop.core.logging.LoggingObjectType;
 import org.apache.hop.core.logging.SimpleLoggingObject;
@@ -55,16 +55,20 @@ import org.w3c.dom.Document;
  * a zip file. It ends up in a temporary file.
  *
  * <p>The servlet returns the name of the file stored.
+ *
+ * @deprecated Use {@link RegisterPackageServlet} ({@code /hop/registerPackage}) instead. The remote
+ *     pipeline and workflow engines call {@code registerPackage} for all export operations. This
+ *     endpoint will be removed in a future release.
  */
-@HopServerServlet(id = "addExport", name = "Upload a resources export file")
+@Deprecated(since = "2.18.0")
+@HopServerServlet(id = "addExport", name = "Upload a resources export file (deprecated)")
 public class AddExportServlet extends BaseHttpServlet implements IHopServerPlugin {
   public static final String PARAMETER_LOAD = "load";
   public static final String PARAMETER_TYPE = "type";
 
   public static final String TYPE_WORKFLOW = "workflow";
   public static final String TYPE_PIPELINE = "pipeline";
-
-  private static final long serialVersionUID = -6850701762586992604L;
+  @Serial private static final long serialVersionUID = -6850701762586992604L;
   public static final String CONTEXT_PATH = "/hop/addExport";
 
   public AddExportServlet() {}
@@ -84,26 +88,30 @@ public class AddExportServlet extends BaseHttpServlet implements IHopServerPlugi
       logDebug("Addition of export requested");
     }
 
-    PrintWriter out = response.getWriter();
-    InputStream in = request.getInputStream(); // read from the client
-    if (log.isDetailed()) {
-      logDetailed("Encoding: " + request.getCharacterEncoding());
+    PrintWriter out = getSafeWriter(response);
+    if (out == null) {
+      return;
     }
 
     boolean isWorkflow =
         TYPE_WORKFLOW.equalsIgnoreCase(
-            StringEscapeUtils.escapeHtml(request.getParameter(PARAMETER_TYPE)));
+            StringEscapeUtils.escapeHtml4(request.getParameter(PARAMETER_TYPE)));
     String load =
-        StringEscapeUtils.escapeHtml(request.getParameter(PARAMETER_LOAD)); // the resource to load
+        StringEscapeUtils.escapeHtml4(request.getParameter(PARAMETER_LOAD)); // the resource to load
 
     response.setContentType("text/xml");
-    out.print(XmlHandler.getXmlHeader());
-
     response.setStatus(HttpServletResponse.SC_OK);
 
     OutputStream outputStream = null;
 
     try {
+      InputStream in = request.getInputStream(); // read from the client
+      if (log.isDetailed()) {
+        logDetailed("Encoding: " + request.getCharacterEncoding());
+      }
+
+      out.print(XmlHandler.getXmlHeader());
+
       FileObject tempFile =
           HopVfs.createTempFile("export", ".zip", System.getProperty("java.io.tmpdir"));
       outputStream = HopVfs.getOutputStream(tempFile, false);
@@ -227,10 +235,16 @@ public class AddExportServlet extends BaseHttpServlet implements IHopServerPlugi
 
       out.println(new WebResult(WebResult.STRING_OK, fileUrl, serverObjectId));
     } catch (Exception ex) {
-      out.println(new WebResult(WebResult.STRING_ERROR, Const.getStackTracker(ex)));
+      logError("Add export failed", ex);
+      out.println(
+          new WebResult(WebResult.STRING_ERROR, "Export failed. See server log for details."));
     } finally {
       if (outputStream != null) {
-        outputStream.close();
+        try {
+          outputStream.close();
+        } catch (IOException e) {
+          logError("Failed to close export output stream", e);
+        }
       }
     }
   }

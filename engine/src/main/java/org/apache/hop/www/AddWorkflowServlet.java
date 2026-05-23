@@ -17,15 +17,16 @@
 
 package org.apache.hop.www;
 
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.Serial;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.annotations.HopServerServlet;
 import org.apache.hop.core.logging.LoggingObjectType;
@@ -41,9 +42,15 @@ import org.apache.hop.workflow.action.ActionMeta;
 import org.apache.hop.workflow.engine.IWorkflowEngine;
 import org.apache.hop.workflow.engine.WorkflowEngineFactory;
 
-@HopServerServlet(id = "addWorkflow", name = "Add a workflow to the server")
+/**
+ * @deprecated Use {@link RegisterWorkflowServlet} ({@code /hop/registerWorkflow}) instead. This
+ *     endpoint is no longer called by the remote workflow engine and will be removed in a future
+ *     release.
+ */
+@Deprecated(since = "2.18.0")
+@HopServerServlet(id = "addWorkflow", name = "Add a workflow to the server (deprecated)")
 public class AddWorkflowServlet extends BaseHttpServlet implements IHopServerPlugin {
-  private static final long serialVersionUID = -6850701762586992604L;
+  @Serial private static final long serialVersionUID = -6850701762586992604L;
 
   public static final String CONTEXT_PATH = "/hop/addWorkflow";
 
@@ -66,8 +73,14 @@ public class AddWorkflowServlet extends BaseHttpServlet implements IHopServerPlu
 
     boolean useXML = "Y".equalsIgnoreCase(request.getParameter("xml"));
 
-    PrintWriter out = response.getWriter();
-    BufferedReader in = request.getReader(); // read from the client
+    PrintWriter out = getSafeWriter(response);
+    if (out == null) {
+      return;
+    }
+    BufferedReader in = getSafeReader(request, response);
+    if (in == null) {
+      return;
+    }
     if (log.isDetailed()) {
       logDetailed("Encoding: " + request.getCharacterEncoding());
     }
@@ -134,15 +147,14 @@ public class AddWorkflowServlet extends BaseHttpServlet implements IHopServerPlu
       workflow.copyParametersFromDefinitions(workflowMeta);
       workflow.clearParameterValues();
       String[] parameterNames = workflow.listParameters();
-      for (int idx = 0; idx < parameterNames.length; idx++) {
+      for (String parameterName : parameterNames) {
         // Grab the parameter value set in the action
         //
-        String thisValue =
-            workflowExecutionConfiguration.getParametersMap().get(parameterNames[idx]);
+        String thisValue = workflowExecutionConfiguration.getParametersMap().get(parameterName);
         if (!Utils.isEmpty(thisValue)) {
           // Set the value as specified by the user in the action
           //
-          workflow.setParameterValue(parameterNames[idx], thisValue);
+          workflow.setParameterValue(parameterName, thisValue);
         }
       }
       workflow.activateParameters(workflow);
@@ -196,7 +208,7 @@ public class AddWorkflowServlet extends BaseHttpServlet implements IHopServerPlu
 
   protected String[] getAllArgumentStrings(Map<String, String> arguments) {
     if (Utils.isEmpty(arguments)) {
-      return null;
+      return new String[0];
     }
 
     String[] argNames = arguments.keySet().toArray(new String[arguments.size()]);

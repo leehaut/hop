@@ -28,12 +28,13 @@ import lombok.Getter;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.config.HopConfig;
-import org.apache.hop.core.logging.HopLogLayout;
+import org.apache.hop.core.logging.FixedWidthLogLayout;
 import org.apache.hop.core.logging.HopLogStore;
 import org.apache.hop.core.logging.HopLoggingEvent;
 import org.apache.hop.core.logging.IHasLogChannel;
 import org.apache.hop.core.logging.ILogChannel;
 import org.apache.hop.core.logging.ILogParentProvided;
+import org.apache.hop.core.logging.LogLevel;
 import org.apache.hop.core.logging.LoggingRegistry;
 import org.apache.hop.core.util.EnvUtil;
 import org.apache.hop.core.util.ExecutorUtil;
@@ -42,29 +43,29 @@ import org.apache.hop.core.variables.DescribedVariable;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.ui.core.ConstUi;
 import org.apache.hop.ui.core.gui.GuiResource;
-import org.apache.hop.ui.core.widget.text.Format;
-import org.apache.hop.ui.core.widget.text.TextFormatter;
+import org.apache.hop.ui.core.widget.StyledTextVar;
+import org.apache.hop.ui.core.widget.TextComposite;
 import org.apache.hop.ui.hopgui.HopGui;
-import org.apache.hop.ui.util.EnvironmentUtils;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.custom.StyleRange;
+import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.events.MouseAdapter;
 import org.eclipse.swt.events.MouseEvent;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.widgets.Menu;
 import org.eclipse.swt.widgets.MenuItem;
-import org.eclipse.swt.widgets.Text;
 
 public class HopGuiLogBrowser {
   private static final Class<?> PKG = HopGui.class;
 
-  @Getter private Text text;
+  @Getter private TextComposite text;
   @Getter private ILogParentProvided logProvider;
   private List<String> childIds = new ArrayList<>();
   private Date lastLogRegistryChange;
   private AtomicBoolean paused;
 
-  public HopGuiLogBrowser(final Text text, final ILogParentProvided logProvider) {
+  public HopGuiLogBrowser(final TextComposite text, final ILogParentProvided logProvider) {
     this.text = text;
     this.logProvider = logProvider;
     this.paused = new AtomicBoolean(false);
@@ -76,7 +77,7 @@ public class HopGuiLogBrowser {
     //
     final AtomicInteger lastLogId = new AtomicInteger(-1);
     final AtomicBoolean busy = new AtomicBoolean(false);
-    final HopLogLayout logLayout = new HopLogLayout(true);
+    final FixedWidthLogLayout logLayout = new FixedWidthLogLayout(true);
 
     // Refresh the log every second or so
     //
@@ -94,11 +95,7 @@ public class HopGuiLogBrowser {
                     () -> {
                       IHasLogChannel provider = logProvider.getLogChannelProvider();
 
-                      if (provider != null
-                          && !text.isDisposed()
-                          && !busy.get()
-                          && !paused.get()
-                          && text.isVisible()) {
+                      if (provider != null && !text.isDisposed() && !busy.get() && !paused.get()) {
                         busy.set(true);
 
                         ILogChannel logChannel = provider.getLogChannel();
@@ -140,36 +137,86 @@ public class HopGuiLogBrowser {
                                   Const.toInt(describedVariable.getValue(), Const.MAX_NR_LOG_LINES);
                             }
 
+                            // Get the StyledText widget if available for direct style application
+                            StyledText styledText = null;
+                            if (text instanceof StyledTextVar) {
+                              styledText = ((StyledTextVar) text).getTextWidget();
+                            }
+
                             synchronized (text) {
                               for (HopLoggingEvent event : logLines) {
                                 String line = logLayout.format(event).trim();
                                 int length = line.length();
 
                                 if (length > 0) {
-                                  Format format = TextFormatter.getInstance().execute(line);
-                                  text.append(format.getText());
-                                  text.append(Const.CR);
+                                  boolean isError =
+                                      event.getLevel() != null
+                                          && event.getLevel().getLevel()
+                                              == LogLevel.ERROR.getLevel();
+
+                                  if (styledText != null && !styledText.isDisposed()) {
+                                    try {
+                                      // Get the current text length (this is where we'll insert)
+                                      int startOffset = styledText.getCharCount();
+                                      String textToAdd = line + Const.CR;
+
+                                      // Use replaceTextRange to add text at the end
+                                      styledText.replaceTextRange(startOffset, 0, textToAdd);
+
+                                      // Apply red color directly if this is an ERROR level event
+                                      if (isError) {
+                                        StyleRange styleRange = new StyleRange();
+                                        styleRange.start = startOffset;
+                                        styleRange.length = line.length();
+                                        styleRange.foreground =
+                                            GuiResource.getInstance().getColorRed();
+                                        styleRange.fontStyle = SWT.NORMAL;
+                                        styledText.setStyleRange(styleRange);
+                                      }
+                                    } catch (Exception e) {
+                                      // Fallback to setText if there's any error
+                                      String currentText = text.getText();
+                                      text.setText(currentText + line + Const.CR);
+                                    }
+                                  } else {
+                                    // Fallback for non-StyledText widgets (e.g., web mode)
+                                    String currentText = text.getText();
+                                    text.setText(currentText + line + Const.CR);
+                                  }
                                 }
                               }
                             }
 
-                            // Erase it all in one go
-                            // This makes it a bit more efficient
-                            // getLineCount is not supported in RAP
+                            // Trim old lines if needed to stay within maxSize
+                            // Calculate line count
+                            String textContent = text.getText();
                             int size;
-                            if (!EnvironmentUtils.getInstance().isWeb()) {
-                              size = text.getLineCount();
+                            if (textContent == null || textContent.isEmpty()) {
+                              size = 0;
                             } else {
-                              size = text.getText().length();
+                              size = 1;
+                              for (int i = 0; i < textContent.length(); i++) {
+                                if (textContent.charAt(i) == '\n') {
+                                  size++;
+                                }
+                              }
                             }
 
                             if (maxSize > 0 && size > maxSize) {
                               int dropIndex =
-                                  StringUtils.lastOrdinalIndexOf(text.getText(), "\n", maxSize + 1);
-                              text.setText(text.getText().substring(dropIndex + 1));
+                                  StringUtils.lastOrdinalIndexOf(textContent, "\n", maxSize + 1);
+                              if (styledText != null && !styledText.isDisposed()) {
+                                // Use replaceTextRange to preserve styles on remaining text
+                                styledText.replaceTextRange(0, dropIndex + 1, "");
+                              } else {
+                                // Fallback for non-StyledText widgets
+                                text.setText(textContent.substring(dropIndex + 1));
+                              }
                             }
 
-                            text.setSelection(text.getText().length());
+                            if (!text.isDisposed()) {
+                              text.setSelection(text.getCharCount());
+                            }
                             lastLogId.set(lastNr);
                           }
                         }
@@ -226,5 +273,14 @@ public class HopGuiLogBrowser {
 
   public void setPaused(boolean paused) {
     this.paused.set(paused);
+  }
+
+  /**
+   * Reset cached log channel state so the next refresh will use the current log channel provider
+   * (e.g. after attaching to a different running pipeline or workflow).
+   */
+  public void resetLogChannels() {
+    childIds = new ArrayList<>();
+    lastLogRegistryChange = null;
   }
 }

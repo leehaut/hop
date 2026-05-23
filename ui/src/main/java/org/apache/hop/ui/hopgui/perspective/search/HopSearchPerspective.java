@@ -18,13 +18,14 @@
 package org.apache.hop.ui.hopgui.perspective.search;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.gui.plugin.GuiPlugin;
+import org.apache.hop.core.gui.plugin.key.GuiKeyboardShortcut;
+import org.apache.hop.core.gui.plugin.key.GuiOsxKeyboardShortcut;
 import org.apache.hop.core.plugins.IPlugin;
 import org.apache.hop.core.plugins.PluginRegistry;
 import org.apache.hop.core.search.ISearchResult;
@@ -42,12 +43,8 @@ import org.apache.hop.ui.core.widget.ColumnInfo;
 import org.apache.hop.ui.core.widget.TableView;
 import org.apache.hop.ui.hopgui.HopGui;
 import org.apache.hop.ui.hopgui.context.IGuiContextHandler;
-import org.apache.hop.ui.hopgui.file.IHopFileType;
-import org.apache.hop.ui.hopgui.file.IHopFileTypeHandler;
-import org.apache.hop.ui.hopgui.file.empty.EmptyHopFileTypeHandler;
 import org.apache.hop.ui.hopgui.perspective.HopPerspectivePlugin;
 import org.apache.hop.ui.hopgui.perspective.IHopPerspective;
-import org.apache.hop.ui.hopgui.perspective.TabItemHandler;
 import org.apache.hop.ui.hopgui.shared.AuditManagerGuiUtil;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.layout.FormAttachment;
@@ -67,7 +64,9 @@ import org.eclipse.swt.widgets.TableItem;
     description = "i18n::HopSearchPerspective.Description",
     image = "ui/images/search.svg",
     documentationUrl = "/hop-gui/perspective-search.html")
-@GuiPlugin(description = "i18n::HopSearchPerspective.GuiPlugin.Description")
+@GuiPlugin(
+    name = "i18n::HopSearchPerspective.Name",
+    description = "i18n::HopSearchPerspective.GuiPlugin.Description")
 public class HopSearchPerspective implements IHopPerspective {
 
   private static final Class<?> PKG = HopSearchPerspective.class;
@@ -98,6 +97,8 @@ public class HopSearchPerspective implements IHopPerspective {
   }
 
   @Override
+  @GuiKeyboardShortcut(control = true, key = 'f', global = true)
+  @GuiOsxKeyboardShortcut(command = true, key = 'f', global = true)
   public void activate() {
     // Someone clicked on the search icon of used CTRL-F
     //
@@ -144,21 +145,6 @@ public class HopSearchPerspective implements IHopPerspective {
         hopGui.getLog().logError("Error reading list of used search strings", e);
       }
     }
-  }
-
-  @Override
-  public IHopFileTypeHandler getActiveFileTypeHandler() {
-    return new EmptyHopFileTypeHandler(); // Not handling anything really
-  }
-
-  @Override
-  public void setActiveFileTypeHandler(IHopFileTypeHandler activeFileTypeHandler) {
-    // Do nothing
-  }
-
-  @Override
-  public List<IHopFileType> getSupportedHopFileTypes() {
-    return Collections.emptyList();
   }
 
   @Override
@@ -341,7 +327,7 @@ public class HopSearchPerspective implements IHopPerspective {
         new TableView(
             hopGui.getVariables(),
             composite,
-            SWT.V_SCROLL | SWT.V_SCROLL | SWT.MULTI,
+            SWT.V_SCROLL | SWT.MULTI,
             resultsColumns,
             0,
             null,
@@ -479,36 +465,6 @@ public class HopSearchPerspective implements IHopPerspective {
 
       allSearchResults.add(searchResult);
     }
-  }
-
-  @Override
-  public boolean remove(IHopFileTypeHandler typeHandler) {
-    return false; // Nothing to do here
-  }
-
-  @Override
-  public List<TabItemHandler> getItems() {
-    return null;
-  }
-
-  @Override
-  public void navigateToPreviousFile() {
-    // Do nothing
-  }
-
-  @Override
-  public void navigateToNextFile() {
-    // Do nothing
-  }
-
-  @Override
-  public boolean hasNavigationPreviousFile() {
-    return false;
-  }
-
-  @Override
-  public boolean hasNavigationNextFile() {
-    return false;
   }
 
   /**

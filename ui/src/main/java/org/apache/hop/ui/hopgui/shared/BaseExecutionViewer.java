@@ -25,6 +25,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.gui.AreaOwner;
 import org.apache.hop.core.gui.DPoint;
@@ -46,6 +48,7 @@ import org.apache.hop.ui.core.metadata.MetadataManager;
 import org.apache.hop.ui.hopgui.HopGui;
 import org.apache.hop.ui.hopgui.perspective.execution.DragViewZoomBase;
 import org.apache.hop.ui.hopgui.perspective.execution.ExecutionPerspective;
+import org.apache.hop.ui.util.EnvironmentUtils;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.SashForm;
@@ -54,10 +57,12 @@ import org.eclipse.swt.events.MouseListener;
 import org.eclipse.swt.events.MouseMoveListener;
 import org.eclipse.swt.graphics.Cursor;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Text;
-import org.eclipse.swt.widgets.ToolBar;
 
+@Getter
+@Setter
 public abstract class BaseExecutionViewer extends DragViewZoomBase
     implements MouseListener, MouseMoveListener {
 
@@ -73,7 +78,7 @@ public abstract class BaseExecutionViewer extends DragViewZoomBase
   protected final Execution execution;
   protected ExecutionState executionState;
 
-  protected ToolBar toolBar;
+  protected Control toolBar;
   protected GuiToolbarWidgets toolBarWidgets;
   protected SashForm sash;
   protected CTabFolder tabFolder;
@@ -117,11 +122,6 @@ public abstract class BaseExecutionViewer extends DragViewZoomBase
   public void redraw() {
     canvas.redraw();
     canvas.setFocus();
-  }
-
-  @Override
-  protected float calculateCorrectedMagnification() {
-    return (float) (magnification * PropsUi.getInstance().getZoomFactor());
   }
 
   public synchronized AreaOwner getVisibleAreaOwner(int x, int y) {
@@ -193,6 +193,15 @@ public abstract class BaseExecutionViewer extends DragViewZoomBase
       viewDrag = false;
       viewPortNavigation = false;
       viewPortStart = null;
+
+      // Clear pan mode and feedback data for web environment
+      if (EnvironmentUtils.getInstance().isWeb() && canvas != null) {
+        canvas.setData("mode", "null");
+        canvas.setData("panStartOffset", null);
+        canvas.setData("panCurrentOffset", null);
+        canvas.setData("panOffsetDelta", null);
+        canvas.setData("panBoundaries", null);
+      }
     }
 
     // Default cursor
@@ -201,15 +210,6 @@ public abstract class BaseExecutionViewer extends DragViewZoomBase
 
   public void mouseHover(MouseEvent event) {
     // don't do anything for now
-  }
-
-  /**
-   * Gets toolBarWidgets
-   *
-   * @return value of toolBarWidgets
-   */
-  public GuiToolbarWidgets getToolBarWidgets() {
-    return toolBarWidgets;
   }
 
   protected void viewMetadata(Execution execution) {
@@ -303,139 +303,4 @@ public abstract class BaseExecutionViewer extends DragViewZoomBase
   }
 
   public abstract String getActiveId();
-
-  /**
-   * Gets perspective
-   *
-   * @return value of perspective
-   */
-  public ExecutionPerspective getPerspective() {
-    return perspective;
-  }
-
-  /**
-   * Gets areaOwners
-   *
-   * @return value of areaOwners
-   */
-  public List<AreaOwner> getAreaOwners() {
-    return areaOwners;
-  }
-
-  /**
-   * Gets locationName
-   *
-   * @return value of locationName
-   */
-  public String getLocationName() {
-    return locationName;
-  }
-
-  /**
-   * Gets execution
-   *
-   * @return value of execution
-   */
-  public Execution getExecution() {
-    return execution;
-  }
-
-  /**
-   * Gets toolBar
-   *
-   * @return value of toolBar
-   */
-  public ToolBar getToolBar() {
-    return toolBar;
-  }
-
-  /**
-   * Sets toolBar
-   *
-   * @param toolBar value of toolBar
-   */
-  public void setToolBar(ToolBar toolBar) {
-    this.toolBar = toolBar;
-  }
-
-  /**
-   * Sets toolBarWidgets
-   *
-   * @param toolBarWidgets value of toolBarWidgets
-   */
-  public void setToolBarWidgets(GuiToolbarWidgets toolBarWidgets) {
-    this.toolBarWidgets = toolBarWidgets;
-  }
-
-  /**
-   * Gets sash
-   *
-   * @return value of sash
-   */
-  public SashForm getSash() {
-    return sash;
-  }
-
-  /**
-   * Sets sash
-   *
-   * @param sash value of sash
-   */
-  public void setSash(SashForm sash) {
-    this.sash = sash;
-  }
-
-  /**
-   * Gets tabFolder
-   *
-   * @return value of tabFolder
-   */
-  public CTabFolder getTabFolder() {
-    return tabFolder;
-  }
-
-  /**
-   * Sets tabFolder
-   *
-   * @param tabFolder value of tabFolder
-   */
-  public void setTabFolder(CTabFolder tabFolder) {
-    this.tabFolder = tabFolder;
-  }
-
-  /**
-   * Gets lastClick
-   *
-   * @return value of lastClick
-   */
-  public Point getLastClick() {
-    return lastClick;
-  }
-
-  /**
-   * Sets lastClick
-   *
-   * @param lastClick value of lastClick
-   */
-  public void setLastClick(Point lastClick) {
-    this.lastClick = lastClick;
-  }
-
-  /**
-   * Gets executionState
-   *
-   * @return value of executionState
-   */
-  public ExecutionState getExecutionState() {
-    return executionState;
-  }
-
-  /**
-   * Sets executionState
-   *
-   * @param executionState value of executionState
-   */
-  public void setExecutionState(ExecutionState executionState) {
-    this.executionState = executionState;
-  }
 }

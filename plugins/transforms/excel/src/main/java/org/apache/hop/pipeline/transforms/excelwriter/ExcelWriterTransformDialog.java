@@ -189,11 +189,9 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "ExcelWriterDialog.DialogTitle"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
     SelectionAdapter lsSel =
         new SelectionAdapter() {
@@ -204,46 +202,6 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
         };
     ModifyListener lsMod = e -> input.setChanged();
     changed = input.hasChanged();
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "ExcelWriterDialog.DialogTitle"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // Buttons go at the bottom
-    //
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wCancel}, margin, null);
-
-    // TransformName line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "System.TransformName.Label"));
-    wlTransformName.setToolTipText(BaseMessages.getString(PKG, "System.TransformName.Tooltip"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
 
     ScrolledComposite sc = new ScrolledComposite(shell, SWT.H_SCROLL | SWT.V_SCROLL);
 
@@ -373,7 +331,7 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
     PropsUi.setLook(wlDoNotOpenNewFileInit);
     FormData fdlDoNotOpenNewFileInit = new FormData();
     fdlDoNotOpenNewFileInit.left = new FormAttachment(0, 0);
-    fdlDoNotOpenNewFileInit.top = new FormAttachment(wCreateParentFolder, 2 * margin, margin);
+    fdlDoNotOpenNewFileInit.top = new FormAttachment(wCreateParentFolder, margin, margin);
     fdlDoNotOpenNewFileInit.right = new FormAttachment(middle, -margin);
     wlDoNotOpenNewFileInit.setLayoutData(fdlDoNotOpenNewFileInit);
     wDoNotOpenNewFileInit = new Button(fileGroup, SWT.CHECK);
@@ -575,7 +533,7 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
     PropsUi.setLook(wlDateTimeFormat);
     FormData fdlDateTimeFormat = new FormData();
     fdlDateTimeFormat.left = new FormAttachment(0, 0);
-    fdlDateTimeFormat.top = new FormAttachment(wSpecifyFormat, 2 * margin);
+    fdlDateTimeFormat.top = new FormAttachment(wSpecifyFormat, margin);
     fdlDateTimeFormat.right = new FormAttachment(middle, -margin);
     wlDateTimeFormat.setLayoutData(fdlDateTimeFormat);
     wDateTimeFormat = new CCombo(fileGroup, SWT.BORDER | SWT.READ_ONLY);
@@ -584,7 +542,7 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
     wDateTimeFormat.addModifyListener(lsMod);
     FormData fdDateTimeFormat = new FormData();
     fdDateTimeFormat.left = new FormAttachment(middle, 0);
-    fdDateTimeFormat.top = new FormAttachment(wSpecifyFormat, 2 * margin);
+    fdDateTimeFormat.top = new FormAttachment(wSpecifyFormat, margin);
     fdDateTimeFormat.right = new FormAttachment(100, 0);
     wDateTimeFormat.setLayoutData(fdDateTimeFormat);
     for (String dat : dats) {
@@ -632,7 +590,7 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
     PropsUi.setLook(wlIfFileExists);
     FormData fdlIfFileExists = new FormData();
     fdlIfFileExists.left = new FormAttachment(0, 0);
-    fdlIfFileExists.top = new FormAttachment(wbShowFiles, 2 * margin, margin);
+    fdlIfFileExists.top = new FormAttachment(wbShowFiles, margin, margin);
     fdlIfFileExists.right = new FormAttachment(middle, -margin);
     wlIfFileExists.setLayoutData(fdlIfFileExists);
     wIfFileExists = new CCombo(fileGroup, SWT.LEFT | SWT.BORDER | SWT.SINGLE | SWT.READ_ONLY);
@@ -651,7 +609,7 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
 
     FormData fdIfFileExists = new FormData();
     fdIfFileExists.left = new FormAttachment(middle, 0);
-    fdIfFileExists.top = new FormAttachment(wbShowFiles, 2 * margin, margin);
+    fdIfFileExists.top = new FormAttachment(wbShowFiles, margin, margin);
     fdIfFileExists.right = new FormAttachment(100, 0);
     wIfFileExists.setLayoutData(fdIfFileExists);
 
@@ -661,7 +619,7 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
     PropsUi.setLook(wlAddToResult);
     FormData fdlAddToResult = new FormData();
     fdlAddToResult.left = new FormAttachment(0, 0);
-    fdlAddToResult.top = new FormAttachment(wIfFileExists, 2 * margin, margin);
+    fdlAddToResult.top = new FormAttachment(wIfFileExists, margin, margin);
     fdlAddToResult.right = new FormAttachment(middle, -margin);
     wlAddToResult.setLayoutData(fdlAddToResult);
     wAddToResult = new Button(fileGroup, SWT.CHECK);
@@ -1352,39 +1310,6 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
     PropsUi.setLook(wFieldsComp);
     wFieldsComp.setLayout(fieldLayout);
 
-    Group fieldGroup = new Group(wFieldsComp, SWT.SHADOW_NONE);
-    PropsUi.setLook(fieldGroup);
-    fieldGroup.setText(
-        BaseMessages.getString(PKG, "ExcelWriterDialog.ManualSchemaDefinition.Label"));
-
-    FormLayout fieldGroupGroupLayout = new FormLayout();
-    fieldGroupGroupLayout.marginWidth = 10;
-    fieldGroupGroupLayout.marginHeight = 10;
-    fieldGroup.setLayout(fieldGroupGroupLayout);
-
-    wGet = new Button(fieldGroup, SWT.PUSH);
-    wGet.setText(BaseMessages.getString(PKG, "System.Button.GetFields"));
-    wGet.setToolTipText(BaseMessages.getString(PKG, "System.Tooltip.GetFields"));
-
-    wMinWidth = new Button(fieldGroup, SWT.PUSH);
-    wMinWidth.setText(BaseMessages.getString(PKG, "ExcelWriterDialog.MinWidth.Button"));
-    wMinWidth.setToolTipText(BaseMessages.getString(PKG, "ExcelWriterDialog.MinWidth.Tooltip"));
-
-    setButtonPositions(new Button[] {wGet, wMinWidth}, margin, null);
-
-    final int FieldsRows = input.getOutputFields().size();
-
-    // Prepare a list of possible formats, filtering reserved internal formats away
-
-    List<String> allFormats = Arrays.asList(BuiltinFormats.getAll());
-    List<String> nonReservedFormats = new ArrayList<>(allFormats.size());
-
-    for (String format : allFormats) {
-      if (!format.startsWith("reserved")) {
-        nonReservedFormats.add(format);
-      }
-    }
-
     wSchemaDefinition =
         new MetaSelectionLine<>(
             variables,
@@ -1428,7 +1353,36 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
     fdIgnoreFields.right = new FormAttachment(100, 0);
     fdIgnoreFields.top = new FormAttachment(wlIgnoreFields, 0, SWT.CENTER);
     wIgnoreFields.setLayoutData(fdIgnoreFields);
-    wIgnoreFields.addListener(SWT.Selection, e -> enableIgnorefiedls());
+    wIgnoreFields.addListener(
+        SWT.Selection,
+        e -> {
+          // If checkbox is being checked (not unchecked), refresh from schema
+          if (wIgnoreFields.getSelection()) {
+            fillFieldsLayoutFromSchema(false);
+          }
+          enableIgnorefiedls();
+        });
+
+    wGet = new Button(wFieldsComp, SWT.PUSH);
+    wGet.setText(BaseMessages.getString(PKG, "System.Button.GetFields"));
+    wGet.setToolTipText(BaseMessages.getString(PKG, "System.Tooltip.GetFields"));
+
+    wMinWidth = new Button(wFieldsComp, SWT.PUSH);
+    wMinWidth.setText(BaseMessages.getString(PKG, "ExcelWriterDialog.MinWidth.Button"));
+    wMinWidth.setToolTipText(BaseMessages.getString(PKG, "ExcelWriterDialog.MinWidth.Tooltip"));
+
+    final int FieldsRows = input.getOutputFields().size();
+
+    // Prepare a list of possible formats, filtering reserved internal formats away
+
+    List<String> allFormats = Arrays.asList(BuiltinFormats.getAll());
+    List<String> nonReservedFormats = new ArrayList<>(allFormats.size());
+
+    for (String format : allFormats) {
+      if (!format.startsWith("reserved")) {
+        nonReservedFormats.add(format);
+      }
+    }
 
     Collections.sort(nonReservedFormats);
     String[] formats = nonReservedFormats.toArray(new String[0]);
@@ -1482,7 +1436,7 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
     wFields =
         new TableView(
             variables,
-            fieldGroup,
+            wFieldsComp,
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
             colinf,
             FieldsRows,
@@ -1491,7 +1445,7 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
 
     FormData fdFields = new FormData();
     fdFields.left = new FormAttachment(0, 0);
-    fdFields.top = new FormAttachment(0, 0);
+    fdFields.top = new FormAttachment(wIgnoreFields, margin);
     fdFields.right = new FormAttachment(100, 0);
     fdFields.bottom = new FormAttachment(wGet, -margin);
     wFields.setLayoutData(fdFields);
@@ -1518,19 +1472,14 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
         };
     new Thread(runnable).start();
 
-    FormData fdFieldGroup = new FormData();
-    fdFieldGroup.left = new FormAttachment(0, margin);
-    fdFieldGroup.top = new FormAttachment(wIgnoreFields, margin);
-    fdFieldGroup.bottom = new FormAttachment(100, 0);
-    fdFieldGroup.right = new FormAttachment(100, -margin);
-    fieldGroup.setLayoutData(fdFieldGroup);
-
     FormData fdFieldComp = new FormData();
     fdFieldComp.left = new FormAttachment(0, 0);
     fdFieldComp.top = new FormAttachment(0, 0);
     fdFieldComp.right = new FormAttachment(100, 0);
     fdFieldComp.bottom = new FormAttachment(100, 0);
     wFieldsComp.setLayoutData(fdFieldComp);
+
+    setButtonPositions(new Button[] {wGet, wMinWidth}, margin, null);
 
     wFieldsComp.layout();
     wFieldTab.setControl(wFieldsComp);
@@ -1544,9 +1493,9 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
 
     FormData fdSc = new FormData();
     fdSc.left = new FormAttachment(0, 0);
-    fdSc.top = new FormAttachment(wTransformName, margin);
+    fdSc.top = new FormAttachment(wSpacer, 0);
     fdSc.right = new FormAttachment(100, 0);
-    fdSc.bottom = new FormAttachment(wOk, -2 * margin);
+    fdSc.bottom = new FormAttachment(wOk, -margin);
     sc.setLayoutData(fdSc);
 
     sc.setContent(wTabFolder);
@@ -1653,23 +1602,30 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
 
     // restore optimal column widths
     wFields.optWidth(true);
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
   }
 
   private void fillFieldsLayoutFromSchema() {
+    fillFieldsLayoutFromSchema(true);
+  }
+
+  private void fillFieldsLayoutFromSchema(boolean askConfirmation) {
 
     if (!wSchemaDefinition.isDisposed()) {
       final String schemaName = wSchemaDefinition.getText();
 
-      MessageBox mb = new MessageBox(shell, SWT.ICON_QUESTION | SWT.NO | SWT.YES);
-      mb.setMessage(
-          BaseMessages.getString(
-              PKG, "ExcelWriterDialog.Load.SchemaDefinition.Message", schemaName));
-      mb.setText(BaseMessages.getString(PKG, "ExcelWriterDialog.Load.SchemaDefinition.Title"));
-      int answer = mb.open();
+      int answer = SWT.YES;
+      if (askConfirmation) {
+        MessageBox mb = new MessageBox(shell, SWT.ICON_QUESTION | SWT.NO | SWT.YES);
+        mb.setMessage(
+            BaseMessages.getString(
+                PKG, "ExcelWriterDialog.Load.SchemaDefinition.Message", schemaName));
+        mb.setText(BaseMessages.getString(PKG, "ExcelWriterDialog.Load.SchemaDefinition.Title"));
+        answer = mb.open();
+      }
 
       if (answer == SWT.YES && !Utils.isEmpty(schemaName)) {
         try {
@@ -1680,6 +1636,8 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
             if (r != null) {
               String[] fieldNames = r.getFieldNames();
               if (fieldNames != null) {
+                // Close any active editors to clear cached combo values
+                wFields.closeActiveEditors();
                 wFields.clearAll();
                 for (int i = 0; i < fieldNames.length; i++) {
                   IValueMeta valueMeta = r.getValueMeta(i);
@@ -1700,6 +1658,10 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
         wFields.removeEmptyRows();
         wFields.setRowNums();
         wFields.optWidth(true);
+
+        // Force table to redraw to update combo dropdowns with correct values
+        wFields.table.redraw();
+        wFields.table.update();
       }
     }
   }
@@ -1793,6 +1755,13 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
 
     wSchemaDefinition.setText(Const.NVL(input.getSchemaDefinition(), ""));
     wIgnoreFields.setSelection(input.isIgnoreFields());
+
+    // Apply the ignore fields state (fill from schema and disable/enable controls)
+    if (input.isIgnoreFields()) {
+      fillFieldsLayoutFromSchema(false);
+      enableIgnorefiedls();
+    }
+
     wStreamData.setSelection(file.isStreamingData());
     wSplitEvery.setText("" + file.getSplitEvery());
     wEmptyRows.setText("" + input.getAppendEmpty());
@@ -1859,48 +1828,49 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
 
     logDebug("Getting fields info...");
 
-    for (int i = 0; i < input.getOutputFields().size(); i++) {
-      ExcelWriterOutputField field = input.getOutputFields().get(i);
+    // Only populate fields from metadata if NOT ignoring fields (will be filled from schema
+    // instead)
+    if (!input.isIgnoreFields()) {
+      for (int i = 0; i < input.getOutputFields().size(); i++) {
+        ExcelWriterOutputField field = input.getOutputFields().get(i);
 
-      TableItem item = wFields.table.getItem(i);
-      if (field.getName() != null) {
-        item.setText(1, field.getName());
-      }
-      item.setText(2, field.getType());
+        TableItem item = wFields.table.getItem(i);
+        if (field.getName() != null) {
+          item.setText(1, field.getName());
+        }
+        item.setText(2, field.getType());
 
-      if (field.getFormat() != null) {
-        item.setText(3, field.getFormat());
-      }
-      if (field.getStyleCell() != null) {
-        item.setText(4, field.getStyleCell());
-      }
-      if (field.getTitle() != null) {
-        item.setText(5, field.getTitle());
-      }
-      if (field.getTitleStyleCell() != null) {
-        item.setText(6, field.getTitleStyleCell());
-      }
-      if (field.isFormula()) {
-        item.setText(7, "Y");
-      } else {
-        item.setText(7, "N");
-      }
+        if (field.getFormat() != null) {
+          item.setText(3, field.getFormat());
+        }
+        if (field.getStyleCell() != null) {
+          item.setText(4, field.getStyleCell());
+        }
+        if (field.getTitle() != null) {
+          item.setText(5, field.getTitle());
+        }
+        if (field.getTitleStyleCell() != null) {
+          item.setText(6, field.getTitleStyleCell());
+        }
+        if (field.isFormula()) {
+          item.setText(7, "Y");
+        } else {
+          item.setText(7, "N");
+        }
 
-      if (field.getHyperlinkField() != null) {
-        item.setText(8, field.getHyperlinkField());
-      }
-      if (field.getCommentField() != null) {
-        item.setText(9, field.getCommentField());
-      }
-      if (field.getCommentAuthorField() != null) {
-        item.setText(10, field.getCommentAuthorField());
+        if (field.getHyperlinkField() != null) {
+          item.setText(8, field.getHyperlinkField());
+        }
+        if (field.getCommentField() != null) {
+          item.setText(9, field.getCommentField());
+        }
+        if (field.getCommentAuthorField() != null) {
+          item.setText(10, field.getCommentAuthorField());
+        }
       }
     }
 
     wFields.optWidth(true);
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   private void getFields() {
@@ -2060,27 +2030,25 @@ public class ExcelWriterTransformDialog extends BaseTransformDialog {
       if (r != null) {
         ITableItemInsertListener listener =
             (tableItem, v) -> {
-              if (v.isNumber()) {
-                if (v.getLength() > 0) {
-                  int le = v.getLength();
-                  int pr = v.getPrecision();
+              if (v.isNumber() && v.getLength() > 0) {
+                int le = v.getLength();
+                int pr = v.getPrecision();
 
-                  if (v.getPrecision() <= 0) {
-                    pr = 0;
-                  }
-
-                  String mask = "";
-                  for (int m = 0; m < le - pr; m++) {
-                    mask += "0";
-                  }
-                  if (pr > 0) {
-                    mask += ".";
-                  }
-                  for (int m = 0; m < pr; m++) {
-                    mask += "0";
-                  }
-                  tableItem.setText(3, mask);
+                if (v.getPrecision() <= 0) {
+                  pr = 0;
                 }
+
+                String mask = "";
+                for (int m = 0; m < le - pr; m++) {
+                  mask += "0";
+                }
+                if (pr > 0) {
+                  mask += ".";
+                }
+                for (int m = 0; m < pr; m++) {
+                  mask += "0";
+                }
+                tableItem.setText(3, mask);
               }
               return true;
             };

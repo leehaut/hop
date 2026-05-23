@@ -35,12 +35,11 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Date;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.FileSelectInfo;
 import org.apache.commons.vfs2.FileSelector;
@@ -117,14 +116,12 @@ public class Mail extends BaseTransform<MailMeta, MailData> {
       }
 
       // Check is SMTP server is provided
-      if (StringUtils.isEmpty(meta.getConnectionName())) {
-        if (Utils.isEmpty(meta.getServer())) {
-          throw new HopException(BaseMessages.getString(PKG, "Mail.Log.ServerFieldEmpty"));
-        }
+      if (StringUtils.isEmpty(meta.getConnectionName()) && Utils.isEmpty(meta.getServer())) {
+        throw new HopException(BaseMessages.getString(PKG, "Mail.Log.ServerFieldEmpty"));
       }
 
       // Check Attached filenames when dynamic
-      if (meta.isFilenameDynamic() && Utils.isEmpty(meta.getDynamicFieldname())) {
+      if (meta.isFilenameDynamic() && Utils.isEmpty(meta.getDynamicFieldName())) {
         throw new HopException(BaseMessages.getString(PKG, "Mail.Log.DynamicFilenameFielddEmpty"));
       }
 
@@ -140,19 +137,17 @@ public class Mail extends BaseTransform<MailMeta, MailData> {
       }
 
       // check authentication
-      if (StringUtils.isEmpty(meta.getConnectionName())) {
-        if (meta.isUsingAuthentication()) {
-          // check authentication user
-          if (Utils.isEmpty(meta.getAuthenticationUser())) {
-            throw new HopException(
-                BaseMessages.getString(PKG, "Mail.Log.AuthenticationUserFieldEmpty"));
-          }
+      if (StringUtils.isEmpty(meta.getConnectionName()) && meta.isUsingAuthentication()) {
+        // check authentication user
+        if (Utils.isEmpty(meta.getAuthenticationUser())) {
+          throw new HopException(
+              BaseMessages.getString(PKG, "Mail.Log.AuthenticationUserFieldEmpty"));
+        }
 
-          // check authentication pass
-          if (Utils.isEmpty(meta.getAuthenticationPassword())) {
-            throw new HopException(
-                BaseMessages.getString(PKG, "Mail.Log.AuthenticationPasswordFieldEmpty"));
-          }
+        // check authentication pass
+        if (Utils.isEmpty(meta.getAuthenticationPassword())) {
+          throw new HopException(
+              BaseMessages.getString(PKG, "Mail.Log.AuthenticationPasswordFieldEmpty"));
         }
       }
 
@@ -256,60 +251,55 @@ public class Mail extends BaseTransform<MailMeta, MailData> {
       }
 
       // cache the position of the Server field
-      if (StringUtils.isEmpty(meta.getConnectionName())) {
+      if (StringUtils.isEmpty(meta.getConnectionName()) && data.indexOfServer < 0) {
+        String realServer = meta.getServer();
+        data.indexOfServer = data.previousRowMeta.indexOfValue(realServer);
         if (data.indexOfServer < 0) {
-          String realServer = meta.getServer();
-          data.indexOfServer = data.previousRowMeta.indexOfValue(realServer);
-          if (data.indexOfServer < 0) {
-            throw new HopException(
-                BaseMessages.getString(PKG, "Mail.Exception.CouldnotFindServerField", realServer));
-          }
+          throw new HopException(
+              BaseMessages.getString(PKG, "Mail.Exception.CouldnotFindServerField", realServer));
         }
       }
 
       // Port
-      if (StringUtils.isEmpty(meta.getConnectionName())) {
-        if (!Utils.isEmpty(meta.getPort()) && data.indexOfPort < 0) {
-          // cache the position of the port field
-
-          String realPort = meta.getPort();
-          data.indexOfPort = data.previousRowMeta.indexOfValue(realPort);
-          if (data.indexOfPort < 0) {
-            throw new HopException(
-                BaseMessages.getString(PKG, "Mail.Exception.CouldnotFindPortField", realPort));
-          }
+      if (StringUtils.isEmpty(meta.getConnectionName())
+          && !Utils.isEmpty(meta.getPort())
+          && data.indexOfPort < 0) {
+        // cache the position of the port field
+        String realPort = meta.getPort();
+        data.indexOfPort = data.previousRowMeta.indexOfValue(realPort);
+        if (data.indexOfPort < 0) {
+          throw new HopException(
+              BaseMessages.getString(PKG, "Mail.Exception.CouldnotFindPortField", realPort));
         }
       }
 
       // Authentication
-      if (StringUtils.isEmpty(meta.getConnectionName())) {
-        if (meta.isUsingAuthentication()) {
-          // cache the position of the Authentication user field
+      if (StringUtils.isEmpty(meta.getConnectionName()) && meta.isUsingAuthentication()) {
+        // cache the position of the Authentication user field
+        if (data.indexOfAuthenticationUser < 0) {
+          String realAuthenticationUser = meta.getAuthenticationUser();
+          data.indexOfAuthenticationUser =
+              data.previousRowMeta.indexOfValue(realAuthenticationUser);
           if (data.indexOfAuthenticationUser < 0) {
-            String realAuthenticationUser = meta.getAuthenticationUser();
-            data.indexOfAuthenticationUser =
-                data.previousRowMeta.indexOfValue(realAuthenticationUser);
-            if (data.indexOfAuthenticationUser < 0) {
-              throw new HopException(
-                  BaseMessages.getString(
-                      PKG,
-                      "Mail.Exception.CouldnotFindAuthenticationUserField",
-                      realAuthenticationUser));
-            }
+            throw new HopException(
+                BaseMessages.getString(
+                    PKG,
+                    "Mail.Exception.CouldnotFindAuthenticationUserField",
+                    realAuthenticationUser));
           }
+        }
 
-          // cache the position of the Authentication password field
+        // cache the position of the Authentication password field
+        if (data.indexOfAuthenticationPass < 0) {
+          String realAuthenticationPassword = meta.getAuthenticationPassword();
+          data.indexOfAuthenticationPass =
+              data.previousRowMeta.indexOfValue(realAuthenticationPassword);
           if (data.indexOfAuthenticationPass < 0) {
-            String realAuthenticationPassword = meta.getAuthenticationPassword();
-            data.indexOfAuthenticationPass =
-                data.previousRowMeta.indexOfValue(realAuthenticationPassword);
-            if (data.indexOfAuthenticationPass < 0) {
-              throw new HopException(
-                  BaseMessages.getString(
-                      PKG,
-                      "Mail.Exception.CouldnotFindAuthenticationPassField",
-                      realAuthenticationPassword));
-            }
+            throw new HopException(
+                BaseMessages.getString(
+                    PKG,
+                    "Mail.Exception.CouldnotFindAuthenticationPassField",
+                    realAuthenticationPassword));
           }
         }
       }
@@ -382,7 +372,7 @@ public class Mail extends BaseTransform<MailMeta, MailData> {
                     PKG, "Mail.Exception.CouldnotSourceAttachedZipFilenameField", realZipFilename));
           }
         }
-        data.zipFileLimit = Const.toLong(resolve(meta.getZiplimitsize()), 0);
+        data.zipFileLimit = Const.toLong(resolve(meta.getZipLimitSize()), 0);
         if (data.zipFileLimit > 0) {
           data.zipFileLimit = data.zipFileLimit * 1048576; // Mo
         }
@@ -395,7 +385,7 @@ public class Mail extends BaseTransform<MailMeta, MailData> {
         if (meta.isFilenameDynamic()) {
           // cache the position of the attached source filename field
           if (data.indexOfSourceFilename < 0) {
-            String realSourceattachedFilename = meta.getDynamicFieldname();
+            String realSourceattachedFilename = meta.getDynamicFieldName();
             data.indexOfSourceFilename =
                 data.previousRowMeta.indexOfValue(realSourceattachedFilename);
             if (data.indexOfSourceFilename < 0) {
@@ -408,7 +398,7 @@ public class Mail extends BaseTransform<MailMeta, MailData> {
           }
 
           // cache the position of the attached wildcard field
-          if (!Utils.isEmpty(meta.getSourcewildcard()) && data.indexOfSourceWildcard < 0) {
+          if (!Utils.isEmpty(meta.getSourceWildCard()) && data.indexOfSourceWildcard < 0) {
             String realSourceattachedWildcard = meta.getDynamicWildcard();
             data.indexOfSourceWildcard =
                 data.previousRowMeta.indexOfValue(realSourceattachedWildcard);
@@ -422,8 +412,8 @@ public class Mail extends BaseTransform<MailMeta, MailData> {
           }
         } else {
           // static attached filenames
-          data.realSourceFileFoldername = resolve(meta.getSourcefilefoldername());
-          data.realSourceWildcard = resolve(meta.getSourcewildcard());
+          data.realSourceFileFoldername = resolve(meta.getSourceFileFolderName());
+          data.realSourceWildcard = resolve(meta.getSourceWildCard());
         }
       }
 
@@ -433,7 +423,7 @@ public class Mail extends BaseTransform<MailMeta, MailData> {
         data.embeddedMimePart = new HashSet<>();
         try {
           for (int i = 0; i < meta.getEmbeddedImages().size(); i++) {
-            String imageFile = resolve(meta.getEmbeddedImages().get(i).getEmbeddedimage());
+            String imageFile = resolve(meta.getEmbeddedImages().get(i).getEmbeddedImage());
             String contentID = resolve(meta.getEmbeddedImages().get(i).getContentId());
             image = HopVfs.getFileObject(imageFile, variables);
 
@@ -447,8 +437,9 @@ public class Mail extends BaseTransform<MailMeta, MailData> {
               imagePart.setHeader("Content-ID", "<" + contentID + ">");
               // keep this part for further user
               data.embeddedMimePart.add(imagePart);
-              logBasic(BaseMessages.getString(PKG, "Mail.Log.ImageAdded", imageFile));
-
+              if (isBasic()) {
+                logBasic(BaseMessages.getString(PKG, "Mail.Log.ImageAdded", imageFile));
+              }
             } else {
               logError(BaseMessages.getString(PKG, "Mail.Log.WrongImage", imageFile));
             }
@@ -520,18 +511,14 @@ public class Mail extends BaseTransform<MailMeta, MailData> {
           port = Const.toInt("" + data.previousRowMeta.getInteger(r, data.indexOfPort), -1);
         }
 
-        if (StringUtils.isEmpty(meta.getConnectionName())) {
-          if (data.indexOfAuthenticationUser > -1) {
-            authuser = data.previousRowMeta.getString(r, data.indexOfAuthenticationUser);
-          }
+        if (StringUtils.isEmpty(meta.getConnectionName()) && data.indexOfAuthenticationUser > -1) {
+          authuser = data.previousRowMeta.getString(r, data.indexOfAuthenticationUser);
         }
 
-        if (StringUtils.isEmpty(meta.getConnectionName())) {
-          if (data.indexOfAuthenticationPass > -1) {
-            authpass =
-                Utils.resolvePassword(
-                    variables, data.previousRowMeta.getString(r, data.indexOfAuthenticationPass));
-          }
+        if (StringUtils.isEmpty(meta.getConnectionName()) && data.indexOfAuthenticationPass > -1) {
+          authpass =
+              Utils.resolvePassword(
+                  variables, data.previousRowMeta.getString(r, data.indexOfAuthenticationPass));
         }
       }
 
@@ -629,7 +616,7 @@ public class Mail extends BaseTransform<MailMeta, MailData> {
 
       protocol = "smtp";
       if (meta.isUsingSecureAuthentication()) {
-        if (meta.isUsexoauth2()) {
+        if (meta.isUseXOAuth2()) {
           data.props.put("mail.smtp.ssl.enable", "true");
           data.props.put("mail.smtp.auth.mechanisms", "XOAUTH2");
         }
@@ -919,9 +906,9 @@ public class Mail extends BaseTransform<MailMeta, MailData> {
               zipOutputStream = new ZipOutputStream(new FileOutputStream(masterZipfile));
             }
 
-            for (int i = 0; i < list.length; i++) {
+            for (FileObject object : list) {
 
-              file = HopVfs.getFileObject(HopVfs.getFilename(list[i]), variables);
+              file = HopVfs.getFileObject(HopVfs.getFilename(object), variables);
 
               if (zipFiles) {
 
@@ -963,9 +950,9 @@ public class Mail extends BaseTransform<MailMeta, MailData> {
 
                 zipOutputStream = new ZipOutputStream(new FileOutputStream(masterZipfile));
 
-                for (int i = 0; i < list.length; i++) {
+                for (FileObject fileObject : list) {
 
-                  file = HopVfs.getFileObject(HopVfs.getFilename(list[i]), variables);
+                  file = HopVfs.getFileObject(HopVfs.getFilename(fileObject), variables);
 
                   ZipEntry zipEntry = new ZipEntry(file.getName().getBaseName());
                   zipOutputStream.putNextEntry(zipEntry);
@@ -1057,8 +1044,7 @@ public class Mail extends BaseTransform<MailMeta, MailData> {
   private void addImagePart() throws Exception {
     data.nrEmbeddedImages = 0;
     if (!Utils.isEmpty(data.embeddedMimePart)) {
-      for (Iterator<MimeBodyPart> i = data.embeddedMimePart.iterator(); i.hasNext(); ) {
-        MimeBodyPart part = i.next();
+      for (MimeBodyPart part : data.embeddedMimePart) {
         data.parts.addBodyPart(part);
         data.nrEmbeddedImages++;
       }

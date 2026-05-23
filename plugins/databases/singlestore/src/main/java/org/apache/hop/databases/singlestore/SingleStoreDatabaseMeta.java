@@ -22,7 +22,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.database.BaseDatabaseMeta;
 import org.apache.hop.core.database.DatabaseMeta;
@@ -225,14 +225,6 @@ public class SingleStoreDatabaseMeta extends BaseDatabaseMeta implements IDataba
   }
 
   /**
-   * @return true if the database supports a boolean, bit, logical
-   */
-  @Override
-  public boolean isSupportsBooleanDataType() {
-    return true;
-  }
-
-  /**
    * Generates the SQL statement to modify a column in the specified table
    *
    * @param tableName The table to add
@@ -350,7 +342,11 @@ public class SingleStoreDatabaseMeta extends BaseDatabaseMeta implements IDataba
         }
         break;
       case IValueMeta.TYPE_BINARY:
-        fieldClause += "VARBINARY";
+        if (length > 0) {
+          fieldClause += "BINARY(" + length + ")";
+        } else {
+          fieldClause += "VARBINARY";
+        }
         break;
       default:
         fieldClause += " UNKNOWN";
@@ -735,6 +731,8 @@ public class SingleStoreDatabaseMeta extends BaseDatabaseMeta implements IDataba
   @Override
   public void addDefaultOptions() {
     addExtraOption(getPluginId(), "defaultFetchSize", "500");
+    setSupportsTimestampDataType(true);
+    setSupportsBooleanDataType(true);
   }
 
   @Override
@@ -745,10 +743,5 @@ public class SingleStoreDatabaseMeta extends BaseDatabaseMeta implements IDataba
   @Override
   public int getMaxTextFieldLength() {
     return Integer.MAX_VALUE;
-  }
-
-  @Override
-  public boolean isSupportsTimestampDataType() {
-    return true;
   }
 }

@@ -82,19 +82,17 @@ public class CrateDBBulkLoader extends BaseTransform<CrateDBBulkLoaderMeta, Crat
         verifyDatabaseConnection();
         data.databaseMeta = this.getPipelineMeta().findDatabase(meta.getConnection(), variables);
 
-        if (meta.isStreamToS3Csv()) {
-          if (!meta.isUseHttpEndpoint()) {
-            String readFromFilename = resolve(meta.getReadFromFilename());
-            String localPath = resolve(meta.getVolumeMapping());
-            if (!StringUtils.isEmpty(localPath) && isURIOfScheme(readFromFilename, Scheme.FILE)) {
-              data.writer =
-                  HopVfs.getOutputStream(
-                      FilenameUtils.concat(localPath, extractFilename(readFromFilename)), false);
-            } else {
-              data.writer = HopVfs.getOutputStream(readFromFilename, false);
-            }
-            // get the file output stream to write to S3
+        if (meta.isStreamToS3Csv() && !meta.isUseHttpEndpoint()) {
+          String readFromFilename = resolve(meta.getReadFromFilename());
+          String localPath = resolve(meta.getVolumeMapping());
+          if (!StringUtils.isEmpty(localPath) && isURIOfScheme(readFromFilename, Scheme.FILE)) {
+            data.writer =
+                HopVfs.getOutputStream(
+                    FilenameUtils.concat(localPath, extractFilename(readFromFilename)), false);
+          } else {
+            data.writer = HopVfs.getOutputStream(readFromFilename, false);
           }
+          // get the file output stream to write to S3
         }
 
         data.db = new Database(this, this, data.databaseMeta);
@@ -160,7 +158,9 @@ public class CrateDBBulkLoader extends BaseTransform<CrateDBBulkLoaderMeta, Crat
                 meta.getFields().stream()
                     .map(CrateDBBulkLoaderField::getDatabaseField)
                     .toArray(String[]::new);
-            data.outputRowMeta.getValueMetaList().forEach(v -> logBasic(v.toString()));
+            if (isBasic()) {
+              data.outputRowMeta.getValueMetaList().forEach(v -> logBasic(v.toString()));
+            }
             String schema = meta.getSchemaName();
             String table = meta.getTableName();
             writeBatchToCrateDB(schema, table, columns);
@@ -222,10 +222,6 @@ public class CrateDBBulkLoader extends BaseTransform<CrateDBBulkLoaderMeta, Crat
       if (meta.isStreamToS3Csv()) {
 
         data.fieldnrs = new HashMap<>();
-
-        //        if (meta.isTruncateTable()) {
-        //          // truncateTable();
-        //        }
 
         meta.getFields(data.insertRowMeta, getTransformName(), null, null, this, metadataProvider);
 
@@ -441,9 +437,7 @@ public class CrateDBBulkLoader extends BaseTransform<CrateDBBulkLoaderMeta, Crat
         case IValueMeta.TYPE_STRING:
           convertedValue = (String) rowItem;
           break;
-        case IValueMeta.TYPE_INTEGER:
-        case IValueMeta.TYPE_NUMBER:
-        case IValueMeta.TYPE_BIGNUMBER:
+        case IValueMeta.TYPE_INTEGER, IValueMeta.TYPE_NUMBER, IValueMeta.TYPE_BIGNUMBER:
           convertedValue = String.valueOf(rowItem);
           break;
         case IValueMeta.TYPE_TIMESTAMP:
@@ -465,7 +459,9 @@ public class CrateDBBulkLoader extends BaseTransform<CrateDBBulkLoaderMeta, Crat
           break;
       }
     }
-    logDetailed("Field: " + v.getName() + " - Converted Value: " + convertedValue);
+    if (isDetailed()) {
+      logDetailed("Field: " + v.getName() + " - Converted Value: " + convertedValue);
+    }
 
     if (vc != null && !data.convertedRowMetaReady) data.convertedRowMeta.setValueMeta(pos, vc);
 
@@ -516,7 +512,7 @@ public class CrateDBBulkLoader extends BaseTransform<CrateDBBulkLoaderMeta, Crat
     for (int i = 0; i < fieldList.size(); i++) {
       CrateDBBulkLoaderField field = fieldList.get(i);
       if (i > 0) {
-        sb.append(", " + field.getDatabaseField());
+        sb.append(", ").append(field.getDatabaseField());
       } else {
         sb.append(field.getDatabaseField());
       }
@@ -556,7 +552,9 @@ public class CrateDBBulkLoader extends BaseTransform<CrateDBBulkLoaderMeta, Crat
     sb.append(")");
     sb.append(" RETURN SUMMARY");
 
-    logDetailed("Copy stmt: " + sb.toString());
+    if (isDetailed()) {
+      logDetailed("Copy stmt: " + sb);
+    }
 
     return sb.toString();
   }
@@ -859,18 +857,17 @@ public class CrateDBBulkLoader extends BaseTransform<CrateDBBulkLoaderMeta, Crat
             }
           }
 
-        } else if (escapeExists && source[index] == escape[0]) {
-
+        } else if (escapeExists
+            && source[index] == escape[0]
+            && index + escape.length <= source.length) {
           // Potential match found, make sure there are enough bytes to support a full match
-          if (index + escape.length <= source.length) {
-            // First byte of separator found
-            result = true; // Assume match
-            for (int i = 1; i < escape.length; i++) {
-              if (source[index + i] != escape[i]) {
-                // Separator match is proven false
-                result = false;
-                break;
-              }
+          // First byte of separator found
+          result = true; // Assume match
+          for (int i = 1; i < escape.length; i++) {
+            if (source[index + i] != escape[i]) {
+              // Separator match is proven false
+              result = false;
+              break;
             }
           }
         }

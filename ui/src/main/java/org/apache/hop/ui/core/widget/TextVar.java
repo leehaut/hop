@@ -216,7 +216,9 @@ public class TextVar extends Composite {
 
   protected ModifyListener getModifyListenerTooltipText(final Text textField) {
     return e -> {
-      if (textField.getEchoChar() == '\0') { // Can't show passwords ;-)
+      // Never put PASSWORD field contents in the tooltip: echo char is not always non-\\0 (e.g.
+      // some SWT/Cocoa combinations), so rely on style as well as echo char.
+      if (textField.getEchoChar() == '\0' && (textField.getStyle() & SWT.PASSWORD) == 0) {
 
         String tip = textField.getText();
         if (!Utils.isEmpty(tip) && !Utils.isEmpty(toolTipText)) {
@@ -294,6 +296,10 @@ public class TextVar extends Composite {
   @Override
   public boolean setFocus() {
     return wText.setFocus();
+  }
+
+  public void setMessage(String message) {
+    wText.setMessage(message);
   }
 
   @Override

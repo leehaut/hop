@@ -19,15 +19,16 @@ package org.apache.hop.www;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.Serial;
 import java.net.URLEncoder;
 import java.util.UUID;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import org.apache.commons.lang.StringEscapeUtils;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.annotations.HopServerServlet;
 import org.apache.hop.core.exception.HopException;
@@ -45,8 +46,7 @@ import org.owasp.encoder.Encode;
 public class StartPipelineServlet extends BaseHttpServlet implements IHopServerPlugin {
 
   private static final Class<?> PKG = StartPipelineServlet.class;
-
-  private static final long serialVersionUID = -5879200987669847357L;
+  @Serial private static final long serialVersionUID = -5879200987669847357L;
 
   public static final String CONTEXT_PATH = "/hop/startPipeline";
 
@@ -67,20 +67,27 @@ public class StartPipelineServlet extends BaseHttpServlet implements IHopServerP
       logDebug(BaseMessages.getString(PKG, "StartPipelineServlet.Log.PipelineStartRequested"));
     }
 
-    String pipelineName = StringEscapeUtils.escapeHtml(request.getParameter("name"));
-    String id = StringEscapeUtils.escapeHtml(request.getParameter("id"));
+    String pipelineName = StringEscapeUtils.escapeHtml4(request.getParameter("name"));
+    String id = StringEscapeUtils.escapeHtml4(request.getParameter("id"));
     if (StringUtils.isEmpty(pipelineName)) {
       pipelineName = "";
     }
     boolean useXML = "Y".equalsIgnoreCase(request.getParameter("xml"));
+    boolean useJson = isJsonRequest(request);
 
     response.setStatus(HttpServletResponse.SC_OK);
 
-    PrintWriter out = response.getWriter();
+    PrintWriter out = getSafeWriter(response);
+    if (out == null) {
+      return;
+    }
     if (useXML) {
       response.setContentType("text/xml");
-      response.setCharacterEncoding(Const.XML_ENCODING);
-      out.print(XmlHandler.getXmlHeader(Const.XML_ENCODING));
+      response.setCharacterEncoding(Const.UTF_8);
+      out.print(XmlHandler.getXmlHeader(Const.UTF_8));
+    } else if (useJson) {
+      response.setContentType("application/json");
+      response.setCharacterEncoding(Const.UTF_8);
     } else {
       response.setContentType("text/html;charset=UTF-8");
       out.println("<HTML>");
@@ -141,8 +148,9 @@ public class StartPipelineServlet extends BaseHttpServlet implements IHopServerP
             BaseMessages.getString(PKG, "StartPipelineServlet.Log.PipelineStarted", pipelineName);
         if (useXML) {
           out.println(new WebResult(WebResult.STRING_OK, message).getXml());
+        } else if (useJson) {
+          out.println(new WebResult(WebResult.STRING_OK, message).getJson());
         } else {
-
           out.println("<H1>" + Encode.forHtml(message) + "</H1>");
           out.println(
               "<a href=\""
@@ -160,7 +168,9 @@ public class StartPipelineServlet extends BaseHttpServlet implements IHopServerP
             BaseMessages.getString(
                 PKG, "PipelineStatusServlet.Log.CoundNotFindSpecPipeline", pipelineName);
         if (useXML) {
-          out.println(new WebResult(WebResult.STRING_ERROR, message, id));
+          out.println(new WebResult(WebResult.STRING_ERROR, message, id).getXml());
+        } else if (useJson) {
+          out.println(new WebResult(WebResult.STRING_ERROR, message, id).getJson());
         } else {
           out.println("<H1>" + Encode.forHtml(message) + "</H1>");
           out.println(
@@ -173,14 +183,15 @@ public class StartPipelineServlet extends BaseHttpServlet implements IHopServerP
         }
       }
     } catch (Exception ex) {
+      String errorMsg =
+          BaseMessages.getString(
+              PKG,
+              "StartPipelineServlet.Error.UnexpectedError",
+              Const.CR + Const.getStackTracker(ex));
       if (useXML) {
-        out.println(
-            new WebResult(
-                WebResult.STRING_ERROR,
-                BaseMessages.getString(
-                    PKG,
-                    "StartPipelineServlet.Error.UnexpectedError",
-                    Const.CR + Const.getStackTracker(ex))));
+        out.println(new WebResult(WebResult.STRING_ERROR, errorMsg).getXml());
+      } else if (useJson) {
+        out.println(new WebResult(WebResult.STRING_ERROR, errorMsg).getJson());
       } else {
         out.println("<p>");
         out.println("<pre>");
@@ -190,7 +201,7 @@ public class StartPipelineServlet extends BaseHttpServlet implements IHopServerP
       }
     }
 
-    if (!useXML) {
+    if (!useXML && !useJson) {
       out.println("<p>");
       out.println("</BODY>");
       out.println("</HTML>");

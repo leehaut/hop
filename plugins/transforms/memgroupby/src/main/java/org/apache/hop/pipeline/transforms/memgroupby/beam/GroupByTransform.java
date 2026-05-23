@@ -27,6 +27,7 @@ import org.apache.beam.sdk.values.PCollection;
 import org.apache.hop.beam.core.BeamHop;
 import org.apache.hop.beam.core.HopRow;
 import org.apache.hop.beam.core.fn.HopKeyValueFn;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.JsonRowMeta;
 import org.apache.hop.core.row.RowMeta;
@@ -78,12 +79,12 @@ public class GroupByTransform extends PTransform<PCollection<HopRow>, PCollectio
         inputRowMeta = JsonRowMeta.fromJson(rowMetaJson);
 
         groupRowMeta = new RowMeta();
-        for (int i = 0; i < groupFields.length; i++) {
-          groupRowMeta.addValueMeta(inputRowMeta.searchValueMeta(groupFields[i]));
+        for (String groupField : groupFields) {
+          groupRowMeta.addValueMeta(inputRowMeta.searchValueMeta(groupField));
         }
         subjectRowMeta = new RowMeta();
-        for (int i = 0; i < subjects.length; i++) {
-          subjectRowMeta.addValueMeta(inputRowMeta.searchValueMeta(subjects[i]));
+        for (String subject : subjects) {
+          subjectRowMeta.addValueMeta(inputRowMeta.searchValueMeta(subject));
         }
       }
 
@@ -118,7 +119,7 @@ public class GroupByTransform extends PTransform<PCollection<HopRow>, PCollectio
     } catch (Exception e) {
       numErrors.inc();
       LOG.error("Error in group by transform", e);
-      throw new RuntimeException("Error in group by transform", e);
+      throw new HopRuntimeException("Error in group by transform", e);
     }
   }
 

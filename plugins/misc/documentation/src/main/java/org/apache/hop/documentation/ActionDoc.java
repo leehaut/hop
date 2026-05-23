@@ -83,6 +83,24 @@ public class ActionDoc extends ActionBase implements Cloneable, IAction {
   @HopMetadataProperty
   private boolean includingMetadata = true;
 
+  @GuiWidgetElement(
+      id = "1040-action-doc-dialog-generate-Html",
+      parentId = GUI_WIDGETS_PARENT_ID,
+      type = GuiElementType.CHECKBOX,
+      variables = false,
+      label = "i18n::ActionDoc.generateHtml.Label")
+  @HopMetadataProperty
+  private boolean generateHtml = true;
+
+  @GuiWidgetElement(
+      id = "1050-action-doc-dialog-remove-markdown",
+      parentId = GUI_WIDGETS_PARENT_ID,
+      type = GuiElementType.CHECKBOX,
+      variables = false,
+      label = "i18n::ActionDoc.RemoveMarkdown.Label")
+  @HopMetadataProperty
+  private boolean removeMarkdown = false;
+
   public ActionDoc() {}
 
   public ActionDoc(ActionDoc other) {
@@ -90,6 +108,9 @@ public class ActionDoc extends ActionBase implements Cloneable, IAction {
     this.targetParentFolder = other.targetParentFolder;
     this.includingNotes = other.includingNotes;
     this.includingParameters = other.includingParameters;
+    this.includingMetadata = other.includingMetadata;
+    this.generateHtml = other.generateHtml;
+    this.removeMarkdown = other.removeMarkdown;
   }
 
   @Override
@@ -107,6 +128,12 @@ public class ActionDoc extends ActionBase implements Cloneable, IAction {
   @Override
   public Result execute(Result prevResult, int nr) {
 
+    // SAFETY CHECK: Disable removeMarkdown if generateHtml=false
+    if (removeMarkdown && !generateHtml) {
+      getLogChannel().logBasic("Remove Markdown disabled - Generate HTML not selected");
+      removeMarkdown = false;
+    }
+
     MultiMetadataProvider provider;
     if (getMetadataProvider() instanceof MultiMetadataProvider) {
       provider = (MultiMetadataProvider) getMetadataProvider();
@@ -121,10 +148,12 @@ public class ActionDoc extends ActionBase implements Cloneable, IAction {
             provider,
             getVariable(DocBuilder.VAR_PROJECT_NAME),
             getVariable(DocBuilder.VAR_PROJECT_HOME),
-            targetParentFolder,
+            resolve(targetParentFolder),
             includingParameters,
             includingNotes,
-            includingMetadata);
+            includingMetadata,
+            generateHtml,
+            removeMarkdown);
     docBuilder.buildDocumentation(prevResult);
     return prevResult;
   }

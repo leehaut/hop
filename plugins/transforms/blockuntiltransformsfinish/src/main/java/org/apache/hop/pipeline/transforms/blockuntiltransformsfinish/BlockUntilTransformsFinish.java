@@ -69,12 +69,10 @@ public class BlockUntilTransformsFinish
         }
         if (targetTransforms != null) {
           // We can not get metrics from the target transforms
-          for (int j = 0; j < targetTransforms.length; j++) {
-            if (blockingTransform.getName().equals(targetTransforms[j])) {
+          for (String targetTransform : targetTransforms) {
+            if (blockingTransform.getName().equals(targetTransform)) {
               throw new HopException(
-                  "You can not get metrics for the target transform ["
-                      + targetTransforms[j]
-                      + "]!");
+                  "You can not get metrics for the target transform [" + targetTransform + "]!");
             }
           }
         }
@@ -109,8 +107,13 @@ public class BlockUntilTransformsFinish
           // This transform is still running...
           data.continueLoop = true;
         } else {
-          logBasic(
-              "Transform " + transform.getName() + " status: " + transform.getStatusDescription());
+          if (isBasic()) {
+            logBasic(
+                "Transform "
+                    + transform.getName()
+                    + " status: "
+                    + transform.getStatusDescription());
+          }
           // We have done with this transform.
           // remove it from the map
           data.componentMap.remove(e.getKey());

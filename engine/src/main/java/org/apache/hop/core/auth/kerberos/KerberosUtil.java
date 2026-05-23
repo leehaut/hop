@@ -18,13 +18,11 @@
 package org.apache.hop.core.auth.kerberos;
 
 import com.sun.security.auth.module.Krb5LoginModule;
-import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.NameCallback;
 import javax.security.auth.callback.PasswordCallback;
 import javax.security.auth.callback.UnsupportedCallbackException;
@@ -64,7 +62,7 @@ public class KerberosUtil {
   public static final String PENTAHO_JAAS_DEBUG = "PENTAHO_JAAS_DEBUG";
 
   /** Base properties to be inherited by all other LOGIN_CONFIG* configuration maps. */
-  public static final Map<String, String> LOGIN_CONFIG_BASE = createLoginConfigBaseMap();
+  protected static final Map<String, String> LOGIN_CONFIG_BASE = createLoginConfigBaseMap();
 
   /** Login Configuration options for KERBEROS_USER mode. */
   private static final Map<String, String> LOGIN_CONFIG_OPTS_KERBEROS_USER =
@@ -101,7 +99,7 @@ public class KerberosUtil {
   }
 
   /** Login Configuration options for KERBEROS_KEYTAB mode. */
-  public static final Map<String, String> LOGIN_CONFIG_OPTS_KERBEROS_KEYTAB =
+  protected static final Map<String, String> LOGIN_CONFIG_OPTS_KERBEROS_KEYTAB =
       createLoginConfigOptsKerberosKeytabMap();
 
   private static Map<String, String> createLoginConfigOptsKerberosKeytabMap() {
@@ -145,19 +143,12 @@ public class KerberosUtil {
     return new LoginContext(
         KERBEROS_APP_NAME,
         new Subject(),
-        new CallbackHandler() {
-
-          @Override
-          public void handle(Callback[] callbacks)
-              throws IOException, UnsupportedCallbackException {
-            for (Callback callback : callbacks) {
-              if (callback instanceof NameCallback nameCallback) {
-                nameCallback.setName(principal);
-              } else if (callback instanceof PasswordCallback passwordCallback) {
-                passwordCallback.setPassword(password.toCharArray());
-              } else {
-                throw new UnsupportedCallbackException(callback);
-              }
+        callbacks -> {
+          for (Callback callback : callbacks) {
+            switch (callback) {
+              case NameCallback nc -> nc.setName(principal);
+              case PasswordCallback pc -> pc.setPassword(password.toCharArray());
+              default -> throw new UnsupportedCallbackException(callback);
             }
           }
         },

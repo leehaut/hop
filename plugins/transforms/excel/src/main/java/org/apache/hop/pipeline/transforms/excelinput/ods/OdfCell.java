@@ -19,6 +19,7 @@ package org.apache.hop.pipeline.transforms.excelinput.ods;
 
 import java.sql.Date;
 import java.util.TimeZone;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.spreadsheet.IKCell;
 import org.apache.hop.core.spreadsheet.KCellType;
 import org.apache.hop.core.util.Utils;
@@ -48,31 +49,34 @@ public class OdfCell implements IKCell {
       return KCellType.EMPTY;
     }
 
-    if (TYPE_BOOLEAN.equals(type)) {
-      if (Utils.isEmpty(cell.getFormula())) {
-        return KCellType.BOOLEAN;
-      } else {
-        return KCellType.BOOLEAN_FORMULA;
+    switch (type) {
+      case TYPE_BOOLEAN -> {
+        if (Utils.isEmpty(cell.getFormula())) {
+          return KCellType.BOOLEAN;
+        } else {
+          return KCellType.BOOLEAN_FORMULA;
+        }
       }
-    } else if (TYPE_CURRENCY.equals(type)
-        || TYPE_FLOAT.equals(type)
-        || TYPE_PERCENTAGE.equals(type)) {
-      if (Utils.isEmpty(cell.getFormula())) {
-        return KCellType.NUMBER;
-      } else {
-        return KCellType.NUMBER_FORMULA;
+      case TYPE_CURRENCY, TYPE_FLOAT, TYPE_PERCENTAGE -> {
+        if (Utils.isEmpty(cell.getFormula())) {
+          return KCellType.NUMBER;
+        } else {
+          return KCellType.NUMBER_FORMULA;
+        }
       }
-    } else if (TYPE_DATE.equals(type) || TYPE_TIME.equals(type)) { // Validate!
-      if (Utils.isEmpty(cell.getFormula())) {
-        return KCellType.DATE;
-      } else {
-        return KCellType.DATE_FORMULA;
+      case TYPE_DATE, TYPE_TIME -> {
+        if (Utils.isEmpty(cell.getFormula())) {
+          return KCellType.DATE;
+        } else {
+          return KCellType.DATE_FORMULA;
+        } // Validate!
       }
-    } else if (TYPE_STRING.equals(type)) {
-      if (Utils.isEmpty(cell.getFormula())) {
-        return KCellType.LABEL;
-      } else {
-        return KCellType.STRING_FORMULA;
+      case TYPE_STRING -> {
+        if (Utils.isEmpty(cell.getFormula())) {
+          return KCellType.LABEL;
+        } else {
+          return KCellType.STRING_FORMULA;
+        }
       }
     }
 
@@ -103,7 +107,7 @@ public class OdfCell implements IKCell {
           return null;
       }
     } catch (Exception e) {
-      throw new RuntimeException(
+      throw new HopRuntimeException(
           "Unable to get value of cell (" + cell.getColumnIndex() + ", " + cell.getRowIndex() + ")",
           e);
     }
@@ -118,7 +122,7 @@ public class OdfCell implements IKCell {
       }
       return value.toString();
     } catch (Exception e) {
-      throw new RuntimeException(
+      throw new HopRuntimeException(
           "Unable to get string content of cell ("
               + cell.getColumnIndex()
               + ", "

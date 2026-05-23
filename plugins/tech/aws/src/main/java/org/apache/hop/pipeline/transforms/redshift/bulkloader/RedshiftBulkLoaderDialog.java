@@ -23,7 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.DbCache;
 import org.apache.hop.core.Props;
@@ -71,13 +71,10 @@ import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
-import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Label;
-import org.eclipse.swt.widgets.Listener;
 import org.eclipse.swt.widgets.MessageBox;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 public class RedshiftBulkLoaderDialog extends BaseTransformDialog {
 
@@ -146,12 +143,9 @@ public class RedshiftBulkLoaderDialog extends BaseTransformDialog {
 
   /** Open the dialog. */
   public String open() {
+    createShell(BaseMessages.getString(PKG, "RedshiftBulkLoaderDialog.DialogTitle"));
 
-    Shell parent = getParent();
-
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).sql(e -> sql()).cancel(e -> cancel()).build();
 
     ModifyListener lsMod = e -> input.setChanged();
     FocusListener lsFocusLost =
@@ -163,39 +157,11 @@ public class RedshiftBulkLoaderDialog extends BaseTransformDialog {
         };
     backupChanged = input.hasChanged();
 
-    int middle = props.getMiddlePct();
-    int margin = Const.MARGIN;
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = Const.FORM_MARGIN;
-    formLayout.marginHeight = Const.FORM_MARGIN;
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "RedshiftBulkLoaderDialog.DialogTitle"));
-
-    // TransformName line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "System.TransformName.Label"));
-    wlTransformName.setToolTipText(BaseMessages.getString(PKG, "System.TransformName.Tooltip"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin * 2);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
     wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin * 2);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
 
     // Connection line
     DatabaseMeta dbm = pipelineMeta.findDatabase(input.getConnection(), variables);
-    wConnection = addConnectionLine(shell, wTransformName, input.getDatabaseMeta(), null);
+    wConnection = addConnectionLine(shell, wSpacer, input.getDatabaseMeta(), null);
     if (input.getDatabaseMeta() == null && pipelineMeta.nrDatabases() == 1) {
       wConnection.select(0);
     }
@@ -211,7 +177,7 @@ public class RedshiftBulkLoaderDialog extends BaseTransformDialog {
     FormData fdlSchema = new FormData();
     fdlSchema.left = new FormAttachment(0, 0);
     fdlSchema.right = new FormAttachment(middle, -margin);
-    fdlSchema.top = new FormAttachment(lastControl, margin * 2);
+    fdlSchema.top = new FormAttachment(lastControl, margin);
     wlSchema.setLayoutData(fdlSchema);
 
     Button wbSchema = new Button(shell, SWT.PUSH | SWT.CENTER);
@@ -219,7 +185,7 @@ public class RedshiftBulkLoaderDialog extends BaseTransformDialog {
     wbSchema.setText(BaseMessages.getString("System.Button.Browse"));
     FormData fdbSchema = new FormData();
     fdbSchema.right = new FormAttachment(100, 0);
-    fdbSchema.top = new FormAttachment(lastControl, margin * 2);
+    fdbSchema.top = new FormAttachment(lastControl, margin);
     wbSchema.setLayoutData(fdbSchema);
 
     wSchema = new TextVar(variables, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
@@ -228,7 +194,7 @@ public class RedshiftBulkLoaderDialog extends BaseTransformDialog {
     wSchema.addFocusListener(lsFocusLost);
     FormData fdSchema = new FormData();
     fdSchema.left = new FormAttachment(middle, 0);
-    fdSchema.top = new FormAttachment(lastControl, margin * 2);
+    fdSchema.top = new FormAttachment(lastControl, margin);
     fdSchema.right = new FormAttachment(wbSchema, -margin);
     wSchema.setLayoutData(fdSchema);
 
@@ -262,14 +228,6 @@ public class RedshiftBulkLoaderDialog extends BaseTransformDialog {
     fdTable.right = new FormAttachment(wbTable, -margin);
     wTable.setLayoutData(fdTable);
 
-    // Some buttons
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString("System.Button.OK"));
-    wCreate = new Button(shell, SWT.PUSH);
-    wCreate.setText(BaseMessages.getString("System.Button.SQL"));
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString("System.Button.Cancel"));
-
     lastControl = wTable;
 
     CTabFolder wTabFolder = new CTabFolder(shell, SWT.BORDER);
@@ -281,18 +239,13 @@ public class RedshiftBulkLoaderDialog extends BaseTransformDialog {
 
     FormData fdTabFolder = new FormData();
     fdTabFolder.left = new FormAttachment(0, 0);
-    fdTabFolder.top = new FormAttachment(lastControl, 2 * margin);
+    fdTabFolder.top = new FormAttachment(lastControl, margin);
     fdTabFolder.right = new FormAttachment(100, 0);
-    fdTabFolder.bottom = new FormAttachment(wOk, -2 * margin);
+    fdTabFolder.bottom = new FormAttachment(100, -50);
     wTabFolder.setLayoutData(fdTabFolder);
     wTabFolder.setSelection(0);
 
-    setButtonPositions(new Button[] {wOk, wCancel, wCreate}, margin, null);
-
     // Add listeners
-    wOk.addListener(SWT.Selection, c -> ok());
-    wCancel.addListener(SWT.Selection, c -> cancel());
-    wCreate.addListener(SWT.Selection, c -> sql());
     wGetFields.addListener(SWT.Selection, c -> get());
     wbTable.addListener(SWT.Selection, c -> getTableName());
 
@@ -305,7 +258,7 @@ public class RedshiftBulkLoaderDialog extends BaseTransformDialog {
 
     toggleSpecifyFieldsFlags();
     toggleKeysSelection();
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
     return transformName;
   }
@@ -464,7 +417,7 @@ public class RedshiftBulkLoaderDialog extends BaseTransformDialog {
         BaseMessages.getString(PKG, "RedshiftBulkLoaderDialog.LoadFromExistingFile.Tooltip"));
     PropsUi.setLook(wlLoadFromExistingFile);
     FormData fdlLoadFromExistingFile = new FormData();
-    fdlLoadFromExistingFile.top = new FormAttachment(lastControl, margin * 2);
+    fdlLoadFromExistingFile.top = new FormAttachment(lastControl, margin);
     fdlLoadFromExistingFile.left = new FormAttachment(0, 0);
     fdlLoadFromExistingFile.right = new FormAttachment(middle, -margin);
     wlLoadFromExistingFile.setLayoutData(fdlLoadFromExistingFile);
@@ -727,19 +680,13 @@ public class RedshiftBulkLoaderDialog extends BaseTransformDialog {
     fdDoMapping.right = new FormAttachment(100, 0);
     wDoMapping.setLayoutData(fdDoMapping);
 
-    wDoMapping.addListener(
-        SWT.Selection,
-        new Listener() {
-          public void handleEvent(Event arg0) {
-            generateMappings();
-          }
-        });
+    wDoMapping.addListener(SWT.Selection, arg0 -> generateMappings());
 
     FormData fdFields = new FormData();
     fdFields.left = new FormAttachment(0, 0);
     fdFields.top = new FormAttachment(wlFields, margin);
     fdFields.right = new FormAttachment(wDoMapping, -margin);
-    fdFields.bottom = new FormAttachment(100, -2 * margin);
+    fdFields.bottom = new FormAttachment(100, -margin);
     wFields.setLayoutData(fdFields);
 
     getFieldsFromPrevious();
@@ -771,7 +718,7 @@ public class RedshiftBulkLoaderDialog extends BaseTransformDialog {
 
                 // Remember these fields...
                 for (int i = 0; i < row.size(); i++) {
-                  inputFields.put(row.getValueMeta(i).getName(), Integer.valueOf(i));
+                  inputFields.put(row.getValueMeta(i).getName(), i);
                 }
 
                 setComboBoxes();
@@ -931,8 +878,8 @@ public class RedshiftBulkLoaderDialog extends BaseTransformDialog {
     Runnable fieldLoader =
         () -> {
           // clear
-          for (int i = 0; i < tableFieldColumns.size(); i++) {
-            ColumnInfo colInfo = (ColumnInfo) tableFieldColumns.get(i);
+          for (ColumnInfo fieldColumn : tableFieldColumns) {
+            ColumnInfo colInfo = (ColumnInfo) fieldColumn;
             colInfo.setComboValues(new String[] {});
           }
           if (!StringUtil.isEmpty(wTable.getText())) {
@@ -950,15 +897,15 @@ public class RedshiftBulkLoaderDialog extends BaseTransformDialog {
                 if (null != r) {
                   String[] fieldNames = r.getFieldNames();
                   if (null != fieldNames) {
-                    for (int i = 0; i < tableFieldColumns.size(); i++) {
-                      ColumnInfo colInfo = (ColumnInfo) tableFieldColumns.get(i);
+                    for (ColumnInfo tableFieldColumn : tableFieldColumns) {
+                      ColumnInfo colInfo = (ColumnInfo) tableFieldColumn;
                       colInfo.setComboValues(fieldNames);
                     }
                   }
                 }
               } catch (Exception e) {
-                for (int i = 0; i < tableFieldColumns.size(); i++) {
-                  ColumnInfo colInfo = (ColumnInfo) tableFieldColumns.get(i);
+                for (ColumnInfo tableFieldColumn : tableFieldColumns) {
+                  ColumnInfo colInfo = (ColumnInfo) tableFieldColumn;
                   colInfo.setComboValues(new String[] {});
                 }
                 // ignore any errors here. drop downs will not be
@@ -1048,8 +995,6 @@ public class RedshiftBulkLoaderDialog extends BaseTransformDialog {
         item.setText(2, vbf.getStreamField());
       }
     }
-
-    wTransformName.selectAll();
   }
 
   private void cancel() {

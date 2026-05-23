@@ -150,14 +150,11 @@ public class MySqlDatabaseMeta extends BaseDatabaseMeta implements IDatabase {
   @Override
   public String getDriverClass() {
 
-    switch (driverClassName) {
-      case "Mysql":
-        return "org.gjt.mm.mysql.Driver";
-      case CONST_MYSQL_8:
-        return "com.mysql.cj.jdbc.Driver";
-      default:
-        return "com.mysql.cj.jdbc.Driver";
-    }
+    return switch (driverClassName) {
+      case "Mysql" -> "org.gjt.mm.mysql.Driver";
+      case CONST_MYSQL_8 -> "com.mysql.cj.jdbc.Driver";
+      default -> "com.mysql.cj.jdbc.Driver";
+    };
   }
 
   public String getDriverClassName() {
@@ -225,14 +222,6 @@ public class MySqlDatabaseMeta extends BaseDatabaseMeta implements IDatabase {
   @Override
   public boolean isSupportsSynonyms() {
     return false;
-  }
-
-  /**
-   * @return true if the database supports a boolean, bit, logical
-   */
-  @Override
-  public boolean isSupportsBooleanDataType() {
-    return true;
   }
 
   /**
@@ -730,6 +719,8 @@ public class MySqlDatabaseMeta extends BaseDatabaseMeta implements IDatabase {
     addExtraOption(getPluginId(), "defaultFetchSize", "500");
     addExtraOption(getPluginId(), "useCursorFetch", "true");
     addExtraOption(getPluginId(), "zeroDateTimeBehaviorValue", "CONVERT_TO_NULL");
+    setSupportsTimestampDataType(true);
+    setSupportsBooleanDataType(true);
   }
 
   @Override
@@ -795,10 +786,5 @@ public class MySqlDatabaseMeta extends BaseDatabaseMeta implements IDatabase {
     names.add(CONST_MYSQL_8);
     names.add("Mysql");
     return names;
-  }
-
-  @Override
-  public boolean isSupportsTimestampDataType() {
-    return true;
   }
 }

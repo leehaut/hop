@@ -20,12 +20,12 @@
     <parent>
         <groupId>org.apache</groupId>
         <artifactId>apache</artifactId>
-        <version>35</version>
+        <version>38</version>
     </parent>
 
     <groupId>org.apache.hop</groupId>
     <artifactId>hop</artifactId>
-    <version>2.16.0-SNAPSHOT</version>
+    <version>2.18.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Hop Orchestration Platform</name>
@@ -97,28 +97,36 @@
     </distributionManagement>
 
     <properties>
-        <apache-beam.version>2.62.0</apache-beam.version>
+        <apache-beam.version>2.71.0</apache-beam.version>
         <assembly_appendId>false</assembly_appendId>
         <assembly_package-phase>package</assembly_package-phase>
         <attach-sources-phase>verify</attach-sources-phase>
+        <azure-sdk-bom.version>1.2.26</azure-sdk-bom.version>
         <build.dependenciesDirectory>${project.build.directory}/dependency</build.dependenciesDirectory>
-        <byte-buddy.version>1.14.15</byte-buddy.version>
+        <byte-buddy.version>1.18.7</byte-buddy.version>
         <cyclonedx-maven-plugin.version>2.8.1</cyclonedx-maven-plugin.version>
-        <hadoop.version>3.4.1</hadoop.version>
+        <grpc.version>1.80.0</grpc.version>
+        <hadoop.version>3.4.2</hadoop.version>
         <jacoco-maven-plugin.version>0.8.12</jacoco-maven-plugin.version>
-        <jandex.version>3.2.2</jandex.version>
+        <jandex.version>3.5.3</jandex.version>
         <java-hamcrest.version>2.0.0.0</java-hamcrest.version>
-        <junit.version>5.10.2</junit.version>
+        <javaVersion>${target.jdk.version}</javaVersion>
+        <javadoc.failOnWarnings>false</javadoc.failOnWarnings>
+        <jetty.version>12.1.7</jetty.version>
+        <junit.version>6.0.3</junit.version>
         <license.bundleLicenseFile>META-INF/LICENSE.txt</license.bundleLicenseFile>
         <license.failOnLicenseCheck>false</license.failOnLicenseCheck>
         <license.inceptionYear>2020</license.inceptionYear>
         <license.licenseFile>LICENSE.txt</license.licenseFile>
         <license.licenseName>apache_v2</license.licenseName>
         <license.organizationName>Apache</license.organizationName>
-        <lombok.version>1.18.34</lombok.version>
+        <lombok.version>1.18.42</lombok.version>
         <maven-failsafe-plugin.forkCount>1</maven-failsafe-plugin.forkCount>
         <maven-failsafe-plugin.reuseForks>true</maven-failsafe-plugin.reuseForks>
-        <maven-surefire-plugin.argLine>-Duser.timezone=UTC
+        <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
+        <maven-surefire-plugin.argLine>-javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito-core.version}/mockito-core-${mockito-core.version}.jar
+            -Xshare:off
+            -Duser.timezone=UTC
             -Dfile.encoding=UTF-8
             -Duser.language=en -Duser.country=US
             --add-opens java.xml/jdk.xml.internal=ALL-UNNAMED
@@ -143,20 +151,72 @@
         <maven.build.timestamp.format>yyyy-MM-dd hh.mm.ss</maven.build.timestamp.format>
         <maven.compiler.source>${target.jdk.version}</maven.compiler.source>
         <maven.compiler.target>${target.jdk.version}</maven.compiler.target>
-        <mockito-core.version>5.12.0</mockito-core.version>
-        <objenesis.version>3.4</objenesis.version>
-        <org.eclipse.platform.version>3.129.0</org.eclipse.platform.version>
-        <project.build.outputTimestamp>1695310533</project.build.outputTimestamp>
+        <minimalMavenBuildVersion>3.6.3</minimalMavenBuildVersion>
+        <mockito-core.version>5.22.0</mockito-core.version>
+        <netty.version>4.2.13.Final</netty.version>
+        <objenesis.version>3.5</objenesis.version>
+        <opentelemetry.version>1.56.0</opentelemetry.version>
+        <org.eclipse.platform.version>3.132.0</org.eclipse.platform.version>
+        <project.build.outputTimestamp>1770029303</project.build.outputTimestamp>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <set-highest-basedir-phase>initialize</set-highest-basedir-phase>
         <site-repo-url>scpexe://people.apache.org/www/hop.apache.org/maven/</site-repo-url>
-        <sonar-maven-plugin.version>4.0.0.4121</sonar-maven-plugin.version>
-        <target.jdk.version>17</target.jdk.version>
+        <sonar-maven-plugin.version>5.5.0.6356</sonar-maven-plugin.version>
+        <spotless.skip>false</spotless.skip>
+        <target.jdk.version>21</target.jdk.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <!-- Jetty: transitive deps (e.g. jersey-jetty-connector) can pull older patch lines (12.1.2).
+                 hop-libs already pins Jetty for modules that import it; root entries cover the rest of
+                 the reactor without importing hop-libs (would cycle: hop -> hop-libs -> parent hop). -->
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-alpn-client</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-client</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty.compression</groupId>
+                <artifactId>jetty-compression-common</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty.compression</groupId>
+                <artifactId>jetty-compression-gzip</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-http</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-io</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>2.21.1</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>2.21.1</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-annotations</artifactId>
+                <version>2.21</version>
+            </dependency>
             <dependency>
                 <groupId>io.smallrye</groupId>
                 <artifactId>jandex</artifactId>
@@ -214,9 +274,11 @@
         <repository>
             <releases>
                 <enabled>true</enabled>
+                <checksumPolicy>fail</checksumPolicy>
             </releases>
             <snapshots>
                 <enabled>false</enabled>
+                <checksumPolicy>fail</checksumPolicy>
             </snapshots>
             <id>central</id>
             <name>Maven Central</name>
@@ -227,9 +289,11 @@
         <pluginRepository>
             <releases>
                 <enabled>false</enabled>
+                <checksumPolicy>fail</checksumPolicy>
             </releases>
             <snapshots>
                 <enabled>true</enabled>
+                <checksumPolicy>fail</checksumPolicy>
             </snapshots>
             <id>apache.snapshots</id>
             <url>https://repository.apache.org/snapshots/</url>
@@ -262,17 +326,86 @@
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>${jacoco-maven-plugin.version}</version>
+                <configuration>
+                    <excludes>
+                        <exclude>**/*Dialog*</exclude>
+                        <exclude>**/dialog/**</exclude>
+                        <exclude>**/*Gui*Graph*</exclude>
+                        <exclude>**/*Editor*</exclude>
+                        <exclude>**/org/apache/hop/neo4j/perspective/HopNeo4jPerspective*</exclude>
+                        <exclude>**/org/apache/hop/neo4j/execution/path/**</exclude>
+                        <exclude>**/org/apache/hop/neo4j/execution/NeoExecutionInfoLocation*</exclude>
+                        <exclude>**/org/apache/hop/neo4j/logging/util/LoggingCore*</exclude>
+                        <exclude>**/org/apache/hop/git/GitGuiPlugin*</exclude>
+                        <exclude>**/org/apache/hop/git/info/GitInfoExplorerFileTypeHandler*</exclude>
+                        <exclude>**/org/apache/hop/git/info/DiffStyledTextComp*</exclude>
+                        <exclude>**/org/apache/hop/git/config/GitConfigOptionPlugin*</exclude>
+                        <exclude>**/org/apache/hop/git/model/VCS*</exclude>
+                        <exclude>**/org/apache/hop/projects/gui/**</exclude>
+                        <exclude>**/org/apache/hop/projects/xp/HopGuiStartProjectLoad*</exclude>
+                        <exclude>**/org/apache/hop/projects/config/ProjectsConfigOptionPlugin*</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/perspective/**</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/terminal/**</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/welcome/**</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/shared/**</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/partition/**</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/file/**/delegates/**</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/delegates/**</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/context/GuiContextUtil*</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/file/pipeline/HopGuiLogBrowser*</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/HopGui</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/HopGui$$*</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/HopGuiKeyHandler*</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/ContentEditorFacade*</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/ToolbarFacade*</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/HopGuiEnvironment*</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/TextSizeUtilFacade*</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/CanvasListener*</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/CanvasFacade*</exclude>
+                        <exclude>**/org/apache/hop/ui/core/widget/**</exclude>
+                        <exclude>**/org/apache/hop/ui/core/gui/**</exclude>
+                        <exclude>**/org/apache/hop/ui/core/vfs/**</exclude>
+                        <exclude>**/org/apache/hop/ui/core/metadata/**</exclude>
+                        <exclude>**/org/apache/hop/ui/core/PropsUi*</exclude>
+                        <exclude>**/org/apache/hop/ui/core/WidgetUtils*</exclude>
+                        <exclude>**/org/apache/hop/ui/core/ConstUi*</exclude>
+                        <exclude>**/org/apache/hop/ui/core/FormDataBuilder*</exclude>
+                        <exclude>**/org/apache/hop/ui/core/GetFieldsDialogOperation*</exclude>
+                        <exclude>**/org/apache/hop/ui/core/SimpleFileSelection*</exclude>
+                        <exclude>**/org/apache/hop/ui/util/Swt*</exclude>
+                        <exclude>**/org/apache/hop/ui/util/EnvironmentUtils*</exclude>
+                        <exclude>**/org/apache/hop/ui/util/HelpUtils*</exclude>
+                        <exclude>**/org/apache/hop/ui/www/**</exclude>
+                        <exclude>**/org/apache/hop/core/SwtUniversalImageSvg*</exclude>
+                        <exclude>**/*FacadeImpl*</exclude>
+                        <exclude>**/HopGuiImpl*</exclude>
+                        <exclude>**/GuiContextUtilImpl*</exclude>
+                        <exclude>**/CanvasListenerImpl*</exclude>
+                        <exclude>**/SvgLabelListenerImpl*</exclude>
+                        <exclude>**/GuiResourceImpl*</exclude>
+                        <exclude>**/ToolBarToolbarContainer*</exclude>
+                        <exclude>**/RuleBasedSourceViewerConfiguration*</exclude>
+                        <exclude>**/ContentEditorTm4eSupport*</exclude>
+                        <exclude>**/SafeCTabFolderRenderer*</exclude>
+                        <exclude>**/PrintSpool*</exclude>
+                        <exclude>**/WebToolbarContainer*</exclude>
+                        <exclude>**/CanvasZoomHandler*</exclude>
+                        <exclude>**/RapHopWebUrlUpdater*</exclude>
+                        <exclude>**/RapClientOsProvider*</exclude>
+                        <exclude>**/HopWebEntryPoint*</exclude>
+                        <exclude>**/HopWebServletContextListener*</exclude>
+                        <exclude>**/HopWebAuditManagerProvider*</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/HopWeb</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/HopWeb$$*</exclude>
+                        <exclude>**/org/apache/hop/ui/hopgui/Clipboard*</exclude>
+                    </excludes>
+                </configuration>
                 <executions>
                     <execution>
                         <id>coverage-initialize</id>
                         <goals>
                             <goal>prepare-agent</goal>
                         </goals>
-                        <configuration>
-                            <excludes>
-                                <exclude>**/*Dialog*</exclude>
-                            </excludes>
-                        </configuration>
                     </execution>
                     <execution>
                         <id>coverage-report</id>
@@ -280,11 +413,6 @@
                             <goal>report</goal>
                         </goals>
                         <phase>post-integration-test</phase>
-                        <configuration>
-                            <excludes>
-                                <exclude>**/*Dialog*</exclude>
-                            </excludes>
-                        </configuration>
                     </execution>
                 </executions>
             </plugin>
@@ -299,6 +427,15 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <compilerArgs>
+                        <arg>-Xlint:-options</arg>
+                    </compilerArgs>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -335,6 +472,7 @@
                         <exclude>DISCLAIMER</exclude>
                         <exclude>LICENSE</exclude>
                         <exclude>NOTICE</exclude>
+                        <exclude>.asf.yaml</exclude>
                         <exclude>**/licenses/*</exclude>
                         <exclude>**/target/**</exclude>
                         <exclude>**/*.svg</exclude>
@@ -373,6 +511,12 @@
                         <exclude>**/integration-tests/**/db.data</exclude>
                         <exclude>**/integration-tests/**/jmxremote.*</exclude>
                         <exclude>**/integration-tests/**/jwt_publickey</exclude>
+                        <exclude>**/integration-tests/**/*.key</exclude>
+                        <exclude>**/integration-tests/**/*.crt</exclude>
+                        <exclude>**/integration-tests/**/*.csr</exclude>
+                        <exclude>**/integration-tests/**/mtls.conf</exclude>
+                        <!-- Goldens compared byte-for-byte to Hop output (no ASF header; see FILE_COMPARE in xml integration HWFs) -->
+                        <exclude>**/integration-tests/xml/files/expected/**</exclude>
 
                         <!-- Samples Exclusions -->
                         <!-- plugins/engines/beam -->
@@ -389,6 +533,30 @@
 
                     </excludes>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>${maven-javadoc-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>generate-javadoc</id>
+                        <goals>
+                            <goal>javadoc</goal>
+                        </goals>
+                        <phase>verify</phase>
+                        <configuration>
+                            <show>public</show>
+                            <failOnError>true</failOnError>
+                            <failOnWarnings>${javadoc.failOnWarnings}</failOnWarnings>
+                            <doclint>all,-missing</doclint>
+                            <source>${target.jdk.version}</source>
+                            <encoding>${project.build.sourceEncoding}</encoding>
+                            <docencoding>${project.reporting.outputEncoding}</docencoding>
+                            <maxmemory>512m</maxmemory>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -412,6 +580,7 @@
                 <artifactId>spotless-maven-plugin</artifactId>
                 <version>2.43.0</version>
                 <configuration>
+                    <skip>${spotless.skip}</skip>
                     <java>
                         <includes>
                             <include>src/**/*.java</include>
@@ -453,6 +622,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
+                <version>${maven-javadoc-plugin.version}</version>
                 <configuration>
                     <show>public</show>
                 </configuration>
@@ -477,6 +647,17 @@
     </reporting>
 
     <profiles>
+        <profile>
+            <id>fast-build</id>
+            <properties>
+                <checkstyle.skip>true</checkstyle.skip>
+                <jacoco.skip>true</jacoco.skip>
+                <maven.javadoc.skip>true</maven.javadoc.skip>
+                <rat.skip>true</rat.skip>
+                <skipTests>true</skipTests>
+                <spotless.skip>true</spotless.skip>
+            </properties>
+        </profile>
         <profile>
             <id>base</id>
             <activation>
@@ -611,7 +792,7 @@
             </activation>
             <properties>
                 <env>mac</env>
-                <swt.artifactId>org.eclipse.swt.cocoa.macosx.x86_64</swt.artifactId>
+                <swt.artifactId>org.eclipse.swt.cocoa.macosx.aarch64</swt.artifactId>
             </properties>
             <dependencyManagement>
                 <dependencies>
@@ -715,6 +896,7 @@
                             <excludes>hop-ui-rcp/**.zip</excludes>
                             <excludes>hop-rest/**.zip</excludes>
                             <excludes>hop-ui/**.zip</excludes>
+                            <excludes>**/org.eclipse.tm4e.core/**</excludes>
                             <serverId>apache.snapshots.https</serverId>
                             <url>${distMgmtSnapshotsUrl}</url>
                         </configuration>

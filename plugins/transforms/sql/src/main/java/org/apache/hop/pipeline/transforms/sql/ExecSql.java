@@ -138,7 +138,7 @@ public class ExecSql extends BaseTransform<ExecSqlMeta, ExecSqlData> {
         int pos = len - 1;
         while (pos >= 0) {
           if (data.sql.charAt(pos) == '?') {
-            data.markerPositions.add(Integer.valueOf(pos)); // save the
+            data.markerPositions.add(pos); // save the
           }
           // marker
           // position
@@ -274,6 +274,15 @@ public class ExecSql extends BaseTransform<ExecSqlMeta, ExecSqlData> {
         return false;
       }
       DatabaseMeta databaseMeta = getPipelineMeta().findDatabase(meta.getConnection(), variables);
+      if (databaseMeta == null) {
+        logError(
+            BaseMessages.getString(
+                PKG,
+                "ExecSql.Init.ConnectionNotFound",
+                variables.resolve(meta.getConnection()),
+                getTransformName()));
+        return false;
+      }
       data.db = new Database(this, this, databaseMeta);
 
       // Connect to the database

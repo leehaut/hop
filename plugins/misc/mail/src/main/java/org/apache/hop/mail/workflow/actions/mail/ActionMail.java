@@ -41,7 +41,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.FileType;
 import org.apache.hop.core.Const;
@@ -51,6 +51,7 @@ import org.apache.hop.core.ResultFile;
 import org.apache.hop.core.annotations.Action;
 import org.apache.hop.core.encryption.Encr;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.gui.WorkflowTracker;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
@@ -59,6 +60,7 @@ import org.apache.hop.core.xml.XmlHandler;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.mail.metadata.MailServerConnection;
 import org.apache.hop.metadata.api.HopMetadataProperty;
+import org.apache.hop.metadata.api.HopMetadataPropertyType;
 import org.apache.hop.metadata.api.IHopMetadataProvider;
 import org.apache.hop.resource.ResourceEntry;
 import org.apache.hop.resource.ResourceEntry.ResourceType;
@@ -184,7 +186,8 @@ public class ActionMail extends ActionBase implements Cloneable, IAction {
   @HopMetadataProperty(key = "embeddedimage", groupKey = "embeddedimages")
   public List<MailEmbeddedImageField> embeddedimages;
 
-  @HopMetadataProperty private String connectionName;
+  @HopMetadataProperty(hopMetadataPropertyType = HopMetadataPropertyType.MAIL_SERVER_CONNECTION)
+  private String connectionName;
 
   public ActionMail(String n) {
     super(n, "");
@@ -217,7 +220,7 @@ public class ActionMail extends ActionBase implements Cloneable, IAction {
             getMetadataProvider().getSerializer(MailServerConnection.class).load(connectionName);
         session = connection.getSession(getVariables() /*, getLogChannel()*/);
       } catch (HopException e) {
-        throw new RuntimeException(
+        throw new HopRuntimeException(
             "Mail server connection '" + connectionName + "' could not be found", e);
       }
     } else {
@@ -531,7 +534,9 @@ public class ActionMail extends ActionBase implements Cloneable, IAction {
                   // add the part with the file in the BodyPart()
                   parts.addBodyPart(files);
                   nrattachedFiles++;
-                  logBasic("Added file '" + fds.getName() + "' to the mail message.");
+                  if (isBasic()) {
+                    logBasic("Added file '" + fds.getName() + "' to the mail message.");
+                  }
                 }
               }
             }
@@ -548,8 +553,8 @@ public class ActionMail extends ActionBase implements Cloneable, IAction {
 
               for (ResultFile resultFile : resultFiles) {
                 boolean found = false;
-                for (int i = 0; i < fileTypes.size(); i++) {
-                  if (fileTypes.get(i).equals(resultFile.getTypeCode())) {
+                for (String fileType : fileTypes) {
+                  if (fileType.equals(resultFile.getTypeCode())) {
                     found = true;
                   }
                 }
@@ -571,10 +576,12 @@ public class ActionMail extends ActionBase implements Cloneable, IAction {
                   }
                   zipOutputStream.closeEntry();
                   nrattachedFiles++;
-                  logBasic(
-                      "Added file '"
-                          + file.getName().getURI()
-                          + "' to the mail message in a zip archive.");
+                  if (isBasic()) {
+                    logBasic(
+                        "Added file '"
+                            + file.getName().getURI()
+                            + "' to the mail message in a zip archive.");
+                  }
                 }
               }
             } catch (Exception e) {
@@ -617,9 +624,9 @@ public class ActionMail extends ActionBase implements Cloneable, IAction {
       int nrEmbeddedImages = 0;
       if (!Utils.isEmpty(embeddedimages)) {
         FileObject imageFile = null;
-        for (int i = 0; i < embeddedimages.size(); i++) {
-          String realImageFile = resolve(embeddedimages.get(i).getEmbeddedimage());
-          String realcontenID = resolve(embeddedimages.get(i).getContentId());
+        for (MailEmbeddedImageField embeddedimage : embeddedimages) {
+          String realImageFile = resolve(embeddedimage.getEmbeddedImage());
+          String realcontenID = resolve(embeddedimage.getContentId());
           if (messageText.indexOf("cid:" + realcontenID) < 0) {
             if (isDebug()) {
               logDebug("Image [" + realImageFile + "] is not used in message body!");
@@ -644,7 +651,9 @@ public class ActionMail extends ActionBase implements Cloneable, IAction {
                 // Add part to multi-part
                 parts.addBodyPart(messageBodyPart);
                 nrEmbeddedImages++;
-                logBasic("Image '" + fds.getName() + "' was embedded in message.");
+                if (isBasic()) {
+                  logBasic("Image '" + fds.getName() + "' was embedded in message.");
+                }
               }
             } catch (Exception e) {
               logError(
@@ -717,8 +726,8 @@ public class ActionMail extends ActionBase implements Cloneable, IAction {
           Address[] invalid = sfex.getInvalidAddresses();
           if (invalid != null) {
             logError("    ** Invalid Addresses");
-            for (int i = 0; i < invalid.length; i++) {
-              logError(CONST_SPACES_LONG + invalid[i]);
+            for (Address address : invalid) {
+              logError(CONST_SPACES_LONG + address);
               result.setNrErrors(1);
             }
           }
@@ -726,16 +735,16 @@ public class ActionMail extends ActionBase implements Cloneable, IAction {
           Address[] validUnsent = sfex.getValidUnsentAddresses();
           if (validUnsent != null) {
             logError("    ** ValidUnsent Addresses");
-            for (int i = 0; i < validUnsent.length; i++) {
-              logError(CONST_SPACES_LONG + validUnsent[i]);
+            for (Address address : validUnsent) {
+              logError(CONST_SPACES_LONG + address);
               result.setNrErrors(1);
             }
           }
 
           Address[] validSent = sfex.getValidSentAddresses();
           if (validSent != null) {
-            for (int i = 0; i < validSent.length; i++) {
-              logError(CONST_SPACES_LONG + validSent[i]);
+            for (Address address : validSent) {
+              logError(CONST_SPACES_LONG + address);
               result.setNrErrors(1);
             }
           }

@@ -17,12 +17,17 @@
 
 package org.apache.hop.core;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+
+import org.junit.jupiter.api.Test;
 
 /** Test class for counters functionality. */
-public class CountersTest extends TestCase {
+class CountersTest {
   /** Test about all. Class is not too big. */
-  public void testGeneralFunctionality() {
+  @Test
+  void testGeneralFunctionality() {
     Counters cntrs = Counters.getInstance();
     assertNull(cntrs.getCounter("counter1"));
     cntrs.setCounter("counter1", new Counter());

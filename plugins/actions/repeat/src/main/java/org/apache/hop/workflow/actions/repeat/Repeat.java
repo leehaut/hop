@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.base.AbstractMeta;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.Result;
@@ -405,7 +405,7 @@ public class Repeat extends ActionBase implements IAction, Cloneable {
       Result result = workflow.startExecution();
 
       boolean flagSet = workflow.getExtensionDataMap().get(REPEAT_END_LOOP) != null;
-      if (flagSet) {
+      if (flagSet && isBasic()) {
         logBasic("End loop flag found, stopping loop.");
       }
 
@@ -608,5 +608,10 @@ public class Repeat extends ActionBase implements IAction, Cloneable {
   @Override
   public String getFilename() {
     return filename;
+  }
+
+  @Override
+  public boolean supportsDrillDown() {
+    return true;
   }
 }

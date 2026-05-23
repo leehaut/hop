@@ -19,7 +19,7 @@
 package org.apache.hop.vfs.minio;
 
 import java.util.Collection;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.Capability;
 import org.apache.commons.vfs2.FileName;
 import org.apache.commons.vfs2.FileSystem;
@@ -41,6 +41,7 @@ public class MinioFileProvider extends AbstractOriginatingFileProvider {
       new UserAuthenticationData.Type[] {
         UserAuthenticationData.USERNAME, UserAuthenticationData.PASSWORD
       };
+  public static final int DEFAULT_ENDPOINT_PORT = 9000;
 
   public static FileSystemOptions getDefaultFileSystemOptions() {
     return defaultOptions;
@@ -92,7 +93,7 @@ public class MinioFileProvider extends AbstractOriginatingFileProvider {
 
       // The end point port
       String endPointPort = variables.resolve(minioMeta.getEndPointPort());
-      fileSystem.setEndPointPort(Const.toInt(endPointPort, 9000));
+      fileSystem.setEndPointPort(Const.toInt(endPointPort, DEFAULT_ENDPOINT_PORT));
 
       // Is the end point secure? (https)
       boolean endPointSecure = minioMeta.isEndPointSecure();
@@ -125,8 +126,13 @@ public class MinioFileProvider extends AbstractOriginatingFileProvider {
       fileSystem.setRegion(region);
 
       // The part size
-      String partSize = variables.resolve(minioMeta.getRegion());
+      String partSize = variables.resolve(minioMeta.getPartSize());
       fileSystem.setPartSize(Const.toLong(partSize, DEFAULT_PART_SIZE));
+
+      // List cache TTL in seconds (same as S3)
+      String cacheTtlSeconds = variables.resolve(minioMeta.getCacheTtlSeconds());
+      long ttlMs = Const.toLong(cacheTtlSeconds, 10L) * 1000L;
+      fileSystem.setListCacheTtlMs(ttlMs);
 
       return fileSystem;
     } finally {

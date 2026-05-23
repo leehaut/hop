@@ -17,13 +17,16 @@
 
 package org.apache.hop.www;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Arrays;
@@ -31,15 +34,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.apache.hop.core.logging.ILogChannel;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-public class BaseHopServerPluginTest {
-
+class BaseHopServerPluginTest {
   HttpServletRequest req = mock(HttpServletRequest.class);
   HttpServletResponse resp = mock(HttpServletResponse.class);
   ILogChannel log = mock(ILogChannel.class);
@@ -48,15 +48,16 @@ public class BaseHopServerPluginTest {
   IHopServerRequestHandler.IOutputStreamResponse outputStreamResponse =
       mock(IHopServerRequestHandler.IOutputStreamResponse.class);
   PrintWriter printWriter = mock(PrintWriter.class);
-  javax.servlet.ServletOutputStream outputStream = mock(javax.servlet.ServletOutputStream.class);
+  jakarta.servlet.ServletOutputStream outputStream =
+      mock(jakarta.servlet.ServletOutputStream.class);
 
   ArgumentCaptor<IHopServerRequestHandler.IHopServerRequest> carteReqCaptor =
       ArgumentCaptor.forClass(IHopServerRequestHandler.IHopServerRequest.class);
 
   BaseHopServerPlugin baseHopServerPlugin;
 
-  @Before
-  public void before() {
+  @BeforeEach
+  void before() {
     baseHopServerPlugin =
         spy(
             new BaseHopServerPlugin() {
@@ -74,14 +75,14 @@ public class BaseHopServerPluginTest {
   }
 
   @Test
-  public void testDoGet() throws Exception {
-    baseHopServerPlugin.doGet(req, resp);
+  void testDoGet() throws Exception {
+    baseHopServerPlugin.service(req, resp);
     // doGet should delegate to .service
     verify(baseHopServerPlugin).service(req, resp);
   }
 
   @Test
-  public void testService() throws Exception {
+  void testService() throws Exception {
     when(req.getContextPath()).thenReturn("/Path");
     when(baseHopServerPlugin.getContextPath()).thenReturn("/Path");
     when(log.isDebug()).thenReturn(true);
@@ -140,14 +141,14 @@ public class BaseHopServerPluginTest {
     assertEquals(2, map.size());
     Collection<String> name1Params = map.get("name1");
     Collection<String> name2Params = map.get("name2");
-    assertEquals(true, name1Params.contains("val"));
-    assertEquals(true, name2Params.contains("val"));
+    assertTrue(name1Params.contains("val"));
+    assertTrue(name2Params.contains("val"));
     assertEquals(name1Params.size(), name2Params.size());
   }
 
   @Test
-  public void testGetService() {
+  void testGetService() {
     when(baseHopServerPlugin.getContextPath()).thenReturn("/Path");
-    assertEquals(true, baseHopServerPlugin.getService().startsWith("/Path"));
+    assertTrue(baseHopServerPlugin.getService().startsWith("/Path"));
   }
 }

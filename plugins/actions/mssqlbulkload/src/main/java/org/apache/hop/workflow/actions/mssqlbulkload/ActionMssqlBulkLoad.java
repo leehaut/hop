@@ -34,7 +34,6 @@ import org.apache.hop.core.database.DatabaseMeta;
 import org.apache.hop.core.exception.HopDatabaseException;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopFileException;
-import org.apache.hop.core.exception.HopXmlException;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.core.vfs.HopVfs;
@@ -237,7 +236,7 @@ public class ActionMssqlBulkLoad extends ActionBase {
 
           if (connection != null) {
 
-            DatabaseMeta dbMeta = DatabaseMeta.loadDatabase(getMetadataProvider(), connection);
+            DatabaseMeta dbMeta = parentWorkflowMeta.findDatabase(connection, getVariables());
 
             // User has specified a connection, We can continue ...
             String pluginId = dbMeta.getPluginId();
@@ -295,7 +294,7 @@ public class ActionMssqlBulkLoad extends ActionBase {
 
                 // Check Error file
                 String realErrorFile = resolve(errorFileName);
-                if (realErrorFile != null) {
+                if (!Utils.isEmpty(realErrorFile)) {
                   File errorfile = new File(realErrorFile);
                   if (errorfile.exists() && !addDatetime) {
                     // The error file is created when the command is executed. An error occurs if
@@ -366,7 +365,7 @@ public class ActionMssqlBulkLoad extends ActionBase {
                   sqlBulkLoad = sqlBulkLoad + "," + useCodepage;
                 }
                 String realFormatFile = resolve(formatFileName);
-                if (realFormatFile != null) {
+                if (!Utils.isEmpty(realFormatFile)) {
                   sqlBulkLoad = sqlBulkLoad + ", FORMATFILE='" + realFormatFile + "'";
                 }
                 if (fireTriggers) {
@@ -384,7 +383,7 @@ public class ActionMssqlBulkLoad extends ActionBase {
                 if (tabLock) {
                   sqlBulkLoad = sqlBulkLoad + ",TABLOCK";
                 }
-                if (orderBy != null) {
+                if (!Utils.isEmpty(orderBy)) {
                   sqlBulkLoad = sqlBulkLoad + ",ORDER ( " + orderBy + " " + orderDirection + ")";
                 }
                 if (!errorfileName.isEmpty()) {
@@ -491,11 +490,7 @@ public class ActionMssqlBulkLoad extends ActionBase {
     ResourceReference reference = null;
     DatabaseMeta dbMeta = null;
     if (connection != null) {
-      try {
-        dbMeta = DatabaseMeta.loadDatabase(getMetadataProvider(), connection);
-      } catch (HopXmlException e) {
-        logError("Error loading connection", e);
-      }
+      dbMeta = parentWorkflowMeta.findDatabase(connection, getVariables());
       reference = new ResourceReference(this);
       references.add(reference);
       reference.getEntries().add(new ResourceEntry(dbMeta.getHostname(), ResourceType.SERVER));

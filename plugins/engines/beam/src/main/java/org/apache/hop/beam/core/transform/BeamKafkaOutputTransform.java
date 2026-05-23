@@ -44,6 +44,7 @@ import org.apache.hop.beam.core.HopRow;
 import org.apache.hop.beam.core.fn.HopRowToKVStringStringFn;
 import org.apache.hop.beam.transforms.kafka.ConfigOption;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.row.JsonRowMeta;
@@ -125,32 +126,21 @@ public class BeamKafkaOutputTransform extends PTransform<PCollection<HopRow>, PD
       for (ConfigOption configOption : configOptions) {
         Object value;
         String optionValue = configOption.getValue();
-        switch (configOption.getType()) {
-          case String:
-            value = optionValue;
-            break;
-          case Short:
-            value = Short.valueOf(optionValue);
-            break;
-          case Int:
-            value = Integer.valueOf(optionValue);
-            break;
-          case Long:
-            value = Long.valueOf(optionValue);
-            break;
-          case Double:
-            value = Double.valueOf(optionValue);
-            break;
-          case Boolean:
-            value = Boolean.valueOf(optionValue);
-            break;
-          default:
-            throw new RuntimeException(
-                "Config option parameter "
-                    + configOption.getParameter()
-                    + " uses unsupported type "
-                    + configOption.getType().name());
-        }
+        value =
+            switch (configOption.getType()) {
+              case String -> optionValue;
+              case Short -> Short.valueOf(optionValue);
+              case Int -> Integer.valueOf(optionValue);
+              case Long -> Long.valueOf(optionValue);
+              case Double -> Double.valueOf(optionValue);
+              case Boolean -> Boolean.valueOf(optionValue);
+              default ->
+                  throw new HopRuntimeException(
+                      "Config option parameter "
+                          + configOption.getParameter()
+                          + " uses unsupported type "
+                          + configOption.getType().name());
+            };
         producerConfigUpdates.put(configOption.getParameter(), value);
       }
 
@@ -200,7 +190,7 @@ public class BeamKafkaOutputTransform extends PTransform<PCollection<HopRow>, PD
     } catch (Exception e) {
       numErrors.inc();
       LOG.error("Error in Beam Kafka output transform", e);
-      throw new RuntimeException("Error in Beam Kafka output transform", e);
+      throw new HopRuntimeException("Error in Beam Kafka output transform", e);
     }
   }
 
@@ -264,7 +254,7 @@ public class BeamKafkaOutputTransform extends PTransform<PCollection<HopRow>, PD
       } catch (Exception e) {
         numErrors.inc();
         LOG.error("Error in setup of HopRow to KV<String,GenericRecord> function", e);
-        throw new RuntimeException(
+        throw new HopRuntimeException(
             "Error in setup of HopRow to KV<String,GenericRecord> function", e);
       }
     }
@@ -284,7 +274,7 @@ public class BeamKafkaOutputTransform extends PTransform<PCollection<HopRow>, PD
       } catch (Exception e) {
         numErrors.inc();
         LOG.error("Error in HopRow to KV<String,GenericRecord> function", e);
-        throw new RuntimeException("Error in HopRow to KV<String,GenericRecord> function", e);
+        throw new HopRuntimeException("Error in HopRow to KV<String,GenericRecord> function", e);
       }
     }
   }

@@ -17,14 +17,15 @@
 
 package org.apache.hop.www.jaxrs;
 
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 import java.util.UUID;
-import javax.ws.rs.GET;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.logging.HopLogStore;
 import org.apache.hop.core.logging.LoggingObjectType;
 import org.apache.hop.core.logging.SimpleLoggingObject;
@@ -41,6 +42,10 @@ import org.apache.hop.workflow.engine.WorkflowEngineFactory;
 import org.apache.hop.www.HopServerObjectEntry;
 import org.apache.hop.www.HopServerSingleton;
 
+/**
+ * @deprecated Since 2.18.0
+ */
+@Deprecated(since = "2.18.0")
 @Path("/carte/workflow")
 public class WorkflowResource {
 
@@ -131,7 +136,7 @@ public class WorkflowResource {
               .replaceWorkflow(workflow, newWorkflow, workflowConfiguration);
           workflow = newWorkflow;
         } catch (Exception e) {
-          throw new RuntimeException("Unable to instantiate new workflow", e);
+          throw new HopRuntimeException("Unable to instantiate new workflow", e);
         }
       }
     }
@@ -215,15 +220,14 @@ public class WorkflowResource {
       workflow.copyParametersFromDefinitions(workflowMeta);
       workflow.clearParameterValues();
       String[] parameterNames = workflow.listParameters();
-      for (int idx = 0; idx < parameterNames.length; idx++) {
+      for (String parameterName : parameterNames) {
         // Grab the parameter value set in the action
         //
-        String thisValue =
-            workflowExecutionConfiguration.getParametersMap().get(parameterNames[idx]);
+        String thisValue = workflowExecutionConfiguration.getParametersMap().get(parameterName);
         if (!Utils.isEmpty(thisValue)) {
           // Set the value as specified by the user in the action
           //
-          workflow.setParameterValue(parameterNames[idx], thisValue);
+          workflow.setParameterValue(parameterName, thisValue);
         }
       }
       workflow.activateParameters(workflow);

@@ -17,17 +17,18 @@
 
 package org.apache.hop.www;
 
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.io.Serial;
 import java.text.MessageFormat;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.servlet.ServletConfig;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.apache.hop.core.exception.HopPluginException;
 import org.apache.hop.core.logging.ILogChannel;
 import org.apache.hop.core.logging.LogChannel;
@@ -37,8 +38,7 @@ import org.apache.hop.core.plugins.IPluginTypeListener;
 import org.apache.hop.core.plugins.PluginRegistry;
 
 public class HopServerServlet extends HttpServlet {
-
-  private static final long serialVersionUID = 2434694833497859776L;
+  @Serial private static final long serialVersionUID = 2434694833497859776L;
 
   public static final String STRING_HOP_SERVER_SERVLET = "HopServer Servlet";
 
@@ -53,7 +53,26 @@ public class HopServerServlet extends HttpServlet {
   @Override
   public void doPost(HttpServletRequest req, HttpServletResponse resp)
       throws ServletException, IOException {
-    doGet(req, resp);
+    try {
+      doGet(req, resp);
+    } catch (Exception e) {
+      log.logError("Error handling HopServer POST request", e);
+      sendSafeError(
+          resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Unable to process server request.");
+    }
+  }
+
+  private void sendSafeError(HttpServletResponse response, int status, String message) {
+    if (response.isCommitted()) {
+      response.setStatus(status);
+      return;
+    }
+    try {
+      response.sendError(status, message);
+    } catch (IOException e) {
+      log.logError("Failed to send error response (" + status + "): " + message, e);
+      response.setStatus(status);
+    }
   }
 
   @Override
@@ -68,15 +87,17 @@ public class HopServerServlet extends HttpServlet {
       try {
         plugin.doGet(req, resp);
       } catch (ServletException e) {
-        throw e;
+        log.logError("Hop server plugin request failed", e);
+        sendSafeError(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Plugin request failed.");
       } catch (Exception e) {
-        throw new ServletException(e);
+        log.logError("Hop server plugin request failed", e);
+        sendSafeError(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Plugin request failed.");
       }
     } else {
       if (log.isDebug()) {
         log.logDebug("Unable to find Hop Server Plugin for key: /hop" + req.getPathInfo());
       }
-      resp.sendError(404);
+      sendSafeError(resp, HttpServletResponse.SC_NOT_FOUND, "Not found.");
     }
   }
 

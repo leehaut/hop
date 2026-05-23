@@ -19,7 +19,7 @@ package org.apache.hop.core.search;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.reflection.StringSearchResult;
 import org.apache.hop.core.reflection.StringSearcher;
 
@@ -41,16 +41,14 @@ public abstract class BaseSearchableAnalyser<T> {
               component,
               propertyValue));
     }
-    if (StringUtils.isNotEmpty(propertyValue)) {
-      if (searchQuery.matches(propertyValue)) {
-        searchResults.add(
-            new SearchResult(
-                parent,
-                propertyValue,
-                "matching property value: " + propertyValue,
-                component,
-                propertyValue));
-      }
+    if (StringUtils.isNotEmpty(propertyValue) && searchQuery.matches(propertyValue)) {
+      searchResults.add(
+          new SearchResult(
+              parent,
+              propertyValue,
+              "matching property value: " + propertyValue,
+              component,
+              propertyValue));
     }
   }
 

@@ -28,7 +28,7 @@ import org.apache.commons.codec.language.DoubleMetaphone;
 import org.apache.commons.codec.language.Metaphone;
 import org.apache.commons.codec.language.RefinedSoundex;
 import org.apache.commons.codec.language.Soundex;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.IRowSet;
 import org.apache.hop.core.exception.HopException;
@@ -266,17 +266,14 @@ public class FuzzyMatch extends BaseTransform<FuzzyMatchMeta, FuzzyMatchData> {
         useLookupvalue = lookupValueString.toLowerCase();
       }
 
-      switch (meta.getAlgorithm()) {
-        case DAMERAU_LEVENSHTEIN:
-          cDistance = Utils.getDamerauLevenshteinDistance(useCacheValue, useLookupvalue);
-          break;
-        case NEEDLEMAN_WUNSH:
-          cDistance = Math.abs((int) new NeedlemanWunsch().score(useCacheValue, useLookupvalue));
-          break;
-        default:
-          cDistance = StringUtils.getLevenshteinDistance(useCacheValue, useLookupvalue);
-          break;
-      }
+      cDistance =
+          switch (meta.getAlgorithm()) {
+            case DAMERAU_LEVENSHTEIN ->
+                Utils.getDamerauLevenshteinDistance(useCacheValue, useLookupvalue);
+            case NEEDLEMAN_WUNSH ->
+                Math.abs((int) new NeedlemanWunsch().score(useCacheValue, useLookupvalue));
+            default -> StringUtils.getLevenshteinDistance(useCacheValue, useLookupvalue);
+          };
 
       if (data.minimalDistance <= cDistance && cDistance <= data.maximalDistance) {
         if (meta.isCloserValue()) {
@@ -395,20 +392,14 @@ public class FuzzyMatch extends BaseTransform<FuzzyMatchMeta, FuzzyMatchData> {
       // Key value is the first value
       String cacheValue = (String) cachedData[0];
 
-      double cSimilarity;
-
-      switch (meta.getAlgorithm()) {
-        case JARO:
-          cSimilarity = new Jaro().score(cacheValue, lookupValueString);
-          break;
-        case JARO_WINKLER:
-          cSimilarity = new JaroWinkler().score(cacheValue, lookupValueString);
-          break;
-        default:
-          // Letters pair similarity
-          cSimilarity = LetterPairSimilarity.getSimiliarity(cacheValue, lookupValueString);
-          break;
-      }
+      double cSimilarity =
+          switch (meta.getAlgorithm()) {
+            case JARO -> new Jaro().score(cacheValue, lookupValueString);
+            case JARO_WINKLER -> new JaroWinkler().score(cacheValue, lookupValueString);
+            default ->
+                // Letters pair similarity
+                LetterPairSimilarity.getSimiliarity(cacheValue, lookupValueString);
+          };
 
       if (data.minimalSimilarity <= cSimilarity && cSimilarity <= data.maximalSimilarity) {
         if (meta.isCloserValue()) {

@@ -61,8 +61,6 @@ import org.w3c.dom.Node;
  *
  * <p><b>Apache Hop Field Type / Java Mapping</b>
  *
- * <p>
- *
  * <Table border="1">
  * <caption>Java mappings</caption>
  * <tr>
@@ -125,8 +123,6 @@ import org.w3c.dom.Node;
  *
  * <p>In addition to the data type of a field, the storage type (getStorageType()/setStorageType())
  * is used to interpret the actual field value in a row array.
- *
- * <p>
  *
  * <Table border="1">
  * <caption>Storage mappings</caption>
@@ -198,6 +194,9 @@ public interface IValueMeta extends Cloneable {
 
   /** Value type indicating that the value contains an Avro Record */
   int TYPE_AVRO = 20;
+
+  /** Value type indicating that the value contains an UUID */
+  int TYPE_UUID = 32;
 
   /** The Constant typeCodes. */
   String[] typeCodes =
@@ -283,22 +282,16 @@ public interface IValueMeta extends Cloneable {
     BOTH("both", BaseMessages.getString(PKG, "ValueMeta.TrimType.Both"), TRIM_TYPE_BOTH);
 
     /**
-     * -- GETTER -- Gets code
-     *
      * @return value of code
      */
     @Getter private final String code;
 
     /**
-     * -- GETTER -- Gets description
-     *
      * @return value of description
      */
     @Getter private final String description;
 
     /**
-     * -- GETTER -- Gets type
-     *
      * @return value of type
      */
     @Getter private final int type;

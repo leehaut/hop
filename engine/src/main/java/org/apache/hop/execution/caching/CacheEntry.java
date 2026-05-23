@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopException;
@@ -49,6 +49,10 @@ public class CacheEntry {
 
   // The name of the pipeline of workflow
   private String name;
+
+  // The creation date of this entry
+  //
+  private Date creationDate;
 
   // The parent execution: pipeline or workflow
   private Execution execution;
@@ -79,6 +83,7 @@ public class CacheEntry {
     childExecutionData = new HashMap<>();
     summary = new EntrySummary();
     lastWritten = new Date();
+    creationDate = new Date();
     dirty = true;
   }
 

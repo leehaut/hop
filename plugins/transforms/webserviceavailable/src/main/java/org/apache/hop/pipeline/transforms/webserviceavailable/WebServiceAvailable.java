@@ -17,14 +17,18 @@
 
 package org.apache.hop.pipeline.transforms.webserviceavailable;
 
-import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.io.CountingInputStream;
 import org.apache.hop.core.row.RowDataUtil;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.i18n.BaseMessages;
+import org.apache.hop.lineage.LineageHttpIoEmitter;
+import org.apache.hop.lineage.model.HttpDirection;
+import org.apache.hop.lineage.model.HttpLineagePayload;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransform;
@@ -47,9 +51,10 @@ public class WebServiceAvailable
 
   @Override
   public boolean processRow() throws HopException {
-
-    Object[] r = getRow(); // Get row from input rowset & set row busy!
-    if (r == null) { // no more input to be expected...
+    // Get row from input rowset & set row busy!
+    Object[] r = getRow();
+    // no more input to be expected...
+    if (r == null) {
 
       setOutputDone();
       return false;
@@ -59,7 +64,7 @@ public class WebServiceAvailable
       first = false;
       // get the RowMeta
       data.previousRowMeta = getInputRowMeta().clone();
-      data.NrPrevFields = data.previousRowMeta.size();
+      data.nrPrevFields = data.previousRowMeta.size();
       data.outputRowMeta = data.previousRowMeta;
       meta.getFields(data.outputRowMeta, getTransformName(), null, null, this, metadataProvider);
 
@@ -86,7 +91,6 @@ public class WebServiceAvailable
     } // End If first
 
     try {
-
       // get url
       String url = data.previousRowMeta.getString(r, data.indexOfURL);
 
@@ -99,16 +103,26 @@ public class WebServiceAvailable
       }
 
       boolean webServiceAvailable = false;
-
-      InputStream in = null;
-
+      long httpStart = System.currentTimeMillis();
+      Integer httpStatus = null;
+      Long httpRespBytes = null;
+      boolean httpOk = false;
       try {
         URLConnection conn = new URL(url).openConnection();
         conn.setConnectTimeout(data.connectTimeOut);
         conn.setReadTimeout(data.readTimeOut);
-        in = conn.getInputStream();
-        // Web service is available
+        if (conn instanceof HttpURLConnection) {
+          httpStatus = ((HttpURLConnection) conn).getResponseCode();
+        }
+        try (CountingInputStream countingIn = new CountingInputStream(conn.getInputStream())) {
+          byte[] buf = new byte[8192];
+          while (countingIn.read(buf) != -1) {
+            // drain response so byte count reflects transferred body
+          }
+          httpRespBytes = countingIn.getCount();
+        }
         webServiceAvailable = true;
+        httpOk = true;
       } catch (Exception e) {
         if (isDebug()) {
           logDebug(
@@ -117,20 +131,28 @@ public class WebServiceAvailable
         }
 
       } finally {
-        if (in != null) {
-          try {
-            in.close();
-          } catch (Exception e) {
-            /* Ignore */
-          }
+        try {
+          LineageHttpIoEmitter.emitTransformHttpIo(
+              this,
+              new HttpLineagePayload(
+                  HttpDirection.CLIENT,
+                  "GET",
+                  url,
+                  httpStatus,
+                  null,
+                  httpRespBytes != null && httpRespBytes > 0 ? httpRespBytes : null,
+                  System.currentTimeMillis() - httpStart,
+                  httpOk,
+                  null));
+        } catch (Exception ignored) {
+          // optional lineage
         }
       }
 
       // addwebservice available to the row
+      // copy row to output rowset(s)
       putRow(
-          data.outputRowMeta,
-          RowDataUtil.addValueData(
-              r, data.NrPrevFields, webServiceAvailable)); // copy row to output rowset(s)
+          data.outputRowMeta, RowDataUtil.addValueData(r, data.nrPrevFields, webServiceAvailable));
 
       if (isRowLevel()) {
         logRowlevel(
@@ -152,7 +174,8 @@ public class WebServiceAvailable
                 + e.getMessage());
         setErrors(1);
         stopAll();
-        setOutputDone(); // signal end to receiver(s)
+        // signal end to receiver(s)
+        setOutputDone();
         return false;
       }
       if (sendToErrorRow) {

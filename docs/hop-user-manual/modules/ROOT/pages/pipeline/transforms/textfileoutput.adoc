@@ -33,6 +33,8 @@ It is also possible to generate fixed width files by setting lengths on the fiel
 
 You can choose to use a xref:metadata-types/static-schema-definition.adoc[Schema Definition] or to define the required fields' layout manually. If you decide to define the fields layout by using a xref:metadata-types/static-schema-definition.adoc[Schema Definition], use the xref:pipeline/transforms/schemamapping.adoc[Schema Mapping] transform to adjust the incoming stream according to the chosen xref:metadata-types/static-schema-definition.adoc[Schema Definition]
 
+The `ignore manual fields` ignores any fields manually defined in the transform's field layout, and only uses the layout specified in the xref:metadata-types/static-schema-definition.adoc[Schema Definition].
+
 
 |
 == Supported Engines
@@ -56,7 +58,6 @@ The File tab is where you define basic properties about the file being created, 
 |Option|Description
 |Transform name|Name of the transform. This name has to be unique in a single pipeline.
 |Filename|Specifies the filename and location of the output text file. Click Browse to select a location.
-|Pass output to servlet|Enable this to return the data via a web service instead writing into a file.
 |Create parent folder|Enable this to create the parent folder when the file is created. Otherwise the folder must already exist or the write fails.
 |Do not create file at start|Enable this to avoid empty files when no rows are getting processed. Otherwise the file is created before any data is processed, and might produce an empty file.
 |Accept file name from field?|Enable this to specify the file name(s) in a field in the input stream
@@ -142,7 +143,10 @@ The table below describes each of the options for configuring the field properti
 Note: Trimming only works when there is no field length given. 
 |Null|Specify a value to insert in the field if the field value is null.
 |Get Fields|Click to retrieve the list of fields from the input fields stream(s).
-|Rounding Type| When writing numbers to a file you can specify the Rounding type being used by default `Half Even` is used, for more information look at the Rounding Types section
+|Rounding Type a| When writing numbers to a file you can specify the Rounding type being used by default `Half Even` is used, for more information look at the Rounding Types section.
+
+TIP: A number format is required with the rounding types in Text File Output.
+
 |Minimal width|Alter the options in the fields tab in such a way that the resulting width of lines in the text file is minimal.
 
 So instead of a string value being 0000001, we write 1, etc.

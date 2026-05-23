@@ -75,6 +75,7 @@ class SingleStoreDatabaseMetaTest {
   void setupBefore() {
     nativeMeta = new SingleStoreDatabaseMeta();
     nativeMeta.setAccessType(DatabaseMeta.TYPE_ACCESS_NATIVE);
+    nativeMeta.addDefaultOptions();
   }
 
   @Test
@@ -488,7 +489,12 @@ class SingleStoreDatabaseMetaTest {
     assertEquals(
         "ALTER TABLE FOO ADD COLUMN BAR VARBINARY",
         nativeMeta.getAddColumnStatement(
-            "FOO", new ValueMetaBinary("BAR", 16777250, 0), "", false, "", false));
+            "FOO", new ValueMetaBinary("BAR", -1, 0), "", false, "", false));
+
+    assertEquals(
+        "ALTER TABLE FOO ADD COLUMN BAR BINARY(16)",
+        nativeMeta.getAddColumnStatement(
+            "FOO", new ValueMetaBinary("BAR", 16, 0), "", false, "", false));
 
     assertEquals(
         "LOCK TABLES FOO WRITE, BAR WRITE;" + Const.CR,

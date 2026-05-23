@@ -25,6 +25,7 @@ import static org.apache.hop.git.HopDiff.CHANGED;
 import static org.apache.hop.git.HopDiff.REMOVED;
 
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.extension.ExtensionPoint;
 import org.apache.hop.core.extension.IExtensionPoint;
 import org.apache.hop.core.gui.DPoint;
@@ -47,32 +48,29 @@ public class DrawDiffOnActionExtensionPoint implements IExtensionPoint {
   @Override
   public void callExtensionPoint(ILogChannel log, IVariables variables, Object object)
       throws HopException {
-    if (!(object instanceof WorkflowPainter)) {
+    if (!(object instanceof WorkflowPainter painter)) {
       return;
     }
-    WorkflowPainter painter = (WorkflowPainter) object;
     DPoint offset = painter.getOffset();
     IGc gc = painter.getGc();
     WorkflowMeta workflowMeta = painter.getWorkflowMeta();
     try {
       workflowMeta.getActions().stream()
-          .filter(je -> je.getAttribute(ATTR_GIT, ATTR_STATUS) != null)
+          .filter(action -> action.getAttribute(ATTR_GIT, ATTR_STATUS) != null)
           .forEach(
-              je -> {
-                if (workflowMeta.getWorkflowVersion() == null
-                    ? false
-                    : workflowMeta.getWorkflowVersion().startsWith("git")) {
-                  String status = je.getAttribute(ATTR_GIT, ATTR_STATUS);
-                  Point n = je.getLocation();
+              action -> {
+                if (workflowMeta.getWorkflowVersion() != null
+                    && workflowMeta.getWorkflowVersion().startsWith("git")) {
+                  String status = action.getAttribute(ATTR_GIT, ATTR_STATUS);
+                  Point n = action.getLocation();
                   String location;
-                  if (status.equals(REMOVED)) {
-                    location = "removed.svg";
-                  } else if (status.equals(CHANGED)) {
-                    location = "changed.svg";
-                  } else if (status.equals(ADDED)) {
-                    location = "added.svg";
-                  } else { // Unchanged
-                    return;
+                  switch (status) {
+                    case REMOVED -> location = "removed.svg";
+                    case CHANGED -> location = "changed.svg";
+                    case ADDED -> location = "added.svg";
+                    default -> {
+                      return;
+                    }
                   }
                   int iconSize = ConstUi.ICON_SIZE;
                   try {
@@ -87,15 +85,15 @@ public class DrawDiffOnActionExtensionPoint implements IExtensionPoint {
                         new SvgFile(location, getClass().getClassLoader()),
                         (int) x,
                         (int) y,
-                        iconSize / 4,
-                        iconSize / 4,
+                        iconSize / 2,
+                        iconSize / 2,
                         gc.getMagnification(),
                         0);
                   } catch (Exception e) {
-                    throw new RuntimeException(e);
+                    throw new HopRuntimeException(e);
                   }
                 } else {
-                  je.getAttributesMap().remove(ATTR_GIT);
+                  action.getAttributesMap().remove(ATTR_GIT);
                 }
               });
     } catch (Exception e) {

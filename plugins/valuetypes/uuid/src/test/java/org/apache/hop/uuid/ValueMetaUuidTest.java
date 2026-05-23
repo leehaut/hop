@@ -31,6 +31,7 @@ import java.io.DataOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.sql.ResultSet;
 import java.util.UUID;
+import org.apache.hop.core.Const;
 import org.apache.hop.core.HopClientEnvironment;
 import org.apache.hop.core.database.IDatabase;
 import org.apache.hop.core.exception.HopValueException;
@@ -86,7 +87,7 @@ class ValueMetaUuidTest {
     indexSrc.setStorageType(IValueMeta.STORAGE_TYPE_INDEXED);
     UUID u2 = UUID.randomUUID();
     indexSrc.setIndex(new Object[] {u.toString(), u2.toString()});
-    out = dst.convertData(indexSrc, Integer.valueOf(1));
+    out = dst.convertData(indexSrc, 1);
     assertInstanceOf(UUID.class, out);
     assertEquals(u2, out);
 
@@ -100,7 +101,7 @@ class ValueMetaUuidTest {
     // target meta storageMetadata tells how to turn bytes into String
     ValueMetaString storage = new ValueMetaString("id");
     storage.setStorageType(IValueMeta.STORAGE_TYPE_NORMAL);
-    storage.setStringEncoding("UTF-8");
+    storage.setStringEncoding(Const.UTF_8);
     binDst.setStorageMetadata(storage);
 
     UUID u3 = UUID.randomUUID();

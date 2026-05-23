@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hop.core.IProgressMonitor;
 import org.apache.hop.core.ProgressNullMonitorListener;
 import org.apache.hop.core.exception.HopDatabaseException;
@@ -32,7 +34,11 @@ import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.i18n.BaseMessages;
 
-/** Contains the schema's, catalogs, tables, views, synonyms, etc we can find in the databases... */
+/**
+ * Contains the schema's, catalogs, tables, views, synonyms, etc. we can find in the databases...
+ */
+@Getter
+@Setter
 public class DatabaseMetaInformation {
   private static final Class<?> PKG = Database.class;
 
@@ -45,7 +51,6 @@ public class DatabaseMetaInformation {
   private Catalog[] catalogs;
   private Schema[] schemas;
   private String[] procedures;
-
   private IVariables variables;
   private DatabaseMeta databaseMeta;
 
@@ -95,8 +100,8 @@ public class DatabaseMetaInformation {
             && connectionExtraOptions.containsKey(catalogFilterKey)) {
           String catsFilterCommaList = connectionExtraOptions.get(catalogFilterKey);
           String[] catsFilterArray = catsFilterCommaList.split(",");
-          for (int i = 0; i < catsFilterArray.length; i++) {
-            catalogList.add(new Catalog(catsFilterArray[i].trim()));
+          for (String s : catsFilterArray) {
+            catalogList.add(new Catalog(s.trim()));
           }
         }
         if (catalogList.isEmpty()) {
@@ -166,8 +171,8 @@ public class DatabaseMetaInformation {
               && connectionExtraOptions.containsKey(schemaFilterKey)) {
             String schemasFilterCommaList = connectionExtraOptions.get(schemaFilterKey);
             String[] schemasFilterArray = schemasFilterCommaList.split(",");
-            for (int i = 0; i < schemasFilterArray.length; i++) {
-              schemaList.add(new Schema(schemasFilterArray[i].trim()));
+            for (String s : schemasFilterArray) {
+              schemaList.add(new Schema(s.trim()));
             }
           }
           if (schemaList.isEmpty()) {
@@ -307,181 +312,5 @@ public class DatabaseMetaInformation {
       db.disconnect();
       monitor.done();
     }
-  }
-
-  /**
-   * Gets tables
-   *
-   * @return value of tables
-   */
-  public String[] getTables() {
-    return tables;
-  }
-
-  /**
-   * @param tables The tables to set
-   */
-  public void setTables(String[] tables) {
-    this.tables = tables;
-  }
-
-  /**
-   * Gets tableMap
-   *
-   * @return value of tableMap
-   */
-  public Map<String, Collection<String>> getTableMap() {
-    return tableMap;
-  }
-
-  /**
-   * @param tableMap The tableMap to set
-   */
-  public void setTableMap(Map<String, Collection<String>> tableMap) {
-    this.tableMap = tableMap;
-  }
-
-  /**
-   * Gets views
-   *
-   * @return value of views
-   */
-  public String[] getViews() {
-    return views;
-  }
-
-  /**
-   * @param views The views to set
-   */
-  public void setViews(String[] views) {
-    this.views = views;
-  }
-
-  /**
-   * Gets viewMap
-   *
-   * @return value of viewMap
-   */
-  public Map<String, Collection<String>> getViewMap() {
-    return viewMap;
-  }
-
-  /**
-   * @param viewMap The viewMap to set
-   */
-  public void setViewMap(Map<String, Collection<String>> viewMap) {
-    this.viewMap = viewMap;
-  }
-
-  /**
-   * Gets synonyms
-   *
-   * @return value of synonyms
-   */
-  public String[] getSynonyms() {
-    return synonyms;
-  }
-
-  /**
-   * @param synonyms The synonyms to set
-   */
-  public void setSynonyms(String[] synonyms) {
-    this.synonyms = synonyms;
-  }
-
-  /**
-   * Gets synonymMap
-   *
-   * @return value of synonymMap
-   */
-  public Map<String, Collection<String>> getSynonymMap() {
-    return synonymMap;
-  }
-
-  /**
-   * @param synonymMap The synonymMap to set
-   */
-  public void setSynonymMap(Map<String, Collection<String>> synonymMap) {
-    this.synonymMap = synonymMap;
-  }
-
-  /**
-   * Gets catalogs
-   *
-   * @return value of catalogs
-   */
-  public Catalog[] getCatalogs() {
-    return catalogs;
-  }
-
-  /**
-   * @param catalogs The catalogs to set
-   */
-  public void setCatalogs(Catalog[] catalogs) {
-    this.catalogs = catalogs;
-  }
-
-  /**
-   * Gets schemas
-   *
-   * @return value of schemas
-   */
-  public Schema[] getSchemas() {
-    return schemas;
-  }
-
-  /**
-   * @param schemas The schemas to set
-   */
-  public void setSchemas(Schema[] schemas) {
-    this.schemas = schemas;
-  }
-
-  /**
-   * Gets procedures
-   *
-   * @return value of procedures
-   */
-  public String[] getProcedures() {
-    return procedures;
-  }
-
-  /**
-   * @param procedures The procedures to set
-   */
-  public void setProcedures(String[] procedures) {
-    this.procedures = procedures;
-  }
-
-  /**
-   * Gets variables
-   *
-   * @return value of variables
-   */
-  public IVariables getVariables() {
-    return variables;
-  }
-
-  /**
-   * @param variables The variables to set
-   */
-  public void setVariables(IVariables variables) {
-    this.variables = variables;
-  }
-
-  /**
-   * Gets databaseMeta
-   *
-   * @return value of databaseMeta
-   */
-  public DatabaseMeta getDatabaseMeta() {
-    return databaseMeta;
-  }
-
-  /**
-   * @param databaseMeta The databaseMeta to set
-   */
-  public void setDatabaseMeta(DatabaseMeta databaseMeta) {
-    this.databaseMeta = databaseMeta;
   }
 }

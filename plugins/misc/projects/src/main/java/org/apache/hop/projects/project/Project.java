@@ -37,7 +37,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.apache.commons.lang.StringUtils;
+import lombok.Getter;
+import lombok.Setter;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.config.DescribedVariablesConfigFile;
@@ -67,35 +69,25 @@ import org.apache.hop.projects.util.ProjectsUtil;
 import org.apache.hop.workflow.WorkflowMeta;
 import org.apache.hop.workflow.action.ActionMeta;
 
+@Getter
+@Setter
 public class Project extends ConfigFile implements IConfigFile {
 
   @JsonIgnore private String configFilename;
-
   private String description;
-
   private String company;
-
   private String department;
-
+  private String version;
   private String metadataBaseFolder;
-
   private String unitTestsBasePath;
-
   private String dataSetsCsvFolder;
-
   private boolean enforcingExecutionInHome;
-
   private String parentProjectName;
-
-  private MultiMetadataProvider metadataProvider;
-
-  private List<Path> pipelinePaths;
-
-  private List<Path> workflowPaths;
-
-  private Map<PipelineMeta, List<TransformMeta>> pipelineTransformsMap;
-
-  private Map<WorkflowMeta, List<ActionMeta>> workflowActionsMap;
+  @JsonIgnore private MultiMetadataProvider metadataProvider;
+  @JsonIgnore private List<Path> pipelinePaths;
+  @JsonIgnore private List<Path> workflowPaths;
+  @JsonIgnore private Map<PipelineMeta, List<TransformMeta>> pipelineTransformsMap;
+  @JsonIgnore private Map<WorkflowMeta, List<ActionMeta>> workflowActionsMap;
 
   public Project() {
     super();
@@ -110,12 +102,20 @@ public class Project extends ConfigFile implements IConfigFile {
     this.configFilename = configFilename;
   }
 
+  public void saveToFile(boolean keepIfExists) throws HopException {
+    try (FileObject file = HopVfs.getFileObject(configFilename)) {
+      if (!keepIfExists || !file.exists()) {
+        saveToFile();
+      }
+    } catch (Exception e) {
+      throw new HopException(
+          "Error checking existence of project configuration file '" + configFilename + "'", e);
+    }
+  }
+
   @Override
   public void saveToFile() throws HopException {
-    try {
-
-      FileObject file = HopVfs.getFileObject(configFilename);
-
+    try (FileObject file = HopVfs.getFileObject(configFilename)) {
       // Does the parent folder of the file exist?
       //
       if (!file.getParent().exists()) {
@@ -145,6 +145,7 @@ public class Project extends ConfigFile implements IConfigFile {
       this.description = project.description;
       this.company = project.company;
       this.department = project.department;
+      this.version = project.version;
       this.metadataBaseFolder = project.metadataBaseFolder;
       this.unitTestsBasePath = project.unitTestsBasePath;
       this.dataSetsCsvFolder = project.dataSetsCsvFolder;
@@ -299,9 +300,19 @@ public class Project extends ConfigFile implements IConfigFile {
       projectsList.add(realParentProjectName);
       ProjectConfig projectConfig = config.findProjectConfig(realParentProjectName);
       if (projectConfig != null) {
-        Project parentProject = projectConfig.loadProject(variables);
+        Project parentProject;
+        try {
+          parentProject = projectConfig.loadProject(variables);
+        } catch (Exception e) {
+          LogChannel.GENERAL.logError(
+              "Could not load parent project '"
+                  + realParentProjectName
+                  + "'; continuing without it. Fix the project path in Project configuration.",
+              e);
+          parentProject = null;
+        }
         if (parentProject == null) {
-          // Can't be loaded, break out of the loop
+          // Can't be loaded, break out of the loop and continue with active project
           realParentProjectName = null;
         } else {
           // See if this project has a parent...
@@ -311,15 +322,13 @@ public class Project extends ConfigFile implements IConfigFile {
             realParentProjectName = null;
           } else {
             realParentProjectName = variables.resolve(parentProject.parentProjectName);
-            if (StringUtils.isNotEmpty(realParentProjectName)) {
-              // See if we've had this one before...
-              //
-              if (projectsList.contains(realParentProjectName)) {
-                throw new HopException(
-                    "There is a loop in the parent projects hierarchy: project "
-                        + realParentProjectName
-                        + " references itself");
-              }
+            // See if we've had this one before...
+            if (StringUtils.isNotEmpty(realParentProjectName)
+                && projectsList.contains(realParentProjectName)) {
+              throw new HopException(
+                  "There is a loop in the parent projects hierarchy: project "
+                      + realParentProjectName
+                      + " references itself");
             }
           }
         }
@@ -445,8 +454,7 @@ public class Project extends ConfigFile implements IConfigFile {
         List<ActionMeta> actionMetas = workflowMeta.getActions();
         workflowActionsMap.put(workflowMeta, actionMetas);
       } catch (Exception e) {
-        System.err.println("error getting workflow actions");
-        e.printStackTrace();
+        LogChannel.GENERAL.logError("error getting workflow actions", e);
       }
     }
 
@@ -484,12 +492,11 @@ public class Project extends ConfigFile implements IConfigFile {
       List<String> names = metadataSerializer.listObjectNames();
 
       // add the available HopMetadataPropertyTypes from @HopMetadata and add to metadataItems
-      if (names.contains(metadataItemName)) {
-        if (metadataClass.isAnnotationPresent(HopMetadata.class)) {
-          HopMetadata annotation = metadataClass.getAnnotation(HopMetadata.class);
-          HopMetadataPropertyType hopMetadataPropertyType = annotation.hopMetadataPropertyType();
-          metadataItems.put(hopMetadataPropertyType, metadataItemName);
-        }
+      if (names.contains(metadataItemName)
+          && metadataClass.isAnnotationPresent(HopMetadata.class)) {
+        HopMetadata annotation = metadataClass.getAnnotation(HopMetadata.class);
+        HopMetadataPropertyType hopMetadataPropertyType = annotation.hopMetadataPropertyType();
+        metadataItems.put(hopMetadataPropertyType, metadataItemName);
       }
     }
 
@@ -555,12 +562,11 @@ public class Project extends ConfigFile implements IConfigFile {
       List<String> names = metadataSerializer.listObjectNames();
 
       // add the available HopMetadataPropertyTypes from @HopMetadata and add to metadataItems
-      if (names.contains(metadataItemName)) {
-        if (metadataClass.isAnnotationPresent(HopMetadata.class)) {
-          HopMetadata annotation = metadataClass.getAnnotation(HopMetadata.class);
-          HopMetadataPropertyType hopMetadataPropertyType = annotation.hopMetadataPropertyType();
-          metadataItems.put(hopMetadataPropertyType, metadataItemName);
-        }
+      if (names.contains(metadataItemName)
+          && metadataClass.isAnnotationPresent(HopMetadata.class)) {
+        HopMetadata annotation = metadataClass.getAnnotation(HopMetadata.class);
+        HopMetadataPropertyType hopMetadataPropertyType = annotation.hopMetadataPropertyType();
+        metadataItems.put(hopMetadataPropertyType, metadataItemName);
       }
     }
 
@@ -620,141 +626,5 @@ public class Project extends ConfigFile implements IConfigFile {
   @Override
   public void setConfigFilename(String configFilename) {
     this.configFilename = configFilename;
-  }
-
-  /**
-   * Gets description
-   *
-   * @return value of description
-   */
-  public String getDescription() {
-    return description;
-  }
-
-  /**
-   * @param description The description to set
-   */
-  public void setDescription(String description) {
-    this.description = description;
-  }
-
-  /**
-   * Gets company
-   *
-   * @return value of company
-   */
-  public String getCompany() {
-    return company;
-  }
-
-  /**
-   * @param company The company to set
-   */
-  public void setCompany(String company) {
-    this.company = company;
-  }
-
-  /**
-   * Gets department
-   *
-   * @return value of department
-   */
-  public String getDepartment() {
-    return department;
-  }
-
-  /**
-   * @param department The department to set
-   */
-  public void setDepartment(String department) {
-    this.department = department;
-  }
-
-  /**
-   * Gets metadataBaseFolder
-   *
-   * @return value of metadataBaseFolder
-   */
-  public String getMetadataBaseFolder() {
-    return metadataBaseFolder;
-  }
-
-  /**
-   * @param metadataBaseFolder The metadataBaseFolder to set
-   */
-  public void setMetadataBaseFolder(String metadataBaseFolder) {
-    this.metadataBaseFolder = metadataBaseFolder;
-  }
-
-  /**
-   * Gets unitTestsBasePath
-   *
-   * @return value of unitTestsBasePath
-   */
-  public String getUnitTestsBasePath() {
-    return unitTestsBasePath;
-  }
-
-  /**
-   * @param unitTestsBasePath The unitTestsBasePath to set
-   */
-  public void setUnitTestsBasePath(String unitTestsBasePath) {
-    this.unitTestsBasePath = unitTestsBasePath;
-  }
-
-  /**
-   * Gets dataSetsCsvFolder
-   *
-   * @return value of dataSetsCsvFolder
-   */
-  public String getDataSetsCsvFolder() {
-    return dataSetsCsvFolder;
-  }
-
-  /**
-   * @param dataSetsCsvFolder The dataSetsCsvFolder to set
-   */
-  public void setDataSetsCsvFolder(String dataSetsCsvFolder) {
-    this.dataSetsCsvFolder = dataSetsCsvFolder;
-  }
-
-  /**
-   * Gets enforcingExecutionInHome
-   *
-   * @return value of enforcingExecutionInHome
-   */
-  public boolean isEnforcingExecutionInHome() {
-    return enforcingExecutionInHome;
-  }
-
-  /**
-   * @param enforcingExecutionInHome The enforcingExecutionInHome to set
-   */
-  public void setEnforcingExecutionInHome(boolean enforcingExecutionInHome) {
-    this.enforcingExecutionInHome = enforcingExecutionInHome;
-  }
-
-  /**
-   * Gets parentProjectName
-   *
-   * @return value of parentProjectName
-   */
-  public String getParentProjectName() {
-    return parentProjectName;
-  }
-
-  /**
-   * @param parentProjectName The parentProjectName to set
-   */
-  public void setParentProjectName(String parentProjectName) {
-    this.parentProjectName = parentProjectName;
-  }
-
-  public MultiMetadataProvider getMetadataProvider() {
-    return metadataProvider;
-  }
-
-  public void setMetadataProvider(MultiMetadataProvider metadataProvider) {
-    this.metadataProvider = metadataProvider;
   }
 }

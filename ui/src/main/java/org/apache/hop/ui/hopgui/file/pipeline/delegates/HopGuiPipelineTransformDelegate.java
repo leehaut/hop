@@ -49,6 +49,7 @@ import org.apache.hop.pipeline.transform.TransformErrorMeta;
 import org.apache.hop.pipeline.transform.TransformMeta;
 import org.apache.hop.pipeline.transform.TransformPartitioningMeta;
 import org.apache.hop.pipeline.transform.stream.IStream;
+import org.apache.hop.pipeline.transforms.missing.Missing;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.dialog.ErrorDialog;
 import org.apache.hop.ui.core.dialog.MessageBox;
@@ -61,6 +62,7 @@ import org.apache.hop.ui.hopgui.partition.PartitionSettings;
 import org.apache.hop.ui.hopgui.partition.processor.IMethodProcessor;
 import org.apache.hop.ui.hopgui.partition.processor.MethodProcessorFactory;
 import org.apache.hop.ui.pipeline.transform.TransformErrorMetaDialog;
+import org.apache.hop.ui.pipeline.transforms.missing.MissingPipelineDialog;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Shell;
 
@@ -81,6 +83,15 @@ public class HopGuiPipelineTransformDelegate {
   public ITransformDialog getTransformDialog(
       ITransformMeta transformMeta, PipelineMeta pipelineMeta, String transformName)
       throws HopException {
+
+    if (transformMeta instanceof Missing) {
+      return new MissingPipelineDialog(
+          hopGui.getShell(),
+          pipelineGraph.getVariables(),
+          transformMeta,
+          pipelineMeta,
+          transformName);
+    }
 
     PluginRegistry registry = PluginRegistry.getInstance();
     IPlugin plugin = registry.getPlugin(TransformPluginType.class, transformMeta);
@@ -474,6 +485,8 @@ public class HopGuiPipelineTransformDelegate {
       if (stream.getTransformMeta() != null && stream.getTransformMeta().equals(toTransform)) {
         // This target stream was directed to B, now we need to direct it to C
         stream.setTransformMeta(transformMeta);
+        // Update subject so searchInfoAndTargetTransforms resolves to C
+        stream.setSubject(transformMeta.getName());
         fromTransform.getTransform().handleStreamSelection(stream);
       }
     }
@@ -483,8 +496,10 @@ public class HopGuiPipelineTransformDelegate {
     ITransformIOMeta toIo = toTransform.getTransform().getTransformIOMeta();
     for (IStream stream : toIo.getInfoStreams()) {
       if (stream.getTransformMeta() != null && stream.getTransformMeta().equals(fromTransform)) {
-        // This info stream was reading from B, now we need to direct it to C
+        // This info stream was reading from A, now we need to direct it to C
         stream.setTransformMeta(transformMeta);
+        // Update subject so searchInfoAndTargetTransforms (e.g. Stream Lookup) resolves to C
+        stream.setSubject(transformMeta.getName());
         toTransform.getTransform().handleStreamSelection(stream);
       }
     }
@@ -512,7 +527,6 @@ public class HopGuiPipelineTransformDelegate {
     newHop2.setEnabled(hop.isEnabled());
     if (pipelineMeta.findPipelineHop(newHop2) == null) {
       pipelineMeta.addPipelineHop(newHop2);
-      toTransform.getTransform().searchInfoAndTargetTransforms(pipelineMeta.getTransforms());
       hopGui.undoDelegate.addUndoNew(
           pipelineMeta,
           new PipelineHopMeta[] {newHop2},
@@ -520,12 +534,16 @@ public class HopGuiPipelineTransformDelegate {
           true);
     }
 
+    // Remove old hop before searchInfoAndTargetTransforms so "prev" reflects new topology
+    // (e.g. Merge Join's info stream can detect insert-in-the-middle).
     hopGui.undoDelegate.addUndoDelete(
         pipelineMeta,
         new PipelineHopMeta[] {hop},
         new int[] {pipelineMeta.indexOfPipelineHop(hop)},
         true);
     pipelineMeta.removePipelineHop(hop);
+
+    toTransform.getTransform().searchInfoAndTargetTransforms(pipelineMeta.getTransforms());
 
     return transformMeta;
   }
@@ -700,6 +718,21 @@ public class HopGuiPipelineTransformDelegate {
           int idx = pipelineMeta.indexOfPipelineHop(hi);
           pipelineHops.add((PipelineHopMeta) hi.clone());
           hopIndexes[hopIndex] = idx;
+
+          TransformMeta fromTransform = hi.getFromTransform();
+          TransformMeta toTransform = hi.getToTransform();
+
+          if (!transforms.contains(toTransform) && toTransform.getTransform() != null) {
+            toTransform.getTransform().cleanAfterHopToRemove(fromTransform);
+            toTransform.getTransform().searchInfoAndTargetTransforms(pipelineMeta.getTransforms());
+          }
+          if (!transforms.contains(fromTransform) && fromTransform.getTransform() != null) {
+            fromTransform.getTransform().cleanAfterHopFromRemove(toTransform);
+            fromTransform
+                .getTransform()
+                .searchInfoAndTargetTransforms(pipelineMeta.getTransforms());
+          }
+
           pipelineMeta.removePipelineHop(idx);
           hopIndex++;
           break;

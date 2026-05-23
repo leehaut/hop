@@ -22,7 +22,7 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.Date;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.ResultFile;
@@ -30,11 +30,14 @@ import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopFileException;
 import org.apache.hop.core.exception.HopTransformException;
 import org.apache.hop.core.fileinput.FileInputList;
+import org.apache.hop.core.io.CountingInputStream;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.row.RowDataUtil;
 import org.apache.hop.core.row.RowMeta;
 import org.apache.hop.core.vfs.HopVfs;
 import org.apache.hop.i18n.BaseMessages;
+import org.apache.hop.lineage.LineageFileIoEmitter;
+import org.apache.hop.lineage.model.FileIoOperation;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransform;
@@ -276,12 +279,13 @@ public class Tika extends BaseTransform<TikaMeta, TikaData> {
    * Read a text file.
    *
    * @param vfsFilename the filename or URL to read from
-   * @param encoding the character set of the string (UTF-8, ISO8859-1, etc)
+   * @param encoding the character set of the string (UTF-8, ISO8859-1, etc.)
    * @return The content of the file as a String
    * @throws HopException
    */
   public String getTextFileContent(String vfsFilename, String encoding) throws HopException {
     InputStream inputStream = null;
+    CountingInputStream countingStream = null;
     String retval = null;
     try {
       // HACK: Check for local files, use a FileInputStream in that case
@@ -292,6 +296,8 @@ public class Tika extends BaseTransform<TikaMeta, TikaData> {
       } else {
         inputStream = HopVfs.getInputStream(vfsFilename, variables);
       }
+      countingStream = new CountingInputStream(inputStream);
+      inputStream = countingStream;
       ByteArrayOutputStream baos = new ByteArrayOutputStream();
       data.tikaOutput.parse(inputStream, meta.getOutputFormat(), baos);
       retval = baos.toString();
@@ -299,12 +305,26 @@ public class Tika extends BaseTransform<TikaMeta, TikaData> {
       throw new HopException(
           BaseMessages.getString(PKG, "Tika.Error.GettingFileContent", vfsFilename, e.toString()),
           e);
-    }
-    if (inputStream != null) {
-      try {
-        inputStream.close();
-      } catch (Exception e) {
-        logError("Error closing reader", e);
+    } finally {
+      if (countingStream != null) {
+        long bytesRead = countingStream.getCount();
+        dataVolumeIn = (dataVolumeIn != null ? dataVolumeIn : 0L) + bytesRead;
+        if (bytesRead > 0) {
+          try {
+            FileObject src = HopVfs.getFileObject(vfsFilename, variables);
+            LineageFileIoEmitter.emitTransformFileIo(
+                this, FileIoOperation.READ, src, null, bytesRead, true, null);
+          } catch (Exception ignored) {
+            // optional lineage
+          }
+        }
+      }
+      if (inputStream != null) {
+        try {
+          inputStream.close();
+        } catch (Exception e) {
+          logError("Error closing reader", e);
+        }
       }
     }
     return retval;

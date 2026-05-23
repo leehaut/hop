@@ -27,9 +27,12 @@ import org.apache.hop.core.database.Database;
 import org.apache.hop.core.database.DatabaseMeta;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopTransformException;
+import org.apache.hop.core.io.CountingOutputStream;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.vfs.HopVfs;
 import org.apache.hop.i18n.BaseMessages;
+import org.apache.hop.lineage.LineageFileIoEmitter;
+import org.apache.hop.lineage.model.FileIoOperation;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransform;
@@ -198,9 +201,10 @@ public class SQLFileOutput extends BaseTransform<SQLFileOutputMeta, SQLFileOutpu
       if (isDetailed()) {
         logDetailed("Opening output stream in nocompress mode");
       }
-      OutputStream fos =
-          HopVfs.getOutputStream(filename, meta.getFile().isFileAppended(), variables);
-      outputStream = fos;
+      data.fos =
+          new CountingOutputStream(
+              HopVfs.getOutputStream(filename, meta.getFile().isFileAppended(), variables));
+      outputStream = data.fos;
 
       if (isDetailed()) {
         logDetailed("Opening output stream in default encoding");
@@ -225,6 +229,7 @@ public class SQLFileOutput extends BaseTransform<SQLFileOutputMeta, SQLFileOutpu
         logDetailed("Opened new file with name [" + filename + "]");
       }
 
+      data.currentOutputFilename = filename;
       data.splitnr++;
 
       retval = true;
@@ -255,6 +260,20 @@ public class SQLFileOutput extends BaseTransform<SQLFileOutputMeta, SQLFileOutpu
         if (isDebug()) {
           logDebug("Closing normal file ..");
         }
+        if (data.fos instanceof CountingOutputStream cos) {
+          long written = cos.getCount();
+          dataVolumeOut = (dataVolumeOut != null ? dataVolumeOut : 0L) + written;
+          if (!data.isBeamContext() && written > 0 && data.currentOutputFilename != null) {
+            try {
+              FileObject outFile = HopVfs.getFileObject(data.currentOutputFilename, variables);
+              LineageFileIoEmitter.emitTransformFileIo(
+                  this, FileIoOperation.WRITE, null, outFile, written, true, null);
+            } catch (Exception ignored) {
+              // optional lineage
+            }
+          }
+        }
+        data.currentOutputFilename = null;
         data.fos.close();
         data.fos = null;
       }
@@ -286,7 +305,9 @@ public class SQLFileOutput extends BaseTransform<SQLFileOutputMeta, SQLFileOutpu
         }
         data.db = new Database(this, this, databaseMeta);
 
-        logBasic("Connected to database [" + meta.getConnection() + "]");
+        if (isBasic()) {
+          logBasic("Connected to database [" + meta.getConnection() + "]");
+        }
 
         if (meta.getFile().isCreateParentFolder()) {
           // Check for parent folder
@@ -296,10 +317,15 @@ public class SQLFileOutput extends BaseTransform<SQLFileOutputMeta, SQLFileOutpu
             String filename = resolve(meta.getFile().getFileName());
             parentfolder = HopVfs.getFileObject(filename, variables).getParent();
             if (!parentfolder.exists()) {
-              logBasic(
-                  "Folder parent", "Folder parent " + parentfolder.getName() + " does not exist !");
+              if (isBasic()) {
+                logBasic(
+                    "Folder parent",
+                    "Folder parent " + parentfolder.getName() + " does not exist !");
+              }
               parentfolder.createFolder();
-              logBasic("Folder parent", "Folder parent was created.");
+              if (isBasic()) {
+                logBasic("Folder parent", "Folder parent was created.");
+              }
             }
           } catch (Exception e) {
             logError("Couldn't created parent folder " + parentfolder.getName());

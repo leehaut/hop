@@ -78,7 +78,7 @@ public class HopGuiPipelineHopDelegate {
             new int[] {pipelineMeta.indexOfPipelineHop(pipelineHopMeta)});
       }
 
-      pipelineGraph.redraw();
+      pipelineGraph.updateGui();
     }
   }
 
@@ -220,20 +220,25 @@ public class HopGuiPipelineHopDelegate {
     pipelineMeta.removePipelineHop(index);
 
     TransformMeta fromTransformMeta = pipelineHopMeta.getFromTransform();
+
     TransformMeta beforeFrom = (TransformMeta) fromTransformMeta.clone();
     int indexFrom = pipelineMeta.indexOfTransform(fromTransformMeta);
 
     TransformMeta toTransformMeta = pipelineHopMeta.getToTransform();
     TransformMeta beforeTo = (TransformMeta) toTransformMeta.clone();
     int indexTo = pipelineMeta.indexOfTransform(toTransformMeta);
-    if (toTransformMeta.getTransform() != null) {
-      toTransformMeta.getTransform().searchInfoAndTargetTransforms(pipelineMeta.getTransforms());
-    }
 
     boolean transformFromNeedAddUndoChange =
         fromTransformMeta.getTransform().cleanAfterHopFromRemove(pipelineHopMeta.getToTransform());
+    if (fromTransformMeta.getTransform() != null) {
+      fromTransformMeta.getTransform().searchInfoAndTargetTransforms(pipelineMeta.getTransforms());
+    }
     boolean transformToNeedAddUndoChange =
         toTransformMeta.getTransform().cleanAfterHopToRemove(fromTransformMeta);
+
+    if (toTransformMeta.getTransform() != null) {
+      toTransformMeta.getTransform().searchInfoAndTargetTransforms(pipelineMeta.getTransforms());
+    }
 
     // If this is an error handling hop, disable it
     //
@@ -251,6 +256,22 @@ public class HopGuiPipelineHopDelegate {
         transformErrorMeta.setEnabled(false);
         transformFromNeedAddUndoChange = true;
       }
+    }
+
+    // Check remaining hops from 'from' transform after deletion
+    //
+    List<PipelineHopMeta> fromHops = pipelineMeta.findAllPipelineHopFrom(fromTransformMeta);
+    int fromHopCount = 0;
+    for (PipelineHopMeta fromHop : fromHops) {
+      // Ignore hop for error handling
+      if (fromHop.isEnabled() && !fromHop.isErrorHop()) {
+        fromHopCount++;
+      }
+    }
+
+    // If remaining hops is 1, reset distribute/copy settings in the from transform
+    if (fromHopCount == 1) {
+      fromTransformMeta.setDistributes(true);
     }
 
     if (transformFromNeedAddUndoChange) {

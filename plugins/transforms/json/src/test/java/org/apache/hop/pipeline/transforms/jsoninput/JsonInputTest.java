@@ -41,7 +41,6 @@ import java.util.zip.ZipOutputStream;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.FileSystemException;
-import org.apache.commons.vfs2.util.FileObjectUtils;
 import org.apache.hop.core.HopClientEnvironment;
 import org.apache.hop.core.IRowSet;
 import org.apache.hop.core.exception.HopException;
@@ -78,71 +77,73 @@ class JsonInputTest {
 
   protected static String getBasicTestJson() {
     return """
-            {
-              "home": {},
-              "store": {
-                "book": [
-                  {
-                    "category": "reference",
-                    "author": "Nigel Rees",
-                    "title": "Sayings of the Century",
-                    "price": 8.95
-                  },
-                  {
-                    "category": "fiction",
-                    "author": "Evelyn Waugh",
-                    "title": "Sword of Honour",
-                    "price": 12.99
-                  },
-                  {
-                    "category": "fiction",
-                    "author": "Herman Melville",
-                    "title": "Moby Dick",
-                    "isbn": "0-553-21311-3",
-                    "price": 8.99
-                  },
-                  {
-                    "category": "fiction",
-                    "author": "J. R. R. Tolkien",
-                    "title": "The Lord of the Rings",
-                    "isbn": "0-395-19395-8",
-                    "price": 22.99
-                  }
-                ],
-                "bicycle": {
-                  "color": "red",
-                  "price": 19.95
-                }
-              }
-            }""";
+				{
+				  "home": {},
+				  "store": {
+				    "book": [
+				      {
+				        "category": "reference",
+				        "author": "Nigel Rees",
+				        "title": "Sayings of the Century",
+				        "price": 8.95
+				      },
+				      {
+				        "category": "fiction",
+				        "author": "Evelyn Waugh",
+				        "title": "Sword of Honour",
+				        "price": 12.99
+				      },
+				      {
+				        "category": "fiction",
+				        "author": "Herman Melville",
+				        "title": "Moby Dick",
+				        "isbn": "0-553-21311-3",
+				        "price": 8.99
+				      },
+				      {
+				        "category": "fiction",
+				        "author": "J. R. R. Tolkien",
+				        "title": "The Lord of the Rings",
+				        "isbn": "0-395-19395-8",
+				        "price": 22.99
+				      }
+				    ],
+				    "bicycle": {
+				      "color": "red",
+				      "price": 19.95
+				    }
+				  }
+				}""";
   }
 
   private static String getPDI17060Json() {
-    return "{"
-        + " \"path\": \"/board/offer-sources/phases/current/cards/acquisitions\","
-        + " \"id\": \"acquisitions\","
-        + " \"template\": \"offer-sources\","
-        + " \"creator\": \"admin\","
-        + " \"created\": 1491703768197,"
-        + " \"modifiedby\": null,"
-        + " \"modified\": null,"
-        + " \"color\": \"blue\","
-        + " \"fields\": {"
-        + "   \"group-detail\": \"Offer Source Details\","
-        + "   \"name\": \"Acquisitions\""
-        + " },"
-        + " \"tasks\": 0,"
-        + " \"history\": 1,"
-        + " \"attachments\": 0,"
-        + " \"comments\": 0,"
-        + " \"alerts\": 0,"
-        + " \"title\": \"Acquisitions\","
-        + " \"lock\": null,"
-        + " \"completeTasks\": null,"
-        + " \"phase\": \"current\","
-        + " \"errors\": null,"
-        + " \"board\": \"offer-sources\""
-        + "}";
+    return """
+        {
+          "path": "/board/offer-sources/phases/current/cards/acquisitions",
+          "id": "acquisitions",
+          "template": "offer-sources",
+          "creator": "admin",
+          "created": 1491703768197,
+          "modifiedby": null,
+          "modified": null,
+          "color": "blue",
+          "fields": {
+            "group-detail": "Offer Source Details",
+            "name": "Acquisitions"
+          },
+          "tasks": 0,
+          "history": 1,
+          "attachments": 0,
+          "comments": 0,
+          "alerts": 0,
+          "title": "Acquisitions",
+          "lock": null,
+          "completeTasks": null,
+          "phase": "current",
+          "errors": null,
+          "board": "offer-sources"
+        }
+        """;
   }
 
   @BeforeAll
@@ -357,7 +358,7 @@ class JsonInputTest {
       jpath.setType(outputMeta.getType());
 
       JsonInputMeta jsonInputMeta = createSimpleMeta("json", jpath);
-      jsonInputMeta.setIgnoreMissingPath(false);
+      jsonInputMeta.setIgnoringMissingPath(false);
 
       JsonInput jsonInput =
           createJsonInput("json", jsonInputMeta, new Object[] {getBasicTestJson()});
@@ -385,7 +386,7 @@ class JsonInputTest {
 
     JsonInputMeta meta = createSimpleMeta(inCol, jpath);
     meta.setRemoveSourceField(true);
-    meta.setIgnoreMissingPath(true);
+    meta.setIgnoringMissingPath(true);
     JsonInput jsonInput = createJsonInput("json", meta, new Object[] {getBasicTestJson()});
     RowComparatorListener rowComparator =
         new RowComparatorListener(new Object[] {"0-553-21311-3"}, new Object[] {"0-395-19395-8"});
@@ -404,7 +405,7 @@ class JsonInputTest {
 
     JsonInputMeta meta = createSimpleMeta(inCol, jpath);
     meta.setRemoveSourceField(true);
-    meta.setIgnoreMissingPath(true);
+    meta.setIgnoringMissingPath(true);
     meta.setRowLimit(2);
     JsonInput jsonInput = createJsonInput("json", meta, new Object[] {getBasicTestJson()});
     processRows(jsonInput, 4);
@@ -453,7 +454,7 @@ class JsonInputTest {
     helper.redirectLog(out, LogLevel.ERROR);
 
     JsonInputMeta meta = createSimpleMeta("json", noPath);
-    meta.setIgnoreMissingPath(true);
+    meta.setIgnoringMissingPath(true);
     meta.setRemoveSourceField(true);
     final String input = getBasicTestJson();
 
@@ -479,7 +480,7 @@ class JsonInputTest {
     JsonInputMeta meta = createSimpleMeta("json", id, name);
     // For these user who wanted to have "old" behavior
     meta.setDefaultPathLeafToNull(false);
-    meta.setIgnoreMissingPath(true);
+    meta.setIgnoringMissingPath(true);
     final String input = getPDI17060Json();
 
     JsonInput jsonInput = createJsonInput("json", meta, new Object[] {input});
@@ -504,7 +505,7 @@ class JsonInputTest {
     helper.redirectLog(out, LogLevel.ERROR);
 
     JsonInputMeta meta = createSimpleMeta("json", id, name);
-    meta.setIgnoreMissingPath(true);
+    meta.setIgnoringMissingPath(true);
     final String input = getPDI17060Json();
 
     JsonInput jsonInput = createJsonInput("json", meta, new Object[] {input});
@@ -521,18 +522,16 @@ class JsonInputTest {
   @Test
   void testIfIgnorePathDoNotSkipRowIfInputIsNullOrFieldNotFound() throws Exception {
 
-    final String input1 =
-        """
-            { "value1": "1",
-              "value2": "2",
-            }""";
+    final String input1 = """
+						{ "value1": "1",
+						  "value2": "2",
+						}""";
     final String input2 = "{ \"value1\": \"3\"" + "}";
     final String input3 = "{ \"value2\": \"4\"" + "}";
-    final String input4 =
-        """
-            { "value1": null,
-              "value2": null,
-            }""";
+    final String input4 = """
+						{ "value1": null,
+						  "value2": null,
+						}""";
     final String input5 = "{}";
     final String input6 = null;
 
@@ -548,7 +547,7 @@ class JsonInputTest {
     bField.setType(IValueMeta.TYPE_STRING);
 
     JsonInputMeta meta = createSimpleMeta(inCol, aField, bField);
-    meta.setIgnoreMissingPath(true);
+    meta.setIgnoringMissingPath(true);
     JsonInput transform =
         createJsonInput(
             inCol,
@@ -604,7 +603,7 @@ class JsonInputTest {
     bField.setRepeated(true);
 
     JsonInputMeta meta = createSimpleMeta(inCol, aField, bField);
-    meta.setIgnoreMissingPath(true);
+    meta.setIgnoringMissingPath(true);
     JsonInput transform = createJsonInput(inCol, meta, new Object[] {input});
     transform.addRowListener(
         new RowComparatorListener(
@@ -618,11 +617,10 @@ class JsonInputTest {
 
   @Test
   void testPathMissingIgnore() throws Exception {
-    final String input =
-        """
-            { "value1": "1",
-              "value2": "2",
-            }""";
+    final String input = """
+						{ "value1": "1",
+						  "value2": "2",
+						}""";
     final String inCol = "input";
 
     JsonInputField aField = new JsonInputField();
@@ -639,7 +637,7 @@ class JsonInputTest {
     cField.setType(IValueMeta.TYPE_STRING);
 
     JsonInputMeta meta = createSimpleMeta(inCol, aField, bField, cField);
-    meta.setIgnoreMissingPath(true);
+    meta.setIgnoringMissingPath(true);
     JsonInput transform = createJsonInput(inCol, meta, new Object[] {input});
     transform.addRowListener(new RowComparatorListener(new Object[] {input, "1", "2", null}));
     processRows(transform, 1);
@@ -687,7 +685,7 @@ class JsonInputTest {
     price.setType(IValueMeta.TYPE_NUMBER);
 
     JsonInputMeta meta = createSimpleMeta("json", isbn, price);
-    meta.setIgnoreMissingPath(true);
+    meta.setIgnoringMissingPath(true);
     meta.setRemoveSourceField(true);
 
     JsonInput jsonInput = createJsonInput("json", meta, new Object[] {getBasicTestJson()});
@@ -905,7 +903,7 @@ class JsonInputTest {
       price.setPath("$..book[*].price");
       List<FileObject> fileList = Arrays.asList(null, null);
       JsonInputMeta meta = createFileListMeta(fileList);
-      meta.setInputFields(new JsonInputField[] {price});
+      meta.getInputFields().add(price);
 
       meta.setIncludeRowNumber(true);
       meta.setRowNumberField("rownbr");
@@ -941,7 +939,7 @@ class JsonInputTest {
       price.setPath("$..book[*].price");
       List<FileObject> fileList = Arrays.asList(fileObj1, fileObj2);
       JsonInputMeta meta = createFileListMeta(fileList);
-      meta.setInputFields(new JsonInputField[] {price});
+      meta.getInputFields().add(price);
 
       meta.setIncludeRowNumber(true);
       meta.setRowNumberField("rownbr");
@@ -977,7 +975,7 @@ class JsonInputTest {
     price.setName("price");
     price.setType(IValueMeta.TYPE_NUMBER);
     price.setPath("$..book[*].price");
-    meta.setInputFields(new JsonInputField[] {price});
+    meta.getInputFields().add(price);
 
     try (LocaleChange enUS = new LocaleChange(Locale.US)) {
       JsonInput jsonInput = createJsonInput(meta);
@@ -1004,10 +1002,6 @@ class JsonInputTest {
           zipOut.flush();
         }
       }
-
-      String json =
-          FileObjectUtils.getContentAsString(
-              HopVfs.getFileObject("zip:" + BASE_RAM_DIR + "test.zip!/test.json"), "UTF-8");
 
       JsonInputField price = new JsonInputField();
       price.setName("price");
@@ -1128,13 +1122,55 @@ class JsonInputTest {
       JsonInputMeta meta = createSimpleMeta("in file", price);
       meta.setIsAFile(true);
       meta.setRemoveSourceField(true);
-      meta.setIgnoreEmptyFile(false);
+      meta.setIgnoringEmptyFile(false);
       JsonInput jsonInput =
           createJsonInput(
               "in file", meta, new Object[][] {new Object[] {BASE_RAM_DIR + "test.json"}});
       processRows(jsonInput, 1);
       String logMsgs = log.toString();
       assertTrue(logMsgs.contains("is empty!"), logMsgs);
+    } finally {
+      deleteFiles();
+    }
+  }
+
+  @Test
+  void testZeroSizeFileIgnoredThenReadsNext() throws Exception {
+    helper.redirectLog(new ByteArrayOutputStream(), LogLevel.BASIC);
+    try (LocaleChange enUs = new LocaleChange(Locale.US)) {
+      FileObject empty = HopVfs.getFileObject(BASE_RAM_DIR + "empty.json");
+      empty.createFile();
+      FileObject good = HopVfs.getFileObject(BASE_RAM_DIR + "good.json");
+      try (OutputStream os = good.getContent().getOutputStream()) {
+        IOUtils.write(getBasicTestJson(), os, StandardCharsets.UTF_8);
+      }
+
+      JsonInputField price = new JsonInputField();
+      price.setName("price");
+      price.setType(IValueMeta.TYPE_NUMBER);
+      price.setPath("$..book[*].price");
+
+      JsonInputMeta meta = createSimpleMeta("in file", price);
+      meta.setIsAFile(true);
+      meta.setRemoveSourceField(true);
+      meta.setIgnoringEmptyFile(true);
+      meta.setIgnoringMissingPath(false);
+
+      JsonInput jsonInput =
+          createJsonInput(
+              "in file",
+              meta,
+              new Object[][] {
+                new Object[] {BASE_RAM_DIR + "empty.json"},
+                new Object[] {BASE_RAM_DIR + "good.json"}
+              });
+      RowComparatorListener rowComparator =
+          new RowComparatorListener(
+              new Object[] {8.95}, new Object[] {12.99}, new Object[] {8.99}, new Object[] {22.99});
+      jsonInput.addRowListener(rowComparator);
+      processRows(jsonInput, 8);
+      assertEquals(0, jsonInput.getErrors());
+      assertEquals(4, jsonInput.getLinesWritten());
     } finally {
       deleteFiles();
     }
@@ -1188,7 +1224,7 @@ class JsonInputTest {
         createJsonInput("json", meta, new Object[] {input1}, new Object[] {input2});
     TransformErrorMeta errMeta = new TransformErrorMeta(helper.transformMeta);
     errMeta.setEnabled(true);
-    errMeta.setErrorFieldsValuename("err field");
+    errMeta.setErrorFieldsValueName("err field");
     when(helper.transformMeta.getTransformErrorMeta()).thenReturn(errMeta);
     final List<Object[]> errorLines = new ArrayList<>();
     jsonInput.addRowListener(
@@ -1200,7 +1236,7 @@ class JsonInputTest {
         });
     processRows(jsonInput, 3);
     assertEquals(1, errorLines.size(), "fwd error");
-    assertEquals(input1, errorLines.get(0)[0], "input in err line");
+    assertEquals(input1, errorLines.getFirst()[0], "input in err line");
     assertEquals(1, jsonInput.getLinesWritten(), "rows written");
   }
 
@@ -1250,8 +1286,8 @@ class JsonInputTest {
     jsonInputMeta.setDefault();
     jsonInputMeta.setInFields(true);
     jsonInputMeta.setFieldValue(inputColumn);
-    jsonInputMeta.setInputFields(jsonPathFields);
-    jsonInputMeta.setIgnoreMissingPath(true);
+    jsonInputMeta.setInputFields(List.of(jsonPathFields));
+    jsonInputMeta.setIgnoringMissingPath(true);
     return jsonInputMeta;
   }
 
@@ -1294,7 +1330,7 @@ class JsonInputTest {
         };
     meta.setDefault();
     meta.setInFields(false);
-    meta.setIgnoreMissingPath(false);
+    meta.setIgnoringMissingPath(false);
     return meta;
   }
 
@@ -1462,7 +1498,7 @@ class JsonInputTest {
   }
 
   /** compare json (deep equals ignoring order) */
-  protected static final boolean jsonEquals(String json1, String json2) throws Exception {
+  protected static boolean jsonEquals(String json1, String json2) throws Exception {
     ObjectMapper om = HopJson.newMapper();
     JsonNode parsedJson1 = om.readTree(json1);
     JsonNode parsedJson2 = om.readTree(json2);
@@ -1489,7 +1525,7 @@ class JsonInputTest {
     processRows(jsonInput, 2);
     assertEquals(
         PATH,
-        inputMeta.getInputFields()[0].getPath(),
+        ((JsonInputField) inputMeta.getInputFields().getFirst()).getPath(),
         "Meta input fields paths should be the same after processRows");
   }
 
@@ -1502,11 +1538,10 @@ class JsonInputTest {
     b.setPath("$..B.F2");
     b.setType(IValueMeta.TYPE_STRING);
     // Create two meta inputs with two different orders a,b and b,a
-    List results = new ArrayList<>();
+    List<Object> results = new ArrayList<>();
     List<JsonInputMeta> metas =
         Arrays.asList(createSimpleMeta("json", a, b), createSimpleMeta("json", b, a));
     for (JsonInputMeta meta : metas) {
-      JsonInputMeta metaAB = createSimpleMeta("json", a, b);
       JsonInput jsonInput =
           createJsonInput(
               "json", meta, new Object[] {"{'B':{'F2': one}, 'C':{'B': {'F2': three}}}"});

@@ -87,10 +87,11 @@ public class CombinationLookup extends BaseTransform<CombinationLookupMeta, Comb
 
   private void determineTechKeyCreation() {
     String keyCreation = meta.getFields().getReturnFields().getTechKeyCreation();
-    if (meta.getDatabaseMeta().supportsAutoinc()
+    DatabaseMeta databaseMeta = getPipelineMeta().findDatabase(meta.getConnectionName(), variables);
+    if (databaseMeta.supportsAutoinc()
         && CombinationLookupMeta.CREATION_METHOD_AUTOINC.equals(keyCreation)) {
       setTechKeyCreation(CREATION_METHOD_AUTOINC);
-    } else if (meta.getDatabaseMeta().supportsSequences()
+    } else if (databaseMeta.supportsSequences()
         && CombinationLookupMeta.CREATION_METHOD_SEQUENCE.equals(keyCreation)) {
       setTechKeyCreation(CREATION_METHOD_SEQUENCE);
     } else {
@@ -171,9 +172,9 @@ public class CombinationLookup extends BaseTransform<CombinationLookupMeta, Comb
       // Take the second, not the fist in the list, otherwise we would be removing a single entry =
       // not good.
       if (samples.size() > 1) {
-        data.smallestCacheKey = samples.get(1).longValue();
+        data.smallestCacheKey = samples.get(1);
       } else { // except when there is only one sample
-        data.smallestCacheKey = samples.get(0).longValue();
+        data.smallestCacheKey = samples.get(0);
       }
 
       // Remove anything in the cache <= smallest.
@@ -181,16 +182,17 @@ public class CombinationLookup extends BaseTransform<CombinationLookupMeta, Comb
       // This algorithm is not 100% correct, but I guess it beats sorting the whole cache all the
       // time.
       //
-      for (int i = 0; i < keys.size(); i++) {
-        RowMetaAndData key = keys.get(i);
+      for (RowMetaAndData key : keys) {
         Long value = data.cache.get(key);
-        if (value != null && value.longValue() <= data.smallestCacheKey) {
+        if (value != null && value <= data.smallestCacheKey) {
           data.cache.remove(key); // this one has to go.
         }
       }
 
       int sizeAfter = data.cache.size();
-      logDetailed("Reduced the lookup cache from " + sizeBefore + " to " + sizeAfter + " rows.");
+      if (isDetailed()) {
+        logDetailed("Reduced the lookup cache from " + sizeBefore + " to " + sizeAfter + " rows.");
+      }
     }
 
     if (isRowLevel()) {
@@ -232,7 +234,9 @@ public class CombinationLookup extends BaseTransform<CombinationLookupMeta, Comb
       lookupRow[lookupIndex] = row[rowIndex]; // KEYi = ?
       lookupIndex++;
 
-      if (meta.getDatabaseMeta().requiresCastToVariousForIsNull()
+      DatabaseMeta databaseMeta =
+          getPipelineMeta().findDatabase(meta.getConnectionName(), variables);
+      if (databaseMeta.requiresCastToVariousForIsNull()
           && rowMeta.getValueMeta(rowIndex).getType() == IValueMeta.TYPE_STRING) {
         lookupRow[lookupIndex] =
             rowMeta.getValueMeta(rowIndex).isNull(row[rowIndex]) ? null : "NotNull"; // KEYi IS
@@ -262,7 +266,7 @@ public class CombinationLookup extends BaseTransform<CombinationLookupMeta, Comb
                     data.realSchemaName, data.realTableName, returnFields.getTechnicalKeyField());
             break;
           case CREATION_METHOD_AUTOINC:
-            valKey = Long.valueOf(0); // value to accept new key...
+            valKey = 0L; // value to accept new key...
             break;
           case CREATION_METHOD_SEQUENCE:
             valKey =
@@ -340,9 +344,11 @@ public class CombinationLookup extends BaseTransform<CombinationLookupMeta, Comb
       data.outputRowMeta = getInputRowMeta().clone();
       meta.getFields(data.outputRowMeta, getTransformName(), null, null, this, metadataProvider);
 
+      DatabaseMeta databaseMeta =
+          getPipelineMeta().findDatabase(meta.getConnectionName(), variables);
       data.schemaTable =
-          meta.getDatabaseMeta()
-              .getQuotedSchemaTableCombination(this, data.realSchemaName, data.realTableName);
+          databaseMeta.getQuotedSchemaTableCombination(
+              this, data.realSchemaName, data.realTableName);
 
       determineTechKeyCreation();
 
@@ -417,7 +423,7 @@ public class CombinationLookup extends BaseTransform<CombinationLookupMeta, Comb
    * retval: name of the key to return
    */
   public void setCombiLookup(IRowMeta inputRowMeta) throws HopDatabaseException {
-    DatabaseMeta databaseMeta = meta.getDatabaseMeta();
+    DatabaseMeta databaseMeta = getPipelineMeta().findDatabase(meta.getConnectionName(), variables);
     CFields fields = meta.getFields();
     List<KeyField> keyFields = fields.getKeyFields();
     ReturnFields returnFields = fields.getReturnFields();
@@ -494,7 +500,7 @@ public class CombinationLookup extends BaseTransform<CombinationLookupMeta, Comb
   public Long combiInsert(IRowMeta rowMeta, Object[] row, Long valKey, Long valCrc)
       throws HopDatabaseException {
     String debug = "Combination insert";
-    DatabaseMeta databaseMeta = meta.getDatabaseMeta();
+    DatabaseMeta databaseMeta = getPipelineMeta().findDatabase(meta.getConnectionName(), variables);
     CFields fields = meta.getFields();
     List<KeyField> keyFields = fields.getKeyFields();
     ReturnFields returnFields = fields.getReturnFields();
@@ -594,20 +600,21 @@ public class CombinationLookup extends BaseTransform<CombinationLookupMeta, Comb
         try {
           debug = "First: prepare statement";
           if (isAutoIncrement() && databaseMeta.supportsAutoGeneratedKeys()) {
-            logDetailed("SQL with return keys: " + sqlStatement);
+            if (isDetailed()) {
+              logDetailed("SQL with return keys: " + sqlStatement);
+            }
             data.prepStatementInsert =
                 data.db
                     .getConnection()
                     .prepareStatement(
                         databaseMeta.stripCR(sqlStatement), Statement.RETURN_GENERATED_KEYS);
           } else {
-            logDetailed("SQL without return keys: " + sqlStatement);
+            if (isDetailed()) {
+              logDetailed("SQL without return keys: " + sqlStatement);
+            }
             data.prepStatementInsert =
                 data.db.getConnection().prepareStatement(databaseMeta.stripCR(sqlStatement));
           }
-        } catch (SQLException ex) {
-          throw new HopDatabaseException(
-              "Unable to prepare combi insert statement : " + Const.CR + sqlStatement, ex);
         } catch (Exception ex) {
           throw new HopDatabaseException(
               "Unable to prepare combi insert statement : " + Const.CR + sqlStatement, ex);
@@ -652,7 +659,7 @@ public class CombinationLookup extends BaseTransform<CombinationLookupMeta, Comb
         try {
           keys = data.prepStatementInsert.getGeneratedKeys(); // 1 key
           if (keys.next()) {
-            valKey = Long.valueOf(keys.getLong(1));
+            valKey = keys.getLong(1);
           } else {
             throw new HopDatabaseException(
                 CONST_UNABLE_TO_RETRIEVE_AUTO_INCREMENT_OF_COMBI_INSERT_KEY
@@ -693,17 +700,19 @@ public class CombinationLookup extends BaseTransform<CombinationLookupMeta, Comb
       data.realTableName = resolve(meta.getTableName());
 
       if (meta.getCacheSize() > 0) {
-        data.cache = new HashMap<>((int) (meta.getCacheSize() * 1.5));
+        data.cache = HashMap.newHashMap((int) (meta.getCacheSize() * 1.5));
       } else {
         data.cache = new HashMap<>();
       }
-      if (meta.getDatabaseMeta() == null) {
+      DatabaseMeta databaseMeta =
+          getPipelineMeta().findDatabase(meta.getConnectionName(), variables);
+      if (databaseMeta == null) {
         logError(
             BaseMessages.getString(
                 PKG, "CombinationLookup.Init.ConnectionMissing", getTransformName()));
         return false;
       }
-      data.db = new Database(this, this, meta.getDatabaseMeta());
+      data.db = new Database(this, this, databaseMeta);
       try {
         data.db.connect();
 
@@ -762,7 +771,8 @@ public class CombinationLookup extends BaseTransform<CombinationLookupMeta, Comb
         throw new HopConfigException(
             BaseMessages.getString(PKG, CONST_COMBINATION_LOOKUP_LOG_UNEXPECTED_ERROR));
       }
-      DatabaseMeta databaseMeta = meta.getDatabaseMeta();
+      DatabaseMeta databaseMeta =
+          getPipelineMeta().findDatabase(meta.getConnectionName(), variables);
       if (databaseMeta == null) {
         throw new HopConfigException(
             BaseMessages.getString(PKG, CONST_COMBINATION_LOOKUP_LOG_UNEXPECTED_ERROR));

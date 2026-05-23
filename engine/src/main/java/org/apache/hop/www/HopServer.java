@@ -18,20 +18,21 @@
 package org.apache.hop.www;
 
 import com.google.common.annotations.VisibleForTesting;
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.client.ClientBuilder;
+import jakarta.ws.rs.client.WebTarget;
 import java.io.OutputStream;
+import java.io.Serial;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.WebTarget;
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.HopClientEnvironment;
@@ -139,6 +140,11 @@ public class HopServer implements Runnable, IHasHopMetadataProvider, IHopCommand
       description = "The name of the server to start as defined in the metadata.")
   private String serverName;
 
+  @CommandLine.Option(
+      names = {"-a", "--auth"},
+      description = "Does the Hop web server have authentication enabled")
+  private Boolean enableAuth;
+
   private WebServer webServer;
   private HopServerConfig config;
   private boolean allOK;
@@ -200,6 +206,11 @@ public class HopServer implements Runnable, IHasHopMetadataProvider, IHopCommand
     }
 
     if (allOK) {
+      // Expose the hop-server.xml details as Internal.Server.* variables so they
+      // are inherited by pipelines and workflows executing on this server.
+      config.setInternalHopServerVariables(config.getVariables(), port);
+      config.setInternalHopServerVariables(variables, port);
+
       boolean shouldJoin = config.isJoining();
       if (joinOverride != null) {
         shouldJoin = joinOverride;
@@ -251,6 +262,7 @@ public class HopServer implements Runnable, IHasHopMetadataProvider, IHopCommand
   @Override
   public void run() {
     try {
+      System.setProperty(Const.HOP_PLATFORM_RUNTIME, "SERVER");
       log = new LogChannel("HopServer");
       log.setLogLevel(determineLogLevel());
       log.logDetailed("Start of Hop Server");
@@ -302,6 +314,11 @@ public class HopServer implements Runnable, IHasHopMetadataProvider, IHopCommand
       //
       config.setVariables(variables);
       config.setMetadataProvider(metadataProvider);
+
+      // enable auth
+      if (this.enableAuth != null) {
+        config.getHopServer().setEnableAuth(this.enableAuth);
+      }
 
       // See if we need to add the metadata folder (legacy)
       //
@@ -682,7 +699,7 @@ public class HopServer implements Runnable, IHasHopMetadataProvider, IHopCommand
 
   /** Exception generated when command line fails */
   public static class HopServerCommandException extends Exception {
-    private static final long serialVersionUID = 1L;
+    @Serial private static final long serialVersionUID = 1L;
 
     public HopServerCommandException(final String message) {
       super(message);

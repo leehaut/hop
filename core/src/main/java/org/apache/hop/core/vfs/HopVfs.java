@@ -23,13 +23,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.CacheStrategy;
 import org.apache.commons.vfs2.FileContent;
 import org.apache.commons.vfs2.FileName;
@@ -45,6 +46,7 @@ import org.apache.commons.vfs2.provider.local.LocalFile;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopFileException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.plugins.IPlugin;
 import org.apache.hop.core.plugins.PluginRegistry;
 import org.apache.hop.core.variables.IVariables;
@@ -70,7 +72,7 @@ public class HopVfs {
           fsm = createFileSystemManager();
           fsm.init();
         } catch (Exception e) {
-          throw new RuntimeException("Error initializing file system manager : ", e);
+          throw new HopRuntimeException("Error initializing file system manager : ", e);
         }
       }
       return fsm;
@@ -111,7 +113,7 @@ public class HopVfs {
 
           extendedFsm.init();
         } catch (Exception e) {
-          throw new RuntimeException("Error initializing file system manager : ", e);
+          throw new HopRuntimeException("Error initializing file system manager : ", e);
         }
       }
       return extendedFsm;
@@ -164,7 +166,10 @@ public class HopVfs {
       fsm.addMimeTypeMap("application/x-gzip", "gz");
       fsm.addMimeTypeMap("application/zip", "zip");
       fsm.setFileContentInfoFactory(new FileContentInfoFilenameFactory());
-      fsm.setReplicator(new DefaultFileReplicator());
+
+      DefaultFileReplicator replicator = new DefaultFileReplicator();
+      fsm.setReplicator(replicator);
+      fsm.setTemporaryFileStore(replicator);
 
       fsm.setFilesCache(new SoftRefFilesCache());
       fsm.setCacheStrategy(CacheStrategy.ON_RESOLVE);
@@ -315,16 +320,15 @@ public class HopVfs {
    * Read a text file (like an XML document). WARNING DO NOT USE FOR DATA FILES.
    *
    * @param vfsFilename the filename or URL to read from
-   * @param charSetName the character set of the string (UTF-8, ISO8859-1, etc)
+   * @param charset the character set of the string (UTF-8, ISO8859-1, etc.)
    * @return The content of the file as a String
-   * @throws org.apache.hop.core.exception.HopFileException
+   * @throws org.apache.hop.core.exception.HopFileException ex
    */
-  public static String getTextFileContent(String vfsFilename, String charSetName)
+  public static String getTextFileContent(String vfsFilename, Charset charset)
       throws HopFileException {
     try {
       InputStream inputStream = getInputStream(vfsFilename);
-
-      InputStreamReader reader = new InputStreamReader(inputStream, charSetName);
+      InputStreamReader reader = new InputStreamReader(inputStream, charset);
       int c;
       StringBuilder aBuffer = new StringBuilder();
       while ((c = reader.read()) != -1) {
@@ -373,6 +377,15 @@ public class HopVfs {
           /* Ignore */
         }
       }
+    }
+  }
+
+  public static boolean isLocalFileSystem(String path) {
+    try {
+      FileObject fileObject = getFileObject(path);
+      return fileObject instanceof LocalFile;
+    } catch (HopFileException e) {
+      return false;
     }
   }
 
@@ -459,6 +472,16 @@ public class HopVfs {
     }
   }
 
+  /**
+   * Utility to normalize file name depending on OS.
+   *
+   * <p>On Window clean some situation where {@code c:/project/\workflow.hwf} is normalized to
+   * {@code c:\project\workflow.hwf}
+   */
+  public static String normalize(String filename) throws HopFileException {
+    return getFilename(getFileObject(filename));
+  }
+
   public static String getFilename(FileObject fileObject) {
     FileName fileName = fileObject.getName();
     String root = fileName.getRootURI();
@@ -518,7 +541,7 @@ public class HopVfs {
    * Creates a file using "java.io.tmpdir" directory
    *
    * @param prefix - file name
-   * @param prefix - file extension
+   * @param suffix - file extension
    * @return FileObject
    * @throws HopFileException
    */
@@ -628,8 +651,8 @@ public class HopVfs {
 
       boolean found = false;
       String[] schemes = fsManager.getSchemes();
-      for (int i = 0; i < schemes.length; i++) {
-        if (vfsFileName.startsWith(schemes[i] + ":")) {
+      for (String scheme : schemes) {
+        if (vfsFileName.startsWith(scheme + ":")) {
           found = true;
           break;
         }

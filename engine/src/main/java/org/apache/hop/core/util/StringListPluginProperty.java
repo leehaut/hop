@@ -17,11 +17,12 @@
 
 package org.apache.hop.core.util;
 
+import java.io.Serial;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.prefs.Preferences;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.xml.XmlHandler;
 import org.w3c.dom.Node;
 
@@ -29,7 +30,7 @@ public class StringListPluginProperty extends KeyValue<List<String>>
     implements IPluginProperty, Iterable<String> {
 
   /** Serial version UID. */
-  private static final long serialVersionUID = 2003662016166396542L;
+  @Serial private static final long serialVersionUID = 2003662016166396542L;
 
   /** Value XML tag name. */
   public static final String VALUE_XML_TAG_NAME = "value";

@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.Set;
 import org.apache.beam.runners.dataflow.DataflowPipelineJob;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.beam.engines.dataflow.BeamDataFlowPipelineEngine;
 import org.apache.hop.beam.pipeline.fatjar.FatJarBuilder;
 import org.apache.hop.core.Const;
@@ -48,7 +48,6 @@ import org.apache.hop.ui.core.gui.GuiResource;
 import org.apache.hop.ui.hopgui.HopGui;
 import org.apache.hop.ui.hopgui.file.IHopFileTypeHandler;
 import org.apache.hop.ui.hopgui.file.pipeline.HopGuiPipelineGraph;
-import org.apache.hop.ui.hopgui.perspective.dataorch.HopDataOrchestrationPerspective;
 import org.apache.hop.ui.hopgui.perspective.execution.ExecutionPerspective;
 import org.apache.hop.ui.hopgui.perspective.execution.IExecutionViewer;
 import org.apache.hop.ui.hopgui.perspective.execution.PipelineExecutionViewer;
@@ -330,8 +329,7 @@ public class HopBeamGuiPlugin {
   }
 
   public static DataflowPipelineJob findDataflowPipelineJob() {
-    HopDataOrchestrationPerspective perspective = HopGui.getDataOrchestrationPerspective();
-    IHopFileTypeHandler typeHandler = perspective.getActiveFileTypeHandler();
+    IHopFileTypeHandler typeHandler = HopGui.getInstance().getActiveFileTypeHandler();
     if (typeHandler == null) {
       return null;
     }

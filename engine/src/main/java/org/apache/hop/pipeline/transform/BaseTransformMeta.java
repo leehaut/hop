@@ -18,12 +18,16 @@
 package org.apache.hop.pipeline.transform;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.apache.hop.core.ICheckResult;
 import org.apache.hop.core.IHopAttribute;
@@ -32,6 +36,7 @@ import org.apache.hop.core.database.Database;
 import org.apache.hop.core.database.DatabaseMeta;
 import org.apache.hop.core.exception.HopDatabaseException;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.exception.HopTransformException;
 import org.apache.hop.core.exception.HopXmlException;
 import org.apache.hop.core.file.IHasFilename;
@@ -63,11 +68,17 @@ import org.w3c.dom.Node;
  *
  * <p>For example, the "Text File Output" transform's TextFileOutputMeta class extends
  * BaseTransformMeta by adding fields for the output file name, compression, file format, etc...
- *
- * <p>
  */
 public class BaseTransformMeta<Main extends ITransform, Data extends ITransformData>
     implements ITransformMeta, Cloneable {
+
+  /**
+   * Prevents infinite recursion when {@link #loadXml(Node, IHopMetadataProvider)} calls {@code
+   * super.loadXml}, which runs {@link XmlMetadataUtil#deSerializeFromXml} and reaches {@link
+   * #convertLegacyXml(Node, IHopMetadataProvider)} again for the same instance.
+   */
+  private static final Set<Object> LEGACY_LOAD_XML_REENTRANT_GUARD =
+      Collections.newSetFromMap(new IdentityHashMap<>());
 
   public static final ILoggingObject loggingObject =
       new SimpleLoggingObject("Transform metadata", LoggingObjectType.TRANSFORM_META, null);
@@ -113,8 +124,8 @@ public class BaseTransformMeta<Main extends ITransform, Data extends ITransformD
               });
       return constructor.newInstance(
           new Object[] {transformMeta, this, data, copyNr, pipelineMeta, pipeline});
-    } catch (RuntimeException | ReflectiveOperationException e) {
-      throw new RuntimeException(
+    } catch (HopRuntimeException | ReflectiveOperationException e) {
+      throw new HopRuntimeException(
           "Error create instance of transform: " + getClass().getCanonicalName(), e);
     }
   }
@@ -130,8 +141,8 @@ public class BaseTransformMeta<Main extends ITransform, Data extends ITransformD
       if (dataClass.isInterface()) return null;
 
       return dataClass.getDeclaredConstructor().newInstance();
-    } catch (RuntimeException | ReflectiveOperationException e) {
-      throw new RuntimeException(
+    } catch (HopRuntimeException | ReflectiveOperationException e) {
+      throw new HopRuntimeException(
           "Error create instance of transform data: " + getClass().getCanonicalName(), e);
     }
   }
@@ -147,10 +158,8 @@ public class BaseTransformMeta<Main extends ITransform, Data extends ITransformD
   protected Type[] getGenericType(Class<?> clazz) {
     do {
       Type type = clazz.getGenericSuperclass();
-      if (type != null) {
-        if (type instanceof ParameterizedType) {
-          return new Type[] {type};
-        }
+      if (type != null && type instanceof ParameterizedType) {
+        return new Type[] {type};
       }
       // If the class is not parameterized, try parent class
       clazz = clazz.getSuperclass();
@@ -219,6 +228,7 @@ public class BaseTransformMeta<Main extends ITransform, Data extends ITransformD
    *
    * @param ch the new changed
    */
+  @Override
   public void setChanged(boolean ch) {
     changed = ch;
   }
@@ -243,13 +253,12 @@ public class BaseTransformMeta<Main extends ITransform, Data extends ITransformD
    * @return the table fields
    * @param variables
    */
-  public IRowMeta getTableFields(IVariables variables) {
+  public IRowMeta getTableFields(IVariables variables) throws HopDatabaseException {
     return null;
   }
 
   /**
-   * Produces the XML string that describes this transform's information.
-   *
+   * @deprecated Produces the XML string that describes this transform's information.
    * @return String containing the XML describing this transform.
    * @throws HopException in case there is an XML conversion or encoding error
    */
@@ -260,9 +269,8 @@ public class BaseTransformMeta<Main extends ITransform, Data extends ITransformD
   }
 
   /**
-   * Automatically load metadata from XML using @{@link
-   * org.apache.hop.metadata.api.HopMetadataProperty} annotations
-   *
+   * @deprecated Automatically load metadata from XML using @{@link
+   *     org.apache.hop.metadata.api.HopMetadataProperty} annotations
    * @param transformNode
    * @param metadataProvider
    * @throws HopXmlException
@@ -387,9 +395,9 @@ public class BaseTransformMeta<Main extends ITransform, Data extends ITransformD
     // Cancel all defined queries...
     //
     if (databases != null) {
-      for (int i = 0; i < databases.length; i++) {
-        if (databases[i] != null) {
-          databases[i].cancelQuery();
+      for (Database database : databases) {
+        if (database != null) {
+          database.cancelQuery();
         }
       }
     }
@@ -899,5 +907,53 @@ public class BaseTransformMeta<Main extends ITransform, Data extends ITransformD
   public IHasFilename loadReferencedObject(
       int index, IHopMetadataProvider metadataProvider, IVariables variables) throws HopException {
     return null;
+  }
+
+  /**
+   * When a transform has no {@link org.apache.hop.metadata.api.HopMetadataProperty} fields,
+   * pipeline XML loaded through {@link org.apache.hop.metadata.serializer.xml.XmlMetadataUtil}
+   * never calls a custom {@code loadXml} unless we bridge here. External plugins that override
+   * {@link #loadXml(Node, IHopMetadataProvider)} are handled by this path.
+   *
+   * <p>The default {@link #loadXml(Node, IHopMetadataProvider)} only re-enters {@link
+   * XmlMetadataUtil#deSerializeFromXml}; calling it from here would recurse with {@link
+   * #convertLegacyXml(Node, IHopMetadataProvider)} (see {@link #declaresOwnLoadXml()}).
+   */
+  @Override
+  public void convertLegacyXml(Node node, IHopMetadataProvider metadataProvider)
+      throws HopException {
+    if (XmlMetadataUtil.hasHopMetadataSerializableProperties(getClass())) {
+      convertLegacyXml(node);
+      return;
+    }
+    if (declaresOwnLoadXml()) {
+      if (!LEGACY_LOAD_XML_REENTRANT_GUARD.add(this)) {
+        return;
+      }
+      try {
+        loadXml(node, metadataProvider);
+      } finally {
+        LEGACY_LOAD_XML_REENTRANT_GUARD.remove(this);
+      }
+    }
+  }
+
+  /**
+   * @return true if this class overrides {@link #loadXml(Node, IHopMetadataProvider)}; the base
+   *     implementation must not be invoked from {@link #convertLegacyXml(Node,
+   *     IHopMetadataProvider)} because it only runs annotation deserialization again.
+   */
+  private boolean declaresOwnLoadXml() {
+    try {
+      Method m = getClass().getMethod("loadXml", Node.class, IHopMetadataProvider.class);
+      return !BaseTransformMeta.class.equals(m.getDeclaringClass());
+    } catch (NoSuchMethodException e) {
+      return false;
+    }
+  }
+
+  @Override
+  public void convertLegacyXml(Node node) throws HopException {
+    // Migrated transforms may override to read leftover legacy tags after annotation loading.
   }
 }

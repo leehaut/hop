@@ -31,6 +31,10 @@ if [ -z "${SUREFIRE_REPORT}" ]; then
   SUREFIRE_REPORT="true"
 fi
 
+# Ensure surefire-reports directory exists and is writable
+mkdir -p "${CURRENT_DIR}"/../surefire-reports/
+chmod 777 "${CURRENT_DIR}"/../surefire-reports/ 2>/dev/null || true
+
 # Get kafka parameters
 if [ -z "${BOOTSTRAP_SERVERS}" ]; then
   BOOTSTRAP_SERVERS=kafka:9092
@@ -55,6 +59,20 @@ fi
 
 if [ -z "${POSTGRES_PASSWORD}" ]; then
   POSTGRES_PASSWORD=hop_password
+fi
+
+# SSH tunnel parameters (for PostgreSQL-via-SSH integration tests)
+if [ -z "${SSH_TUNNEL_HOST}" ]; then
+  SSH_TUNNEL_HOST=ssh
+fi
+if [ -z "${SSH_TUNNEL_PORT}" ]; then
+  SSH_TUNNEL_PORT=22
+fi
+if [ -z "${SSH_TUNNEL_USER}" ]; then
+  SSH_TUNNEL_USER=hop
+fi
+if [ -z "${SSH_TUNNEL_PASSWORD}" ]; then
+  SSH_TUNNEL_PASSWORD=hop_ssh_password
 fi
 
 if [ -z "${PROJECT_NAME}" ]; then
@@ -148,6 +166,10 @@ for d in "${CURRENT_DIR}"/../${PROJECT_NAME}/; do
           -p POSTGRES_PORT=${POSTGRES_PORT} \
           -p POSTGRES_USER=${POSTGRES_USER} \
           -p POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
+          -p SSH_TUNNEL_HOST=${SSH_TUNNEL_HOST} \
+          -p SSH_TUNNEL_PORT=${SSH_TUNNEL_PORT} \
+          -p SSH_TUNNEL_USER=${SSH_TUNNEL_USER} \
+          -p SSH_TUNNEL_PASSWORD=${SSH_TUNNEL_PASSWORD} \
           -p BOOTSTRAP_SERVERS=${BOOTSTRAP_SERVERS} \
           -f $hop_file > >(tee /tmp/test_output) 2> >(tee /tmp/test_output_err >&1)
 

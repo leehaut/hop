@@ -19,7 +19,7 @@
 package org.apache.hop.pipeline.transforms.execinfo;
 
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.CheckResult;
 import org.apache.hop.core.ICheckResult;
 import org.apache.hop.core.annotations.Transform;
@@ -29,6 +29,7 @@ import org.apache.hop.core.row.RowMetaBuilder;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.metadata.api.HopMetadataProperty;
+import org.apache.hop.metadata.api.HopMetadataPropertyType;
 import org.apache.hop.metadata.api.IHopMetadataProvider;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransformMeta;
@@ -45,7 +46,8 @@ import org.apache.hop.pipeline.transform.TransformMeta;
 public class ExecInfoMeta extends BaseTransformMeta<ExecInfo, ExecInfoData> {
   private static final Class<?> PKG = ExecInfoMeta.class;
 
-  @HopMetadataProperty private String location;
+  @HopMetadataProperty(hopMetadataPropertyType = HopMetadataPropertyType.EXEC_INFO_LOCATION)
+  private String location;
 
   @HopMetadataProperty private OperationType operationType;
 

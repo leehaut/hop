@@ -91,12 +91,10 @@ public class HopGuiWorkflowActionDelegate {
         action.setPluginId(actionPlugin.getIds()[0]);
         action.setName(actionName);
 
-        if (action.isStart()) {
+        if (action.isStart() && workflowMeta.findStart() != null) {
           // Check if start is already on the canvas...
-          if (workflowMeta.findStart() != null) {
-            HopGuiWorkflowGraph.showOnlyStartOnceMessage(hopGui.getActiveShell());
-            return null;
-          }
+          HopGuiWorkflowGraph.showOnlyStartOnceMessage(hopGui.getActiveShell());
+          return null;
         }
 
         if (openIt) {
@@ -201,7 +199,7 @@ public class HopGuiWorkflowActionDelegate {
     Object[] arguments =
         new Object[] {hopGui.getShell(), action, workflowMeta, workflowGraph.getVariables()};
 
-    if (MissingAction.ID.equals(action.getPluginId())) {
+    if (action instanceof MissingAction) {
       return new MissingActionDialog(
           hopGui.getActiveShell(), action, workflowMeta, workflowGraph.getVariables());
     }

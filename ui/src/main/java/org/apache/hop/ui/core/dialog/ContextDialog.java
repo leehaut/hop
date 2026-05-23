@@ -23,7 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.Props;
 import org.apache.hop.core.config.HopConfig;
@@ -43,8 +43,10 @@ import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.gui.GuiResource;
 import org.apache.hop.ui.core.gui.GuiToolbarWidgets;
 import org.apache.hop.ui.core.gui.HopNamespace;
+import org.apache.hop.ui.core.gui.IToolbarContainer;
 import org.apache.hop.ui.core.gui.WindowProperty;
 import org.apache.hop.ui.core.widget.OsHelper;
+import org.apache.hop.ui.hopgui.ToolbarFacade;
 import org.apache.hop.ui.pipeline.transform.BaseTransformDialog;
 import org.apache.hop.ui.util.EnvironmentUtils;
 import org.eclipse.swt.SWT;
@@ -61,6 +63,7 @@ import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Canvas;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Dialog;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
@@ -69,7 +72,6 @@ import org.eclipse.swt.widgets.Monitor;
 import org.eclipse.swt.widgets.ScrollBar;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
-import org.eclipse.swt.widgets.ToolBar;
 import org.eclipse.swt.widgets.ToolItem;
 
 @GuiPlugin(description = "This dialog presents you all the actions you can take in a given context")
@@ -401,10 +403,12 @@ public class ContextDialog extends Dialog {
 
     // Create a toolbar at the right of the search bar...
     //
-    ToolBar toolBar = new ToolBar(searchComposite, SWT.WRAP | SWT.LEFT | SWT.HORIZONTAL);
+    IToolbarContainer toolBarContainer =
+        ToolbarFacade.createToolbarContainer(searchComposite, SWT.WRAP | SWT.LEFT | SWT.HORIZONTAL);
+    Control toolBar = toolBarContainer.getControl();
     toolBarWidgets = new GuiToolbarWidgets();
     toolBarWidgets.registerGuiPluginObject(this);
-    toolBarWidgets.createToolbarWidgets(toolBar, GUI_PLUGIN_TOOLBAR_PARENT_ID);
+    toolBarWidgets.createToolbarWidgets(toolBarContainer, GUI_PLUGIN_TOOLBAR_PARENT_ID);
     toolBar.pack();
     PropsUi.setLook(toolBar, Props.WIDGET_STYLE_TOOLBAR);
 
@@ -579,6 +583,12 @@ public class ContextDialog extends Dialog {
     }
 
     activeInstance = null;
+
+    // When automatic closing occurs upon loss of focus, we must help set the focus to the parent
+    // (Widows only).
+    if (focusLost) {
+      getParent().setFocus();
+    }
 
     return selectedAction;
   }
@@ -794,6 +804,7 @@ public class ContextDialog extends Dialog {
 
           dispose();
         }
+        break;
       default:
         break;
     }
@@ -1062,29 +1073,27 @@ public class ContextDialog extends Dialog {
 
       // See if we need to show the selected item.
       //
-      if (!EnvironmentUtils.getInstance().isWeb()) {
-        if (scroll && totalContentHeight > 0) {
-          Rectangle itemArea = selectedItem.getAreaOwner().getArea();
-          org.eclipse.swt.graphics.Rectangle clientArea = wScrolledComposite.getClientArea();
+      if (!EnvironmentUtils.getInstance().isWeb() && scroll && totalContentHeight > 0) {
+        Rectangle itemArea = selectedItem.getAreaOwner().getArea();
+        org.eclipse.swt.graphics.Rectangle clientArea = wScrolledComposite.getClientArea();
 
-          ScrollBar verticalBar = wScrolledComposite.getVerticalBar();
-          // Scroll down
-          //
-          while (itemArea.y + itemArea.height + 2 * yMargin
-              > verticalBar.getSelection() + clientArea.height) {
-            wScrolledComposite.setOrigin(
-                0,
-                Math.min(
-                    verticalBar.getSelection() + verticalBar.getPageIncrement(),
-                    verticalBar.getMaximum() - verticalBar.getThumb()));
-          }
+        ScrollBar verticalBar = wScrolledComposite.getVerticalBar();
+        // Scroll down
+        //
+        while (itemArea.y + itemArea.height + 2 * yMargin
+            > verticalBar.getSelection() + clientArea.height) {
+          wScrolledComposite.setOrigin(
+              0,
+              Math.min(
+                  verticalBar.getSelection() + verticalBar.getPageIncrement(),
+                  verticalBar.getMaximum() - verticalBar.getThumb()));
+        }
 
-          // Scroll up
-          //
-          while (itemArea.y < verticalBar.getSelection()) {
-            wScrolledComposite.setOrigin(
-                0, Math.max(verticalBar.getSelection() - verticalBar.getPageIncrement(), 0));
-          }
+        // Scroll up
+        //
+        while (itemArea.y < verticalBar.getSelection()) {
+          wScrolledComposite.setOrigin(
+              0, Math.max(verticalBar.getSelection() - verticalBar.getPageIncrement(), 0));
         }
       }
     }
@@ -1197,6 +1206,8 @@ public class ContextDialog extends Dialog {
       case SWT.END:
         selectItem(lastShownItem, true);
         break;
+      default:
+        break;
     }
   }
 
@@ -1223,10 +1234,8 @@ public class ContextDialog extends Dialog {
         // Only keep the items to the left
         //
         Rectangle r = areaOwner.getArea();
-        if (r.x > area.x + area.width) {
-          if (r.y - 2 * yMargin < area.y && r.y + 2 * yMargin > area.y) {
-            rightAreas.add(areaOwner);
-          }
+        if (r.x > area.x + area.width && r.y - 2 * yMargin < area.y && r.y + 2 * yMargin > area.y) {
+          rightAreas.add(areaOwner);
         }
       }
     }
@@ -1245,13 +1254,10 @@ public class ContextDialog extends Dialog {
         // Only keep the items to the left
         //
         Rectangle r = areaOwner.getArea();
-        if (r.x < area.x) {
-
+        if (r.x < area.x && r.y - 2 * yMargin < area.y && r.y + 2 * yMargin > area.y) {
           // Select only in the same band of items
           //
-          if (r.y - 2 * yMargin < area.y && r.y + 2 * yMargin > area.y) {
-            leftAreas.add(areaOwner);
-          }
+          leftAreas.add(areaOwner);
         }
       }
     }
@@ -1266,12 +1272,10 @@ public class ContextDialog extends Dialog {
   private void selectItemUp(Rectangle area) {
     List<AreaOwner> topAreas = new ArrayList<>();
     for (AreaOwner areaOwner : areaOwners) {
-      if (areaOwner.getOwner() instanceof Item) {
+      if (areaOwner.getOwner() instanceof Item && areaOwner.getArea().y < area.y) {
         // Only keep the items to the left
         //
-        if (areaOwner.getArea().y < area.y) {
-          topAreas.add(areaOwner);
-        }
+        topAreas.add(areaOwner);
       }
     }
     selectClosest(area, topAreas);
@@ -1285,12 +1289,10 @@ public class ContextDialog extends Dialog {
   private void selectItemDown(Rectangle area) {
     List<AreaOwner> bottomAreas = new ArrayList<>();
     for (AreaOwner areaOwner : areaOwners) {
-      if (areaOwner.getOwner() instanceof Item) {
+      if (areaOwner.getOwner() instanceof Item && areaOwner.getArea().y > area.y + area.height) {
         // Only keep the items to the left
         //
-        if (areaOwner.getArea().y > area.y + area.height) {
-          bottomAreas.add(areaOwner);
-        }
+        bottomAreas.add(areaOwner);
       }
     }
     selectClosest(area, bottomAreas);
@@ -1300,12 +1302,11 @@ public class ContextDialog extends Dialog {
     ScrollBar verticalBar = wScrolledComposite.getVerticalBar();
     List<AreaOwner> topAreas = new ArrayList<>();
     for (AreaOwner areaOwner : areaOwners) {
-      if (areaOwner.getOwner() instanceof Item) {
+      if (areaOwner.getOwner() instanceof Item
+          && areaOwner.getArea().y < area.y - verticalBar.getPageIncrement()) {
         // Only keep the items to the left
         //
-        if (areaOwner.getArea().y < area.y - verticalBar.getPageIncrement()) {
-          topAreas.add(areaOwner);
-        }
+        topAreas.add(areaOwner);
       }
     }
     if (topAreas.isEmpty()) topAreas.add(firstShownItem.getAreaOwner());
@@ -1358,10 +1359,8 @@ public class ContextDialog extends Dialog {
   private Item findItem(int x, int y) {
 
     for (AreaOwner areaOwner : areaOwners) {
-      if (areaOwner.contains(x, y)) {
-        if (areaOwner.getOwner() instanceof Item item) {
-          return item;
-        }
+      if (areaOwner.contains(x, y) && areaOwner.getOwner() instanceof Item item) {
+        return item;
       }
     }
 

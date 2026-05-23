@@ -29,9 +29,11 @@ import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.metadata.rest.RestConnection;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.TransformMeta;
+import org.apache.hop.pipeline.transforms.rest.common.RestConst;
 import org.apache.hop.pipeline.transforms.rest.fields.HeaderField;
 import org.apache.hop.pipeline.transforms.rest.fields.MatrixParameterField;
 import org.apache.hop.pipeline.transforms.rest.fields.ParameterField;
+import org.apache.hop.ui.core.FormDataBuilder;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.dialog.BaseDialog;
 import org.apache.hop.ui.core.dialog.ErrorDialog;
@@ -55,11 +57,11 @@ import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 public class RestDialog extends BaseTransformDialog {
   private static final Class<?> PKG = RestMeta.class;
@@ -132,7 +134,13 @@ public class RestDialog extends BaseTransformDialog {
 
   private TextVar wResponseHeader;
 
+  /** trust store password label */
+  private Label wlTrustStorePassword;
+
   private TextVar wTrustStorePassword;
+
+  /** trust store file label */
+  private Label wlTrustStoreFile;
 
   private TextVar wTrustStoreFile;
 
@@ -144,6 +152,13 @@ public class RestDialog extends BaseTransformDialog {
 
   private MetaSelectionLine wSelectionLine;
 
+  /** retry */
+  private TextVar wRetryTimes;
+
+  private TextVar wRetryDelay;
+  private TableView wStatusCodes;
+  private TableView wMethods;
+
   public RestDialog(
       Shell parent, IVariables variables, RestMeta transformMeta, PipelineMeta pipelineMeta) {
     super(parent, variables, transformMeta, pipelineMeta);
@@ -152,27 +167,12 @@ public class RestDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "RestDialog.Shell.Title"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
     ModifyListener lsMod = e -> input.setChanged();
-
     changed = input.hasChanged();
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "RestDialog.Shell.Title"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    setupButtons(margin);
 
     setupTransformName(lsMod, middle, margin);
 
@@ -199,8 +199,8 @@ public class RestDialog extends BaseTransformDialog {
 
     Group gSettings = setupSettingGroup(wGeneralComp);
 
-    setupRestConnectionLine(lsMod, middle, margin, wGeneralComp, gSettings);
-    setupUrlLine(lsMod, middle, margin, wGeneralComp, gSettings);
+    setupRestConnectionLine(margin, wGeneralComp, gSettings);
+    setupUrlLine(lsMod, middle, margin, gSettings);
     setupUrlInFieldLine(middle, margin, gSettings);
     setupUrlFieldNameLine(lsMod, middle, margin, gSettings);
     setupHttpMethodLine(lsMod, middle, margin, gSettings);
@@ -214,7 +214,7 @@ public class RestDialog extends BaseTransformDialog {
     FormData fdSettings = new FormData();
     fdSettings.left = new FormAttachment(0, 0);
     fdSettings.right = new FormAttachment(100, 0);
-    fdSettings.top = new FormAttachment(wTransformName, margin);
+    fdSettings.top = new FormAttachment(wSpacer, margin);
     gSettings.setLayoutData(fdSettings);
 
     // END Output Settings GROUP
@@ -235,7 +235,7 @@ public class RestDialog extends BaseTransformDialog {
 
     FormData fdGeneralComp = new FormData();
     fdGeneralComp.left = new FormAttachment(0, 0);
-    fdGeneralComp.top = new FormAttachment(wTransformName, margin);
+    fdGeneralComp.top = new FormAttachment(wSpacer, margin);
     fdGeneralComp.right = new FormAttachment(100, 0);
     fdGeneralComp.bottom = new FormAttachment(100, 0);
     wGeneralComp.setLayoutData(fdGeneralComp);
@@ -298,7 +298,7 @@ public class RestDialog extends BaseTransformDialog {
 
     FormData fdAuthComp = new FormData();
     fdAuthComp.left = new FormAttachment(0, 0);
-    fdAuthComp.top = new FormAttachment(wTransformName, margin);
+    fdAuthComp.top = new FormAttachment(wSpacer, margin);
     fdAuthComp.right = new FormAttachment(100, 0);
     fdAuthComp.bottom = new FormAttachment(100, 0);
     wAuthComp.setLayoutData(fdAuthComp);
@@ -326,8 +326,8 @@ public class RestDialog extends BaseTransformDialog {
 
     Group gSSLTrustStore = setupTrustoreGroup(wSSLComp);
 
-    Button wbTrustStoreFile = setupTrustoreFileLine(lsMod, middle, margin, gSSLTrustStore);
-    setupTrustorePwdLine(lsMod, middle, margin, gSSLTrustStore, wbTrustStoreFile);
+    Button wbTrustStoreFile = setupTrustStoreFileLine(lsMod, middle, margin, gSSLTrustStore);
+    setupTrustStorePwdLine(lsMod, middle, margin, gSSLTrustStore, wbTrustStoreFile);
     setupIgnoreSslLine(middle, margin, gSSLTrustStore);
 
     FormData fdSSLTrustStore = new FormData();
@@ -341,7 +341,7 @@ public class RestDialog extends BaseTransformDialog {
 
     FormData fdSSLComp = new FormData();
     fdSSLComp.left = new FormAttachment(0, 0);
-    fdSSLComp.top = new FormAttachment(wTransformName, margin);
+    fdSSLComp.top = new FormAttachment(wSpacer, margin);
     fdSSLComp.right = new FormAttachment(100, 0);
     fdSSLComp.bottom = new FormAttachment(100, 0);
     wSSLComp.setLayoutData(fdSSLComp);
@@ -368,7 +368,7 @@ public class RestDialog extends BaseTransformDialog {
 
     FormData fdAdditionalComp = new FormData();
     fdAdditionalComp.left = new FormAttachment(0, 0);
-    fdAdditionalComp.top = new FormAttachment(wTransformName, margin);
+    fdAdditionalComp.top = new FormAttachment(wSpacer, margin);
     fdAdditionalComp.right = new FormAttachment(100, -margin);
     fdAdditionalComp.bottom = new FormAttachment(100, 0);
     wAdditionalComp.setLayoutData(fdAdditionalComp);
@@ -395,7 +395,7 @@ public class RestDialog extends BaseTransformDialog {
 
     FormData fdParametersComp = new FormData();
     fdParametersComp.left = new FormAttachment(0, 0);
-    fdParametersComp.top = new FormAttachment(wTransformName, margin);
+    fdParametersComp.top = new FormAttachment(wSpacer, margin);
     fdParametersComp.right = new FormAttachment(100, 0);
     fdParametersComp.bottom = new FormAttachment(100, 0);
     wParametersComp.setLayoutData(fdParametersComp);
@@ -419,11 +419,14 @@ public class RestDialog extends BaseTransformDialog {
 
     setupMatrixParamTabContent(lsMod, margin, wMatrixParametersTab, wMatrixParametersComp);
 
+    // retry
+    addRetryTabItem(wTabFolder, lsMod);
+
     FormData fdTabFolder = new FormData();
     fdTabFolder.left = new FormAttachment(0, 0);
-    fdTabFolder.top = new FormAttachment(wTransformName, margin);
+    fdTabFolder.top = new FormAttachment(wSpacer, margin);
     fdTabFolder.right = new FormAttachment(100, 0);
-    fdTabFolder.bottom = new FormAttachment(wOk, -2 * margin);
+    fdTabFolder.bottom = new FormAttachment(wOk, -margin);
     wTabFolder.setLayoutData(fdTabFolder);
 
     lsResize =
@@ -440,13 +443,124 @@ public class RestDialog extends BaseTransformDialog {
     getData();
     activateUrlInfield();
     activateMethodInfield();
-    activateTrustoreFields();
+    activateTrustStoreFields();
     setMethod();
     input.setChanged(changed);
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
+  }
+
+  private void addRetryTabItem(CTabFolder wTabFolder, ModifyListener lsMod) {
+    CTabItem retryTab = new CTabItem(wTabFolder, SWT.NONE);
+    retryTab.setFont(GuiResource.getInstance().getFontDefault());
+    retryTab.setText(BaseMessages.getString(PKG, "RestDialog.Tab.Retry.Title"));
+
+    Composite wRetryComp = new Composite(wTabFolder, SWT.NONE);
+    PropsUi.setLook(wRetryComp);
+    FormLayout pl = new FormLayout();
+    pl.marginWidth = PropsUi.getFormMargin();
+    pl.marginHeight = PropsUi.getFormMargin();
+    wRetryComp.setLayout(pl);
+
+    // Retry Times
+    Label wlRetryTimes = new Label(wRetryComp, SWT.RIGHT);
+    wlRetryTimes.setText(BaseMessages.getString(PKG, "RestDialog.Tab.Retry.Times"));
+    PropsUi.setLook(wlRetryTimes);
+    wlRetryTimes.setLayoutData(FormDataBuilder.builder().top(0, 5).left().width(300).build());
+
+    wRetryTimes = new TextVar(variables, wRetryComp, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
+    PropsUi.setLook(wRetryTimes);
+    wRetryTimes.setLayoutData(
+        FormDataBuilder.builder().top(0, 5).left(wlRetryTimes, 5).right(100, 0).build());
+
+    // Retry Delay (ms)
+    Label wlRetryDelay = new Label(wRetryComp, SWT.RIGHT);
+    wlRetryDelay.setText(BaseMessages.getString(PKG, "RestDialog.Tab.Retry.Delay"));
+    PropsUi.setLook(wlRetryDelay);
+    wlRetryDelay.setLayoutData(
+        FormDataBuilder.builder().top(wlRetryTimes, 5).left().width(300).build());
+
+    wRetryDelay = new TextVar(variables, wRetryComp, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
+    PropsUi.setLook(wRetryDelay);
+    wRetryDelay.setLayoutData(
+        FormDataBuilder.builder().top(wRetryTimes, 5).left(wlRetryDelay, 5).right(100, 0).build());
+
+    // Status Codes table (left)
+    retryResponseCodeLeft(wRetryComp, wlRetryDelay, lsMod);
+    // HTTP Methods table (right)
+    retryRequestMethodRight(wRetryComp, wRetryDelay, lsMod);
+
+    wRetryComp.setLayoutData(
+        FormDataBuilder.builder().top().left().right(100, 0).bottom(100, 0).build());
+    wRetryComp.layout();
+    retryTab.setControl(wRetryComp);
+  }
+
+  private void retryResponseCodeLeft(Composite wRetryComp, Control top, ModifyListener lsMod) {
+    // Status Codes table (left)
+    Label wlStatusCodes = new Label(wRetryComp, SWT.LEFT);
+    wlStatusCodes.setText(BaseMessages.getString(PKG, "RestDialog.Tab.Retry.Http.Status"));
+    PropsUi.setLook(wlStatusCodes);
+    wlStatusCodes.setLayoutData(FormDataBuilder.builder().top(top, 30).left(0, 0).build());
+
+    String colName = BaseMessages.getString(PKG, "RestDialog.Tab.Retry.Http.Status.Header");
+    ColumnInfo[] headers =
+        new ColumnInfo[] {new ColumnInfo(colName, ColumnInfo.COLUMN_TYPE_TEXT, false)};
+
+    wStatusCodes =
+        new TableView(
+            variables,
+            wRetryComp,
+            SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
+            headers,
+            0,
+            false,
+            lsMod,
+            props);
+
+    PropsUi.setLook(wStatusCodes);
+    wStatusCodes.setLayoutData(
+        FormDataBuilder.builder()
+            .top(wlStatusCodes, PropsUi.getMargin())
+            .left(0, 0)
+            .right(50, -PropsUi.getMargin() / 2)
+            .bottom(100, 0)
+            .build());
+  }
+
+  private void retryRequestMethodRight(Composite wRetryComp, Control top, ModifyListener lsMod) {
+    // HTTP Methods table (right)
+    Label wlMethods = new Label(wRetryComp, SWT.LEFT);
+    wlMethods.setText(BaseMessages.getString(PKG, "RestDialog.Tab.Retry.Http.Method"));
+    PropsUi.setLook(wlMethods);
+    wlMethods.setLayoutData(
+        FormDataBuilder.builder().top(top, 30).left(50, PropsUi.getMargin() / 2).build());
+
+    String colName = BaseMessages.getString(PKG, "RestDialog.Tab.Retry.Http.Method.Header");
+    ColumnInfo[] headers =
+        new ColumnInfo[] {new ColumnInfo(colName, ColumnInfo.COLUMN_TYPE_TEXT, false)};
+
+    wMethods =
+        new TableView(
+            variables,
+            wRetryComp,
+            SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
+            headers,
+            0,
+            false,
+            lsMod,
+            props);
+
+    PropsUi.setLook(wMethods);
+    wMethods.setLayoutData(
+        FormDataBuilder.builder()
+            .top(wlMethods, PropsUi.getMargin())
+            .left(50, PropsUi.getMargin() / 2)
+            .right(100, 0)
+            .bottom(100, 0)
+            .build());
   }
 
   private void setupMatrixParamTabContent(
@@ -459,7 +573,7 @@ public class RestDialog extends BaseTransformDialog {
     PropsUi.setLook(wlMatrixParameters);
     FormData fdlMatrixParameters = new FormData();
     fdlMatrixParameters.left = new FormAttachment(0, 0);
-    fdlMatrixParameters.top = new FormAttachment(wTransformName, margin);
+    fdlMatrixParameters.top = new FormAttachment(wSpacer, margin);
     wlMatrixParameters.setLayoutData(fdlMatrixParameters);
 
     wMatrixGet = new Button(wMatrixParametersComp, SWT.PUSH);
@@ -503,7 +617,7 @@ public class RestDialog extends BaseTransformDialog {
 
     FormData fdMatrixParametersComp = new FormData();
     fdMatrixParametersComp.left = new FormAttachment(0, 0);
-    fdMatrixParametersComp.top = new FormAttachment(wTransformName, margin);
+    fdMatrixParametersComp.top = new FormAttachment(wSpacer, margin);
     fdMatrixParametersComp.right = new FormAttachment(100, 0);
     fdMatrixParametersComp.bottom = new FormAttachment(100, 0);
     wMatrixParametersComp.setLayoutData(fdMatrixParametersComp);
@@ -524,7 +638,7 @@ public class RestDialog extends BaseTransformDialog {
     PropsUi.setLook(wlParameters);
     FormData fdlParameters = new FormData();
     fdlParameters.left = new FormAttachment(0, 0);
-    fdlParameters.top = new FormAttachment(wTransformName, margin);
+    fdlParameters.top = new FormAttachment(wSpacer, margin);
     wlParameters.setLayoutData(fdlParameters);
 
     wGet = new Button(wParametersComp, SWT.PUSH);
@@ -579,7 +693,7 @@ public class RestDialog extends BaseTransformDialog {
     PropsUi.setLook(wlFields);
     FormData fdlFields = new FormData();
     fdlFields.left = new FormAttachment(0, 0);
-    fdlFields.top = new FormAttachment(wTransformName, margin);
+    fdlFields.top = new FormAttachment(wSpacer, margin);
     wlFields.setLayoutData(fdlFields);
 
     Button wGetHeaders = new Button(wAdditionalComp, SWT.PUSH);
@@ -649,21 +763,26 @@ public class RestDialog extends BaseTransformDialog {
           @Override
           public void widgetSelected(SelectionEvent e) {
             input.setChanged();
-            activateTrustoreFields();
+            activateTrustStoreFields();
           }
         });
   }
 
-  private void activateTrustoreFields() {
+  private void activateTrustStoreFields() {
+    // trust store file(label/text/browse)
+    wlTrustStoreFile.setEnabled(!wIgnoreSsl.getSelection());
     wTrustStoreFile.setEnabled(!wIgnoreSsl.getSelection());
     wbTrustStoreFile.setEnabled(!wIgnoreSsl.getSelection());
+
+    // trust store password(label/text)
+    wlTrustStorePassword.setEnabled(!wIgnoreSsl.getSelection());
     wTrustStorePassword.setEnabled(!wIgnoreSsl.getSelection());
   }
 
-  private void setupTrustorePwdLine(
+  private void setupTrustStorePwdLine(
       ModifyListener lsMod, int middle, int margin, Group gSSLTrustStore, Button wbTrustStoreFile) {
     // TrustStorePassword line
-    Label wlTrustStorePassword = new Label(gSSLTrustStore, SWT.RIGHT);
+    wlTrustStorePassword = new Label(gSSLTrustStore, SWT.RIGHT);
     wlTrustStorePassword.setText(
         BaseMessages.getString(PKG, "RestDialog.TrustStorePassword.Label"));
     PropsUi.setLook(wlTrustStorePassword);
@@ -683,10 +802,10 @@ public class RestDialog extends BaseTransformDialog {
     wTrustStorePassword.setLayoutData(fdTrustStorePassword);
   }
 
-  private Button setupTrustoreFileLine(
+  private Button setupTrustStoreFileLine(
       ModifyListener lsMod, int middle, int margin, Group gSSLTrustStore) {
     // TrustStoreFile line
-    Label wlTrustStoreFile = new Label(gSSLTrustStore, SWT.RIGHT);
+    wlTrustStoreFile = new Label(gSSLTrustStore, SWT.RIGHT);
     wlTrustStoreFile.setText(BaseMessages.getString(PKG, "RestDialog.TrustStoreFile.Label"));
     PropsUi.setLook(wlTrustStoreFile);
     FormData fdlTrustStoreFile = new FormData();
@@ -726,7 +845,7 @@ public class RestDialog extends BaseTransformDialog {
   }
 
   private Group setupTrustoreGroup(Composite wSSLComp) {
-    Group gSSLTrustStore = new Group(wSSLComp, SWT.SHADOW_ETCHED_IN);
+    Group gSSLTrustStore = new Group(wSSLComp, SWT.SHADOW_NONE);
     gSSLTrustStore.setText(BaseMessages.getString(PKG, "RestDialog.SSLTrustStoreGroup.Label"));
     FormLayout sslTrustStoreLayout = new FormLayout();
     sslTrustStoreLayout.marginWidth = 3;
@@ -737,8 +856,6 @@ public class RestDialog extends BaseTransformDialog {
   }
 
   private void setupConnectionTimeoutLine(ModifyListener lsMod, Group gSettings) {
-    int margin = PropsUi.getMargin();
-    int middle = props.getMiddlePct();
     Label wlConnectionTimeout = new Label(gSettings, SWT.RIGHT);
     wlConnectionTimeout.setText(BaseMessages.getString(PKG, "RestDialog.ConnectionTimeout.Label"));
     PropsUi.setLook(wlConnectionTimeout);
@@ -824,7 +941,7 @@ public class RestDialog extends BaseTransformDialog {
   }
 
   private Group setupProxyGroup(Composite wAuthComp) {
-    Group gProxy = new Group(wAuthComp, SWT.SHADOW_ETCHED_IN);
+    Group gProxy = new Group(wAuthComp, SWT.SHADOW_NONE);
     gProxy.setText(BaseMessages.getString(PKG, "RestDialog.ProxyGroup.Label"));
     FormLayout proxyLayout = new FormLayout();
     proxyLayout.marginWidth = 3;
@@ -903,7 +1020,7 @@ public class RestDialog extends BaseTransformDialog {
   }
 
   private Group setupAuthGroup(Composite wAuthComp) {
-    Group gHttpAuth = new Group(wAuthComp, SWT.SHADOW_ETCHED_IN);
+    Group gHttpAuth = new Group(wAuthComp, SWT.SHADOW_NONE);
     gHttpAuth.setText(BaseMessages.getString(PKG, "RestDialog.HttpAuthGroup.Label"));
     FormLayout httpAuthLayout = new FormLayout();
     httpAuthLayout.marginWidth = 3;
@@ -998,13 +1115,13 @@ public class RestDialog extends BaseTransformDialog {
     wResult.addModifyListener(lsMod);
     FormData fdResult = new FormData();
     fdResult.left = new FormAttachment(middle, 0);
-    fdResult.top = new FormAttachment(gSettings, margin * 2);
+    fdResult.top = new FormAttachment(gSettings, margin);
     fdResult.right = new FormAttachment(100, -margin);
     wResult.setLayoutData(fdResult);
   }
 
   private Group setupOutputFieldGroup(Composite wGeneralComp) {
-    Group gOutputFields = new Group(wGeneralComp, SWT.SHADOW_ETCHED_IN);
+    Group gOutputFields = new Group(wGeneralComp, SWT.SHADOW_NONE);
     gOutputFields.setText(BaseMessages.getString(PKG, "RestDialog.OutputFieldsGroup.Label"));
     FormLayout outputFieldsLayout = new FormLayout();
     outputFieldsLayout.marginWidth = 3;
@@ -1022,7 +1139,7 @@ public class RestDialog extends BaseTransformDialog {
     FormData fdlApplicationType = new FormData();
     fdlApplicationType.left = new FormAttachment(0, 0);
     fdlApplicationType.right = new FormAttachment(middle, -margin);
-    fdlApplicationType.top = new FormAttachment(wBody, 2 * margin);
+    fdlApplicationType.top = new FormAttachment(wBody, margin);
     wlApplicationType.setLayoutData(fdlApplicationType);
 
     wApplicationType = new ComboVar(variables, gSettings, SWT.BORDER | SWT.READ_ONLY);
@@ -1031,7 +1148,7 @@ public class RestDialog extends BaseTransformDialog {
     wApplicationType.addModifyListener(lsMod);
     FormData fdApplicationType = new FormData();
     fdApplicationType.left = new FormAttachment(middle, 0);
-    fdApplicationType.top = new FormAttachment(wBody, 2 * margin);
+    fdApplicationType.top = new FormAttachment(wBody, margin);
     fdApplicationType.right = new FormAttachment(100, -margin);
     wApplicationType.setLayoutData(fdApplicationType);
     wApplicationType.setItems(RestMeta.APPLICATION_TYPES);
@@ -1053,7 +1170,7 @@ public class RestDialog extends BaseTransformDialog {
     FormData fdlBody = new FormData();
     fdlBody.left = new FormAttachment(0, 0);
     fdlBody.right = new FormAttachment(middle, -margin);
-    fdlBody.top = new FormAttachment(wMethodField, 2 * margin);
+    fdlBody.top = new FormAttachment(wMethodField, margin);
     wlBody.setLayoutData(fdlBody);
 
     wBody = new ComboVar(variables, gSettings, SWT.BORDER | SWT.READ_ONLY);
@@ -1062,7 +1179,7 @@ public class RestDialog extends BaseTransformDialog {
     wBody.addModifyListener(lsMod);
     FormData fdBody = new FormData();
     fdBody.left = new FormAttachment(middle, 0);
-    fdBody.top = new FormAttachment(wMethodField, 2 * margin);
+    fdBody.top = new FormAttachment(wMethodField, margin);
     fdBody.right = new FormAttachment(100, -margin);
     wBody.setLayoutData(fdBody);
   }
@@ -1124,7 +1241,7 @@ public class RestDialog extends BaseTransformDialog {
     FormData fdlMethod = new FormData();
     fdlMethod.left = new FormAttachment(0, 0);
     fdlMethod.right = new FormAttachment(middle, -margin);
-    fdlMethod.top = new FormAttachment(wUrlField, 2 * margin);
+    fdlMethod.top = new FormAttachment(wUrlField, margin);
     wlMethod.setLayoutData(fdlMethod);
 
     wMethod = new ComboVar(variables, gSettings, SWT.BORDER | SWT.READ_ONLY);
@@ -1133,7 +1250,7 @@ public class RestDialog extends BaseTransformDialog {
     wMethod.addModifyListener(lsMod);
     FormData fdMethod = new FormData();
     fdMethod.left = new FormAttachment(middle, 0);
-    fdMethod.top = new FormAttachment(wUrlField, 2 * margin);
+    fdMethod.top = new FormAttachment(wUrlField, margin);
     fdMethod.right = new FormAttachment(100, -margin);
     wMethod.setLayoutData(fdMethod);
     wMethod.setItems(RestMeta.HTTP_METHODS);
@@ -1197,9 +1314,7 @@ public class RestDialog extends BaseTransformDialog {
         });
   }
 
-  private void setupRestConnectionLine(
-      ModifyListener lsMod, int middle, int margin, Composite wGeneralComp, Group gSettings) {
-
+  private void setupRestConnectionLine(int margin, Composite wGeneralComp, Group gSettings) {
     wSelectionLine =
         new MetaSelectionLine(
             variables,
@@ -1223,8 +1338,7 @@ public class RestDialog extends BaseTransformDialog {
     }
   }
 
-  private void setupUrlLine(
-      ModifyListener lsMod, int middle, int margin, Composite wGeneralComp, Group gSettings) {
+  private void setupUrlLine(ModifyListener lsMod, int middle, int margin, Group gSettings) {
 
     wlUrl = new Label(gSettings, SWT.RIGHT);
     wlUrl.setText(BaseMessages.getString(PKG, "RestDialog.URL.Label"));
@@ -1232,7 +1346,7 @@ public class RestDialog extends BaseTransformDialog {
     FormData fdlUrl = new FormData();
     fdlUrl.left = new FormAttachment(0, 0);
     fdlUrl.right = new FormAttachment(middle, -margin);
-    fdlUrl.top = new FormAttachment(wSelectionLine, margin * 2);
+    fdlUrl.top = new FormAttachment(wSelectionLine, margin);
     wlUrl.setLayoutData(fdlUrl);
 
     wUrl = new TextVar(variables, gSettings, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
@@ -1240,13 +1354,13 @@ public class RestDialog extends BaseTransformDialog {
     wUrl.addModifyListener(lsMod);
     FormData fdUrl = new FormData();
     fdUrl.left = new FormAttachment(middle, 0);
-    fdUrl.top = new FormAttachment(wSelectionLine, margin * 2);
+    fdUrl.top = new FormAttachment(wSelectionLine, margin);
     fdUrl.right = new FormAttachment(100, 0);
     wUrl.setLayoutData(fdUrl);
   }
 
   private Group setupSettingGroup(Composite wGeneralComp) {
-    Group gSettings = new Group(wGeneralComp, SWT.SHADOW_ETCHED_IN);
+    Group gSettings = new Group(wGeneralComp, SWT.SHADOW_NONE);
     gSettings.setText(BaseMessages.getString(PKG, "RestDialog.SettingsGroup.Label"));
     FormLayout settingsLayout = new FormLayout();
     settingsLayout.marginWidth = 3;
@@ -1257,35 +1371,7 @@ public class RestDialog extends BaseTransformDialog {
   }
 
   private void setupTransformName(ModifyListener lsMod, int middle, int margin) {
-    // TransformName line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "RestDialog.TransformName.Label"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
-  }
-
-  private void setupButtons(int margin) {
-    // THE BUTTONS: at the bottom
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wCancel}, margin, null);
+    // TransformName line is already created by createShell()
   }
 
   protected void setMethod() {
@@ -1294,7 +1380,7 @@ public class RestDialog extends BaseTransformDialog {
 
     wlBody.setEnabled(activateBody);
     wBody.setEnabled(activateBody);
-    wApplicationType.setEnabled(activateBody);
+    wApplicationType.setEnabled(true);
 
     wlParameters.setEnabled(activateParams);
     wParameters.setEnabled(activateParams);
@@ -1452,8 +1538,41 @@ public class RestDialog extends BaseTransformDialog {
     wFields.setRowNums();
     wFields.optWidth(true);
 
-    wTransformName.selectAll();
-    wTransformName.setFocus();
+    // get retry data
+    getDataForRetry();
+  }
+
+  private void getDataForRetry() {
+    if (input.getRetryTimes() != null) {
+      wRetryTimes.setText(input.getRetryTimes().toString());
+    } else {
+      wRetryTimes.setText(RestConst.DEFAULT_RETRY_TIMES + Const.EMPTY_STRING);
+    }
+
+    if (input.getRetryDelayMs() != null) {
+      wRetryDelay.setText(input.getRetryDelayMs().toString());
+    } else {
+      wRetryDelay.setText(RestConst.DEFAULT_RETRY_DELAY_MS + Const.EMPTY_STRING);
+    }
+
+    // http response code
+    List<String> codes = input.getRetryStatusCodes();
+    if (codes != null && !codes.isEmpty()) {
+      wStatusCodes.table.removeAll();
+      for (String code : codes) {
+        TableItem item = new TableItem(wStatusCodes.table, SWT.NONE);
+        item.setText(1, code);
+      }
+    }
+
+    // http request methods
+    List<String> methods = input.getRetryMethods();
+    if (methods != null && !methods.isEmpty()) {
+      wMethods.table.removeAll();
+      for (String method : methods) {
+        wMethods.add(method);
+      }
+    }
   }
 
   private void cancel() {
@@ -1530,7 +1649,41 @@ public class RestDialog extends BaseTransformDialog {
     input.setApplicationType(wApplicationType.getText());
     transformName = wTransformName.getText(); // return value
 
+    okForRetry();
     dispose();
+  }
+
+  private void okForRetry() {
+    // retry times
+    if (!Utils.isEmpty(wRetryTimes.getText())) {
+      int times = Integer.parseInt(wRetryTimes.getText());
+      input.setRetryTimes(Math.max(times, 0));
+    } else {
+      input.setRetryTimes(RestConst.DEFAULT_RETRY_TIMES);
+    }
+
+    // retry delay
+    if (!Utils.isEmpty(wRetryDelay.getText())) {
+      long delay = Long.parseLong(wRetryDelay.getText());
+      input.setRetryDelayMs(Math.max(delay, RestConst.DEFAULT_RETRY_DELAY_MS / 2));
+    } else {
+      input.setRetryDelayMs(RestConst.DEFAULT_RETRY_DELAY_MS);
+    }
+
+    input.getRetryStatusCodes().clear();
+    for (int i = 0; i < wStatusCodes.nrNonEmpty(); i++) {
+      TableItem item = wStatusCodes.getNonEmpty(i);
+      input.getRetryStatusCodes().add(item.getText(1));
+    }
+
+    input.getRetryMethods().clear();
+    for (int i = 0; i < wMethods.nrNonEmpty(); i++) {
+      TableItem item = wMethods.getNonEmpty(i);
+      String text = item.getText(1);
+      if (!Utils.isEmpty(text)) {
+        input.getRetryMethods().add(text.toUpperCase());
+      }
+    }
   }
 
   private void getParametersFields(TableView tView) {

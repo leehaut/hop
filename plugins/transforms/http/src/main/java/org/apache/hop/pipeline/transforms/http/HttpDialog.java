@@ -49,7 +49,6 @@ import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.graphics.Cursor;
-import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
@@ -60,7 +59,6 @@ import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 public class HttpDialog extends BaseTransformDialog {
   private static final Class<?> PKG = HttpMeta.class;
@@ -99,8 +97,8 @@ public class HttpDialog extends BaseTransformDialog {
 
   private final HttpMeta input;
 
-  private ColumnInfo[] colinf;
-  private ColumnInfo[] colinfHeaders;
+  private ColumnInfo[] argumentColumns;
+  private ColumnInfo[] headerColumns;
 
   private final List<String> inputFields = new ArrayList<>();
 
@@ -120,28 +118,12 @@ public class HttpDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "HTTPDialog.Shell.Title"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
     ModifyListener lsMod = e -> input.setChanged();
-
     changed = input.hasChanged();
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "HTTPDialog.Shell.Title"));
-
-    int margin = PropsUi.getMargin();
-
-    setupButtons();
-
-    Control lastControl = setupTransformNameField(lsMod);
 
     CTabFolder wTabFolder = new CTabFolder(shell, SWT.BORDER);
     PropsUi.setLook(wTabFolder, Props.WIDGET_STYLE_TAB);
@@ -165,11 +147,11 @@ public class HttpDialog extends BaseTransformDialog {
     // START Settings GROUP
 
     Group gSettings = setupSettingGroup(wGeneralComp);
-    lastControl = setupUrlLine(lsMod, lastControl, gSettings);
+    Control lastControl = setupUrlLine(lsMod, gSettings);
     lastControl = setupUrlInFieldLine(lastControl, gSettings);
     lastControl = setupIgnoreSslLine(lastControl, gSettings);
     lastControl = setupUrlFieldNameLine(lsMod, lastControl, gSettings);
-    lastControl = setupEncodingLine(lsMod, lastControl, gSettings);
+    setupEncodingLine(lsMod, lastControl, gSettings);
     setupConnectionTimeoutLine(lsMod, gSettings);
     setupSocketTimeoutLine(lsMod, gSettings);
     setupCloseWaitTimeLine(lsMod, gSettings);
@@ -177,7 +159,7 @@ public class HttpDialog extends BaseTransformDialog {
     FormData fdSettings = new FormData();
     fdSettings.left = new FormAttachment(0, 0);
     fdSettings.right = new FormAttachment(100, 0);
-    fdSettings.top = new FormAttachment(lastControl, margin);
+    fdSettings.top = new FormAttachment(0, margin);
     gSettings.setLayoutData(fdSettings);
 
     // END Output Settings GROUP
@@ -230,11 +212,10 @@ public class HttpDialog extends BaseTransformDialog {
 
     // END Http Proxy GROUP
     // ////////////////////////
-    lastControl = gProxy;
 
     FormData fdGeneralComp = new FormData();
     fdGeneralComp.left = new FormAttachment(0, 0);
-    fdGeneralComp.top = new FormAttachment(wTransformName, margin);
+    fdGeneralComp.top = new FormAttachment(0, margin);
     fdGeneralComp.right = new FormAttachment(100, 0);
     fdGeneralComp.bottom = new FormAttachment(100, 0);
     wGeneralComp.setLayoutData(fdGeneralComp);
@@ -259,7 +240,7 @@ public class HttpDialog extends BaseTransformDialog {
     wAdditionalComp.setLayout(addLayout);
     PropsUi.setLook(wAdditionalComp);
 
-    setupParamBlock(lsMod, lastControl, wAdditionalComp);
+    setupParamBlock(lsMod, wAdditionalComp);
     setupHeadBlock(lsMod, wAdditionalComp);
 
     //
@@ -286,7 +267,7 @@ public class HttpDialog extends BaseTransformDialog {
 
     FormData fdAdditionalComp = new FormData();
     fdAdditionalComp.left = new FormAttachment(0, 0);
-    fdAdditionalComp.top = new FormAttachment(wTransformName, margin);
+    fdAdditionalComp.top = new FormAttachment(0, margin);
     fdAdditionalComp.right = new FormAttachment(100, 0);
     fdAdditionalComp.bottom = new FormAttachment(100, 0);
     wAdditionalComp.setLayoutData(fdAdditionalComp);
@@ -297,25 +278,16 @@ public class HttpDialog extends BaseTransformDialog {
 
     FormData fdTabFolder = new FormData();
     fdTabFolder.left = new FormAttachment(0, 0);
-    fdTabFolder.top = new FormAttachment(wTransformName, margin);
+    fdTabFolder.top = new FormAttachment(wSpacer, margin);
     fdTabFolder.right = new FormAttachment(100, 0);
-    fdTabFolder.bottom = new FormAttachment(wOk, -2 * margin);
+    fdTabFolder.bottom = new FormAttachment(wOk, -margin);
     wTabFolder.setLayoutData(fdTabFolder);
-
-    lsResize =
-        event -> {
-          Point size = shell.getSize();
-          wFields.setSize(size.x - 10, size.y - 50);
-          wFields.table.setSize(size.x - 10, size.y - 50);
-          wFields.redraw();
-        };
-    shell.addListener(SWT.Resize, lsResize);
 
     getData();
     wTabFolder.setSelection(0);
     activeUrlInfield();
     input.setChanged(changed);
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -331,9 +303,9 @@ public class HttpDialog extends BaseTransformDialog {
     fdlHeaders.top = new FormAttachment(wFields, margin);
     wlHeaders.setLayoutData(fdlHeaders);
 
-    final int HeadersRows = input.getHeaderParameter().length;
+    final int nrHeadersRows = input.getLookupParameters().getHeaders().size();
 
-    colinfHeaders =
+    headerColumns =
         new ColumnInfo[] {
           new ColumnInfo(
               BaseMessages.getString(PKG, "HTTPDialog.ColumnInfo.Field"),
@@ -345,14 +317,14 @@ public class HttpDialog extends BaseTransformDialog {
               ColumnInfo.COLUMN_TYPE_TEXT,
               false),
         };
-    colinfHeaders[1].setUsingVariables(true);
+    headerColumns[1].setUsingVariables(true);
     wHeaders =
         new TableView(
             variables,
             wAdditionalComp,
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
-            colinfHeaders,
-            HeadersRows,
+            headerColumns,
+            nrHeadersRows,
             lsMod,
             props);
 
@@ -372,15 +344,14 @@ public class HttpDialog extends BaseTransformDialog {
     wHeaders.setLayoutData(fdHeaders);
   }
 
-  private void setupParamBlock(
-      ModifyListener lsMod, Control lastControl, Composite wAdditionalComp) {
+  private void setupParamBlock(ModifyListener lsMod, Composite wAdditionalComp) {
     int margin = PropsUi.getMargin();
     Label wlFields = new Label(wAdditionalComp, SWT.NONE);
     wlFields.setText(BaseMessages.getString(PKG, "HTTPDialog.Parameters.Label"));
     PropsUi.setLook(wlFields);
     FormData fdlFields = new FormData();
     fdlFields.left = new FormAttachment(0, 0);
-    fdlFields.top = new FormAttachment(lastControl, margin);
+    fdlFields.top = new FormAttachment(0, margin);
     wlFields.setLayoutData(fdlFields);
 
     Button wGet = new Button(wAdditionalComp, SWT.PUSH);
@@ -391,9 +362,8 @@ public class HttpDialog extends BaseTransformDialog {
     wGet.setLayoutData(fdGet);
     wGet.addListener(SWT.Selection, e -> get());
 
-    final int FieldsRows = input.getArgumentField().length;
-
-    colinf =
+    final int nrFieldRows = input.getLookupParameters().getQueryParameters().size();
+    argumentColumns =
         new ColumnInfo[] {
           new ColumnInfo(
               BaseMessages.getString(PKG, "HTTPDialog.ColumnInfo.Name"),
@@ -411,8 +381,8 @@ public class HttpDialog extends BaseTransformDialog {
             variables,
             wAdditionalComp,
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
-            colinf,
-            FieldsRows,
+            argumentColumns,
+            nrFieldRows,
             lsMod,
             props);
 
@@ -420,14 +390,12 @@ public class HttpDialog extends BaseTransformDialog {
     fdFields.left = new FormAttachment(0, 0);
     fdFields.top = new FormAttachment(wlFields, margin);
     fdFields.right = new FormAttachment(wGet, -margin);
-    fdFields.bottom = new FormAttachment(wlFields, 200);
+    fdFields.bottom = new FormAttachment(45, 0);
     wFields.setLayoutData(fdFields);
   }
 
   private void setupProxyPort(ModifyListener lsMod, Control lastControl, Group gProxy) {
     // Proxy port
-    int margin = PropsUi.getMargin();
-    int middle = props.getMiddlePct();
     Label wlProxyPort = new Label(gProxy, SWT.RIGHT);
     wlProxyPort.setText(BaseMessages.getString(PKG, "HTTPDialog.ProxyPort.Label"));
     PropsUi.setLook(wlProxyPort);
@@ -477,7 +445,7 @@ public class HttpDialog extends BaseTransformDialog {
   }
 
   private Group setupProxyGroup(Composite wGeneralComp) {
-    Group gProxy = new Group(wGeneralComp, SWT.SHADOW_ETCHED_IN);
+    Group gProxy = new Group(wGeneralComp, SWT.SHADOW_NONE);
     gProxy.setText(BaseMessages.getString(PKG, "HTTPDialog.ProxyGroup.Label"));
     FormLayout proxyLayout = new FormLayout();
     proxyLayout.marginWidth = 3;
@@ -534,7 +502,7 @@ public class HttpDialog extends BaseTransformDialog {
   }
 
   private Group setupHttpAuthGroup(Composite wGeneralComp) {
-    Group gHttpAuth = new Group(wGeneralComp, SWT.SHADOW_ETCHED_IN);
+    Group gHttpAuth = new Group(wGeneralComp, SWT.SHADOW_NONE);
     gHttpAuth.setText(BaseMessages.getString(PKG, "HTTPDialog.HttpAuthGroup.Label"));
     FormLayout httpAuthLayout = new FormLayout();
     httpAuthLayout.marginWidth = 3;
@@ -634,7 +602,7 @@ public class HttpDialog extends BaseTransformDialog {
   }
 
   private Group setupOutputFieldGroup(Composite wGeneralComp) {
-    Group gOutputFields = new Group(wGeneralComp, SWT.SHADOW_ETCHED_IN);
+    Group gOutputFields = new Group(wGeneralComp, SWT.SHADOW_NONE);
     gOutputFields.setText(BaseMessages.getString(PKG, "HTTPDialog.OutputFieldsGroup.Label"));
     FormLayout outputFieldsLayout = new FormLayout();
     outputFieldsLayout.marginWidth = 3;
@@ -714,7 +682,7 @@ public class HttpDialog extends BaseTransformDialog {
     wConnectionTimeOut.setLayoutData(fdConnectionTimeOut);
   }
 
-  private Control setupEncodingLine(ModifyListener lsMod, Control lastControl, Group gSettings) {
+  private void setupEncodingLine(ModifyListener lsMod, Control lastControl, Group gSettings) {
     // Encoding
     //
     int margin = PropsUi.getMargin();
@@ -751,8 +719,6 @@ public class HttpDialog extends BaseTransformDialog {
             busy.dispose();
           }
         });
-    lastControl = wEncoding;
-    return lastControl;
   }
 
   private Control setupUrlFieldNameLine(
@@ -864,8 +830,7 @@ public class HttpDialog extends BaseTransformDialog {
     return lastControl;
   }
 
-  private Control setupUrlLine(
-      ModifyListener lsMod, Control transformNameControl, Group gSettings) {
+  private Control setupUrlLine(ModifyListener lsMod, Group gSettings) {
     // The URL to use
     //
     int margin = PropsUi.getMargin();
@@ -876,7 +841,7 @@ public class HttpDialog extends BaseTransformDialog {
     FormData fdlUrl = new FormData();
     fdlUrl.left = new FormAttachment(0, 0);
     fdlUrl.right = new FormAttachment(middle, -margin);
-    fdlUrl.top = new FormAttachment(transformNameControl, margin);
+    fdlUrl.top = new FormAttachment(0, margin);
     wlUrl.setLayoutData(fdlUrl);
 
     wUrl = new TextVar(variables, gSettings, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
@@ -884,15 +849,14 @@ public class HttpDialog extends BaseTransformDialog {
     wUrl.addModifyListener(lsMod);
     FormData fdUrl = new FormData();
     fdUrl.left = new FormAttachment(middle, 0);
-    fdUrl.top = new FormAttachment(transformNameControl, margin);
+    fdUrl.top = new FormAttachment(0, margin);
     fdUrl.right = new FormAttachment(100, 0);
     wUrl.setLayoutData(fdUrl);
-    transformNameControl = wUrl;
-    return transformNameControl;
+    return wUrl;
   }
 
   private Group setupSettingGroup(Composite wGeneralComp) {
-    Group gSettings = new Group(wGeneralComp, SWT.SHADOW_ETCHED_IN);
+    Group gSettings = new Group(wGeneralComp, SWT.SHADOW_NONE);
     gSettings.setText(BaseMessages.getString(PKG, "HTTPDialog.SettingsGroup.Label"));
     FormLayout settingsLayout = new FormLayout();
     settingsLayout.marginWidth = 3;
@@ -900,42 +864,6 @@ public class HttpDialog extends BaseTransformDialog {
     gSettings.setLayout(settingsLayout);
     PropsUi.setLook(gSettings);
     return gSettings;
-  }
-
-  private Control setupTransformNameField(ModifyListener lsMod) {
-    // TransformName line
-    //
-    int margin = PropsUi.getMargin();
-    int middle = props.getMiddlePct();
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "HTTPDialog.TransformName.Label"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
-    return wTransformName;
-  }
-
-  private void setupButtons() {
-    // THE BUTTONS
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wCancel}, PropsUi.getMargin(), null);
   }
 
   private void setEncodings() {
@@ -950,7 +878,7 @@ public class HttpDialog extends BaseTransformDialog {
       }
 
       // Now select the default!
-      String defEncoding = Const.getEnvironmentVariable("file.encoding", "UTF-8");
+      String defEncoding = Const.getEnvironmentVariable("file.encoding", Const.UTF_8);
       int idx = Const.indexOfString(defEncoding, wEncoding.getItems());
       if (idx >= 0) {
         wEncoding.select(idx);
@@ -962,8 +890,8 @@ public class HttpDialog extends BaseTransformDialog {
     // Something was changed in the row.
     //
     String[] fieldNames = ConstUi.sortFieldNames(inputFields);
-    colinf[0].setComboValues(fieldNames);
-    colinfHeaders[0].setComboValues(fieldNames);
+    argumentColumns[0].setComboValues(fieldNames);
+    headerColumns[0].setComboValues(fieldNames);
   }
 
   private void activeUrlInfield() {
@@ -979,24 +907,18 @@ public class HttpDialog extends BaseTransformDialog {
       logDebug(BaseMessages.getString(PKG, "HTTPDialog.Log.GettingKeyInfo"));
     }
 
-    if (input.getArgumentField() != null) {
-      for (int i = 0; i < input.getArgumentField().length; i++) {
-        TableItem item = wFields.table.getItem(i);
-        item.setText(1, Const.NVL(input.getArgumentField()[i], ""));
-        item.setText(2, Const.NVL(input.getArgumentParameter()[i], ""));
-      }
+    for (int i = 0; i < input.getLookupParameters().getQueryParameters().size(); i++) {
+      HttpMeta.QueryParameter param = input.getLookupParameters().getQueryParameters().get(i);
+      TableItem item = wFields.table.getItem(i);
+      item.setText(1, Const.NVL(param.getField(), ""));
+      item.setText(2, Const.NVL(param.getParameter(), ""));
     }
 
-    if (input.getHeaderField() != null) {
-      for (int i = 0; i < input.getHeaderField().length; i++) {
-        TableItem item = wHeaders.table.getItem(i);
-        if (input.getHeaderField()[i] != null) {
-          item.setText(1, input.getHeaderField()[i]);
-        }
-        if (input.getHeaderParameter()[i] != null) {
-          item.setText(2, input.getHeaderParameter()[i]);
-        }
-      }
+    for (int i = 0; i < input.getLookupParameters().getHeaders().size(); i++) {
+      HttpMeta.HeaderParameter param = input.getLookupParameters().getHeaders().get(i);
+      TableItem item = wHeaders.table.getItem(i);
+      item.setText(1, Const.NVL(param.getField(), ""));
+      item.setText(2, Const.NVL(param.getParameter(), ""));
     }
     wSocketTimeOut.setText(Const.NVL(input.getSocketTimeout(), ""));
     wConnectionTimeOut.setText(Const.NVL(input.getConnectionTimeout(), ""));
@@ -1008,36 +930,19 @@ public class HttpDialog extends BaseTransformDialog {
     wUrlField.setText(Const.NVL(input.getUrlField(), ""));
     wEncoding.setText(Const.NVL(input.getEncoding(), ""));
 
-    wResult.setText(Const.NVL(input.getFieldName(), ""));
-    if (input.getHttpLogin() != null) {
-      wHttpLogin.setText(input.getHttpLogin());
-    }
-    if (input.getHttpPassword() != null) {
-      wHttpPassword.setText(input.getHttpPassword());
-    }
-    if (input.getProxyHost() != null) {
-      wProxyHost.setText(input.getProxyHost());
-    }
-    if (input.getProxyPort() != null) {
-      wProxyPort.setText(input.getProxyPort());
-    }
-    if (input.getResultCodeFieldName() != null) {
-      wResultCode.setText(input.getResultCodeFieldName());
-    }
-    if (input.getResponseTimeFieldName() != null) {
-      wResponseTime.setText(input.getResponseTimeFieldName());
-    }
-    if (input.getResponseHeaderFieldName() != null) {
-      wResponseHeader.setText(input.getResponseHeaderFieldName());
-    }
+    wHttpLogin.setText(Const.NVL(input.getHttpLogin(), ""));
+    wHttpPassword.setText(Const.NVL(input.getHttpPassword(), ""));
+    wProxyHost.setText(Const.NVL(input.getProxyHost(), ""));
+    wProxyPort.setText(Const.NVL(input.getProxyPort(), ""));
+    wResult.setText(Const.NVL(input.getResultFields().getFieldName(), ""));
+    wResultCode.setText(Const.NVL(input.getResultFields().getResultCodeFieldName(), ""));
+    wResponseTime.setText(Const.NVL(input.getResultFields().getResponseTimeFieldName(), ""));
+    wResponseHeader.setText(Const.NVL(input.getResultFields().getResponseHeaderFieldName(), ""));
 
     wFields.setRowNums();
     wFields.optWidth(true);
     wHeaders.setRowNums();
     wHeaders.optWidth(true);
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   private void cancel() {
@@ -1051,51 +956,48 @@ public class HttpDialog extends BaseTransformDialog {
       return;
     }
 
-    int nrargs = wFields.nrNonEmpty();
-    int nrheaders = wHeaders.nrNonEmpty();
+    getInfo(input);
 
-    input.allocate(nrargs, nrheaders);
+    transformName = wTransformName.getText(); // return value
 
-    if (isDebug()) {
-      logDebug(
-          BaseMessages.getString(PKG, "HTTPDialog.Log.FoundArguments", String.valueOf(nrargs)));
-    }
-    for (int i = 0; i < nrargs; i++) {
-      TableItem item = wFields.getNonEmpty(i);
-      input.getArgumentField()[i] = item.getText(1);
-      input.getArgumentParameter()[i] = item.getText(2);
+    dispose();
+  }
+
+  private void getInfo(HttpMeta input) {
+
+    input.getLookupParameters().getQueryParameters().clear();
+    for (TableItem item : wFields.getNonEmptyItems()) {
+      String field = item.getText(1);
+      String parameter = item.getText(2);
+      input
+          .getLookupParameters()
+          .getQueryParameters()
+          .add(new HttpMeta.QueryParameter(field, parameter));
     }
 
-    if (log.isDebug()) {
-      logDebug(
-          BaseMessages.getString(PKG, "HTTPDialog.Log.FoundHeaders", String.valueOf(nrheaders)));
-    }
-    for (int i = 0; i < nrheaders; i++) {
-      TableItem item = wHeaders.getNonEmpty(i);
-      input.getHeaderField()[i] = item.getText(1);
-      input.getHeaderParameter()[i] = item.getText(2);
+    input.getLookupParameters().getHeaders().clear();
+    for (TableItem item : wHeaders.getNonEmptyItems()) {
+      String field = item.getText(1);
+      String parameter = item.getText(2);
+      input.getLookupParameters().getHeaders().add(new HttpMeta.HeaderParameter(field, parameter));
     }
 
     input.setUrl(wUrl.getText());
     input.setUrlField(wUrlField.getText());
     input.setUrlInField(wUrlInField.getSelection());
     input.setIgnoreSsl(wIgnoreSsl.getSelection());
-    input.setFieldName(wResult.getText());
     input.setEncoding(wEncoding.getText());
     input.setHttpLogin(wHttpLogin.getText());
     input.setHttpPassword(wHttpPassword.getText());
     input.setProxyHost(wProxyHost.getText());
     input.setProxyPort(wProxyPort.getText());
-    input.setResultCodeFieldName(wResultCode.getText());
-    input.setResponseTimeFieldName(wResponseTime.getText());
-    input.setResponseHeaderFieldName(wResponseHeader.getText());
+    input.getResultFields().setFieldName(wResult.getText());
+    input.getResultFields().setResultCodeFieldName(wResultCode.getText());
+    input.getResultFields().setResponseTimeFieldName(wResponseTime.getText());
+    input.getResultFields().setResponseHeaderFieldName(wResponseHeader.getText());
     input.setSocketTimeout(wSocketTimeOut.getText());
     input.setConnectionTimeout(wConnectionTimeOut.getText());
     input.setCloseIdleConnectionsTime(wCloseIdleConnectionsTime.getText());
-
-    transformName = wTransformName.getText(); // return value
-
-    dispose();
   }
 
   private void get() {

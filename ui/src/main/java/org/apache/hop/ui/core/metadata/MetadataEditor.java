@@ -21,9 +21,10 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.Objects;
 import lombok.Getter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.extension.ExtensionPointHandler;
 import org.apache.hop.core.extension.HopExtensionPoint;
 import org.apache.hop.core.plugins.IPlugin;
@@ -57,7 +58,7 @@ public abstract class MetadataEditor<T extends IHopMetadata> extends MetadataFil
   private static final Class<?> PKG = MetadataEditorDialog.class;
 
   @Getter protected HopGui hopGui;
-  protected MetadataManager<T> manager;
+  @Getter protected MetadataManager<T> manager;
   protected T metadata;
 
   protected String title;
@@ -201,9 +202,18 @@ public abstract class MetadataEditor<T extends IHopMetadata> extends MetadataFil
       try {
         hopGui.getEventsHandler().fire(HopGuiEvents.MetadataChanged.name());
       } catch (HopException e) {
-        throw new RuntimeException(e);
+        throw new HopRuntimeException(e);
       }
     }
+  }
+
+  /**
+   * Called when the metadata modal dialog or metadata perspective tab becomes active again, so
+   * editors can reload metadata-backed combo items (e.g. execution information locations) that may
+   * have changed while the window was in the background.
+   */
+  public void refreshOnDialogActivate() {
+    // default: no-op
   }
 
   /** Inline usage: copy information from the metadata onto the various widgets */
@@ -317,6 +327,10 @@ public abstract class MetadataEditor<T extends IHopMetadata> extends MetadataFil
       if (serializer.exists(originalName)) {
         serializer.delete(originalName);
       }
+      // Run global replace in pipelines/workflows if supported (same logic as rename from tree)
+      String objectKey = manager.getManagedClass().getAnnotation(HopMetadata.class).key();
+      MetadataPerspective.getInstance()
+          .performGlobalReplaceIfSupported(objectKey, originalName, name);
       this.originalName = metadata.getName();
     }
 

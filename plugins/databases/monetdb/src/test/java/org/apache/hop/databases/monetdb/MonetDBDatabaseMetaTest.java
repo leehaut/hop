@@ -41,6 +41,7 @@ class MonetDBDatabaseMetaTest {
   void setupBefore() {
     nativeMeta = new MonetDBDatabaseMeta();
     nativeMeta.setAccessType(DatabaseMeta.TYPE_ACCESS_NATIVE);
+    nativeMeta.addDefaultOptions();
   }
 
   @Test
@@ -268,7 +269,7 @@ class MonetDBDatabaseMetaTest {
             false,
             false)); // should end up with (100) if "safeMode = true"
 
-    MonetDBDatabaseMeta.safeModeLocal.set(Boolean.valueOf(true));
+    MonetDBDatabaseMeta.safeModeLocal.set(Boolean.TRUE);
     assertEquals(
         "VARCHAR(100)",
         nativeMeta.getFieldDefinition(

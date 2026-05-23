@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
-import org.apache.commons.lang.builder.EqualsBuilder;
+import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.hop.core.HopEnvironment;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.plugins.PluginRegistry;
@@ -65,7 +65,7 @@ class ExecSqlMetaTest implements IInitializer<ITransformMeta> {
             "arguments");
 
     Map<String, String> getterMap =
-        new HashMap<String, String>() {
+        new HashMap<>() {
           {
             put("connection", "getConnection");
             put("sql", "getSql");
@@ -82,7 +82,7 @@ class ExecSqlMetaTest implements IInitializer<ITransformMeta> {
           }
         };
     Map<String, String> setterMap =
-        new HashMap<String, String>() {
+        new HashMap<>() {
           {
             put("connection", "setConnection");
             put("sql", "setSql");
@@ -121,12 +121,12 @@ class ExecSqlMetaTest implements IInitializer<ITransformMeta> {
             validatorFactory,
             ExecSqlArgumentItem.class,
             Arrays.asList("name"),
-            new HashMap<String, String>() {
+            new HashMap<>() {
               {
                 put("name", "getName");
               }
             },
-            new HashMap<String, String>() {
+            new HashMap<>() {
               {
                 put("name", "setName");
               }

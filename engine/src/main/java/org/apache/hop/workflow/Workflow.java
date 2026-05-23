@@ -34,6 +34,7 @@ import org.apache.commons.vfs2.FileName;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.HopEnvironment;
+import org.apache.hop.core.HopVersionProvider;
 import org.apache.hop.core.IExecutor;
 import org.apache.hop.core.IExtensionData;
 import org.apache.hop.core.Result;
@@ -679,18 +680,6 @@ public abstract class Workflow extends Variables
       return res;
     }
 
-    // If previous is not null then that action has finished
-    if (previous != null) {
-      if (log.isBasic()) {
-        log.logBasic(
-            BaseMessages.getString(
-                PKG,
-                "Workflow.Log.FinishedAction",
-                previous.getName(),
-                previousResult.isResult() + ""));
-      }
-    }
-
     // Start this action!
     if (log.isBasic()) {
       log.logBasic(
@@ -706,6 +695,8 @@ public abstract class Workflow extends Variables
     } else {
       prevResult = newResult();
     }
+
+    final String[] actionLogChannelHolder = new String[1];
 
     WorkflowExecutionExtension extension =
         new WorkflowExecutionExtension(this, prevResult, actionMeta, true);
@@ -758,6 +749,7 @@ public abstract class Workflow extends Variables
       final long start = System.currentTimeMillis();
 
       cloneAction.getLogChannel().logDetailed("Starting action");
+      actionLogChannelHolder[0] = cloneAction.getLogChannel().getLogChannelId();
       for (IActionListener actionListener : actionListeners) {
         actionListener.beforeExecution(this, actionMeta, cloneAction);
       }
@@ -770,11 +762,23 @@ public abstract class Workflow extends Variables
 
       // Action execution duration
       newResult.setElapsedTimeMillis(System.currentTimeMillis() - start);
+      newResult.setEntryNr(nr);
 
       activeActions.remove(actionMeta);
 
       for (IActionListener actionListener : actionListeners) {
         actionListener.afterExecution(this, actionMeta, cloneAction, newResult);
+      }
+
+      // Log action as finished as soon as its body has completed (action can no longer fail after
+      // this point)
+      if (log.isBasic()) {
+        log.logBasic(
+            BaseMessages.getString(
+                PKG,
+                "Workflow.Log.FinishedAction",
+                actionMeta.getName(),
+                newResult.isResult() + ""));
       }
 
       Thread.currentThread().setContextClassLoader(cl);
@@ -789,6 +793,14 @@ public abstract class Workflow extends Variables
 
       // Save this result as well...
       //
+      long actionBytesRead = 0;
+      long actionBytesWritten = 0;
+      if (Const.toBoolean(getVariable(Const.HOP_METRIC_DATA_VOLUME, "N"))) {
+        actionBytesRead = newResult.getBytesReadThisAction();
+        actionBytesWritten = newResult.getBytesWrittenThisAction();
+        newResult.setBytesReadThisAction(0);
+        newResult.setBytesWrittenThisAction(0);
+      }
       ActionResult jerAfter =
           new ActionResult(
               newResult,
@@ -796,7 +808,9 @@ public abstract class Workflow extends Variables
               BaseMessages.getString(PKG, CONST_ACTION_FINISHED),
               null,
               actionMeta.getName(),
-              resolve(actionMeta.getAction().getFilename()));
+              resolve(actionMeta.getAction().getFilename()),
+              actionBytesRead,
+              actionBytesWritten);
       workflowTracker.addWorkflowTracker(new WorkflowTracker(workflowMeta, jerAfter));
       synchronized (actionResults) {
         actionResults.add(jerAfter);
@@ -814,6 +828,8 @@ public abstract class Workflow extends Variables
 
     extension =
         new WorkflowExecutionExtension(this, prevResult, actionMeta, extension.executeAction);
+    extension.actionExecutionResult = newResult;
+    extension.actionLogChannelId = actionLogChannelHolder[0];
     ExtensionPointHandler.callExtensionPoint(
         log, this, HopExtensionPoint.WorkflowAfterActionExecution.id, extension);
 
@@ -859,10 +875,8 @@ public abstract class Workflow extends Variables
           || (actionMeta.isEvaluation() && (hopMeta.isEvaluation() == newResult.isResult()))) {
 
         // If the next action is a join, only execute once
-        if (nextAction.isJoin()) {
-          if (activeActions.contains(nextAction)) {
-            continue;
-          }
+        if (nextAction.isJoin() && activeActions.contains(nextAction)) {
+          continue;
         }
 
         // Pass along the previous result, perhaps the next workflow can use it...
@@ -953,10 +967,10 @@ public abstract class Workflow extends Variables
       }
     }
 
-    // Perhaps we don't have next transforms??
-    // In this case, return the previous result.
+    // Perhaps we don't have next actions??
+    // In this case, return the result of the action we just ran.
     if (res == null) {
-      res = prevResult;
+      res = newResult;
     }
 
     // See if there were any errors in the parallel execution
@@ -987,13 +1001,12 @@ public abstract class Workflow extends Variables
     if (res.getNrErrors() > 0) {
       res.setResult(false);
     }
-    // Log the final action that has finished
-    if (res.getEntryNr() == nr) {
-      if (log.isBasic()) {
-        log.logBasic(
-            BaseMessages.getString(
-                PKG, "Workflow.Log.FinishedAction", actionMeta.getName(), res.isResult() + ""));
-      }
+
+    // Toolbar / API stop sets the engine's stopped flag; the last completed action can still
+    // return a successful Result with stopped=false. Propagate stop into Result so consumers
+    // (e.g. transactional workflow commit/rollback) behave correctly.
+    if (isStopped() && res != null) {
+      res.setStopped(true);
     }
 
     return res;
@@ -1223,6 +1236,9 @@ public abstract class Workflow extends Variables
     } else {
       this.setVariable(Const.INTERNAL_VARIABLE_WORKFLOW_PARENT_ID, null);
     }
+
+    HopVersionProvider versionProvider = new HopVersionProvider();
+    setVariable(Const.HOP_VERSION, versionProvider.getVersion()[0]);
   }
 
   /**

@@ -32,9 +32,10 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopPluginException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.exception.HopValueException;
 import org.apache.hop.core.exception.HopXmlException;
 import org.apache.hop.core.row.IRowMeta;
@@ -55,23 +56,15 @@ import org.w3c.dom.Node;
  *
  * <p>A condition can either be
  *
- * <p>
- *
  * <p>1) Atomic (a=10, B='aa')
  *
  * <p>2) Composite ( NOT Condition1 AND Condition2 OR Condition3 )
- *
- * <p>
  *
  * <p>If the nr of atomic conditions is 0, the condition is atomic, otherwise it's Composit.
  *
  * <p>Precedence doesn't exist. Conditions are evaluated in the order in which they are found.
  *
  * <p>A condition can be negated or not.
- *
- * <p>
- *
- * <p>
  */
 @Getter
 @Setter
@@ -162,6 +155,11 @@ public class Condition implements Cloneable {
   private int rightFieldIndex;
   private String rightString;
 
+  // Cache for constant right values (only used when rightFieldIndex == -2)
+  private IValueMeta cachedFieldMeta2;
+  private Object cachedField2;
+  private boolean rightValueCached;
+
   /**
    * Temporary variable, no need to persist this one. Contains the sorted array of strings in an IN
    * LIST condition
@@ -177,6 +175,7 @@ public class Condition implements Cloneable {
 
     leftFieldIndex = -2;
     rightFieldIndex = -2;
+    rightValueCached = false;
   }
 
   public Condition(String valueName, Function function, String valueName2, ValueMetaAndData exact)
@@ -295,7 +294,7 @@ public class Condition implements Cloneable {
 
   /** A condition is empty when the condition is atomic and no left field is specified. */
   public boolean isEmpty() {
-    return (isAtomic() && leftValueName == null);
+    return (isAtomic() && (leftValueName == null || leftValueName.isEmpty()));
   }
 
   /**
@@ -305,6 +304,9 @@ public class Condition implements Cloneable {
   public void clearFieldPositions() {
     leftFieldIndex = -2;
     rightFieldIndex = -2;
+    rightValueCached = false;
+    cachedFieldMeta2 = null;
+    cachedField2 = null;
   }
 
   /**
@@ -356,15 +358,25 @@ public class Condition implements Cloneable {
 
         // Get field index: right value
         //
-        IValueMeta fieldMeta2 = rightValue != null ? rightValue.createValueMeta() : null;
-        // Old metadata contains a right value block without name, type and so on.  This means: no
-        // value
-        // Removed the name check, old fixed values do not contain a name element causing regression
-        Object field2 =
-            rightValue != null && rightFieldIndex == -2 ? rightValue.createValueData() : null;
-        if (field2 == null && rightFieldIndex >= 0) {
+        IValueMeta fieldMeta2;
+        Object field2;
+
+        if (rightFieldIndex >= 0) {
+          // Right value is a field from the row - get it dynamically
           fieldMeta2 = rowMeta.getValueMeta(rightFieldIndex);
           field2 = r[rightFieldIndex];
+        } else if (rightValue != null) {
+          // Right value is a constant - cache it for performance
+          if (!rightValueCached) {
+            cachedFieldMeta2 = rightValue.createValueMeta();
+            cachedField2 = rightValue.createValueData();
+            rightValueCached = true;
+          }
+          fieldMeta2 = cachedFieldMeta2;
+          field2 = cachedField2;
+        } else {
+          fieldMeta2 = null;
+          field2 = null;
         }
 
         // Evaluate
@@ -522,7 +534,7 @@ public class Condition implements Cloneable {
         }
       }
     } catch (Exception e) {
-      throw new RuntimeException("Unexpected error evaluation condition [" + this + "]", e);
+      throw new HopRuntimeException("Unexpected error evaluation condition [" + this + "]", e);
     }
 
     return evaluation;

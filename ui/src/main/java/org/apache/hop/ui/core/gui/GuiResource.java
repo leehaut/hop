@@ -80,6 +80,7 @@ public class GuiResource {
   @Getter private Color colorTab;
   @Getter private Color colorRed;
   @Getter private Color colorDarkRed;
+  @Getter private Color colorLightRed;
   @Getter private Color colorSuccessGreen;
   @Getter private Color colorBlueCustomGrid;
   @Getter private Color colorGreen;
@@ -106,6 +107,14 @@ public class GuiResource {
   @Getter private Color colorHopDefault;
   @Getter private Color colorHopTrue;
   @Getter private Color colorDeprecated;
+
+  /** Muted variants for use on grayed (non-openable) explorer items; light and dark mode aware. */
+  @Getter private Color colorDarkGreenMuted;
+
+  @Getter private Color colorLightBlueMuted;
+  @Getter private Color colorRedMuted;
+  @Getter private Color colorDarkGrayMuted;
+  @Getter private Color colorBlackMuted;
 
   // Fonts
   //
@@ -135,8 +144,10 @@ public class GuiResource {
   private SwtUniversalImage imageDeprecated;
   private SwtUniversalImage imageVariable;
   private SwtUniversalImage imagePipeline;
+  private SwtUniversalImage imagePipelineDisabled;
   private SwtUniversalImage imagePartitionSchema;
   private SwtUniversalImage imageWorkflow;
+  private SwtUniversalImage imageWorkflowDisabled;
   private SwtUniversalImage imageArrowDefault;
   private SwtUniversalImage imageArrowTrue;
   private SwtUniversalImage imageArrowFalse;
@@ -153,6 +164,10 @@ public class GuiResource {
   private SwtUniversalImage imageSuccess;
   private SwtUniversalImage imageError;
   private SwtUniversalImage imageErrorDisabled;
+  private SwtUniversalImage imageRunningIcon;
+  private SwtUniversalImage imageRunningIconDisabled;
+  private SwtUniversalImage imageFinishedIcon;
+  private SwtUniversalImage imageFinishedIconDisabled;
   private SwtUniversalImage imageInfo;
   private SwtUniversalImage imageInfoDisabled;
   private SwtUniversalImage imageWarning;
@@ -196,6 +211,7 @@ public class GuiResource {
   @Getter private Image imageEmpty;
   @Getter private Image imageExpandAll;
   @Getter private Image imageFunction;
+  @Getter private Image imageKeyboard;
   @Getter private Image imageHelp;
   @Getter private Image imageHide;
   @Getter private Image imageHideResults;
@@ -239,9 +255,11 @@ public class GuiResource {
   @Getter private Image imageStop;
   @Getter private Image imageSynonym;
   @Getter private Image imageTable;
+  @Getter private Image imageTerminal;
   @Getter private Image imageUndo;
   @Getter private Image imageUnselectAll;
   @Getter private Image imageUp;
+  @Getter private Image imageUpDisabled;
   @Getter private Image imageUser;
   @Getter private Image imageView;
 
@@ -357,6 +375,7 @@ public class GuiResource {
     colorSuccessGreen = new Color(display, props.contrastColor(0, 139, 0));
     colorRed = new Color(display, props.contrastColor(255, 0, 0));
     colorDarkRed = new Color(display, props.contrastColor(192, 57, 43));
+    colorLightRed = new Color(display, props.contrastColor(255, 200, 200));
     colorGreen = new Color(display, props.contrastColor(0, 255, 0));
     colorDarkGreen = new Color(display, props.contrastColor(16, 172, 132));
     colorBlue = new Color(display, props.contrastColor(0, 0, 255));
@@ -382,6 +401,13 @@ public class GuiResource {
     colorHopDefault = new Color(display, props.contrastColor(61, 99, 128));
     colorHopTrue = new Color(display, props.contrastColor(12, 178, 15));
     colorDeprecated = new Color(display, props.contrastColor(246, 196, 56));
+
+    // Muted variants for grayed (non-openable) explorer items; dark mode variants in PropsUi
+    colorDarkGreenMuted = new Color(display, props.contrastColor(new RGB(85, 115, 85)));
+    colorLightBlueMuted = new Color(display, props.contrastColor(new RGB(75, 95, 165)));
+    colorRedMuted = new Color(display, props.contrastColor(new RGB(130, 85, 85)));
+    colorDarkGrayMuted = new Color(display, props.contrastColor(new RGB(105, 105, 105)));
+    colorBlackMuted = new Color(display, props.contrastColor(new RGB(90, 90, 90)));
 
     // Load all images from files...
     loadFonts();
@@ -419,12 +445,18 @@ public class GuiResource {
     imageMissing.dispose();
     imageVariable.dispose();
     imagePipeline.dispose();
+    imagePipelineDisabled.dispose();
     imagePartitionSchema.dispose();
     imageWorkflow.dispose();
+    imageWorkflowDisabled.dispose();
     imageCopyRows.dispose();
     imageCopyRowsDisabled.dispose();
     imageError.dispose();
     imageErrorDisabled.dispose();
+    imageRunningIcon.dispose();
+    imageRunningIconDisabled.dispose();
+    imageFinishedIcon.dispose();
+    imageFinishedIconDisabled.dispose();
     imageInfo.dispose();
     imageInfoDisabled.dispose();
     imageWarning.dispose();
@@ -480,6 +512,7 @@ public class GuiResource {
     disposeImage(imageDown);
     disposeImage(imageDuplicate);
     disposeImage(imageFunction);
+    disposeImage(imageKeyboard);
     disposeImage(imageHelp);
     disposeImage(imageHide);
     disposeImage(imageHideResults);
@@ -523,6 +556,7 @@ public class GuiResource {
     disposeImage(imageUndo);
     disposeImage(imageUnselectAll);
     disposeImage(imageUp);
+    disposeImage(imageUpDisabled);
     disposeImage(imageUser);
     disposeImage(imageView);
 
@@ -638,13 +672,13 @@ public class GuiResource {
     fontLarge = new ManagedFont(display, largeFontData);
 
     // Create a tiny version of the graph font
-    int tinyFontSize = mediumFontSize - 2;
+    int tinyFontSize = (int) (graphFontSize * 0.50f);
     FontData tinyFontData =
         new FontData(graphFontData.getName(), tinyFontSize, graphFontData.getStyle());
     fontTiny = new ManagedFont(display, tinyFontData);
 
     // Create a small version of the graph font
-    int smallFontSize = mediumFontSize - 1;
+    int smallFontSize = (int) (graphFontSize * 0.75f);
     FontData smallFontData =
         new FontData(graphFontData.getName(), smallFontSize, graphFontData.getStyle());
     fontSmall = new ManagedFont(display, smallFontData);
@@ -710,6 +744,8 @@ public class GuiResource {
     imageExpandAll = loadAsResource(display, "ui/images/expand-all.svg", ConstUi.SMALL_ICON_SIZE);
     imageLabel = loadAsResource(display, "ui/images/label.svg", ConstUi.SMALL_ICON_SIZE);
     imageFunction = loadAsResource(display, "ui/images/function.svg", ConstUi.SMALL_ICON_SIZE);
+    imageKeyboard = loadAsResource(display, "ui/images/keyboard.svg", ConstUi.SMALL_ICON_SIZE);
+
     imageNavigateBack =
         loadAsResource(display, "ui/images/navigate-back.svg", ConstUi.SMALL_ICON_SIZE);
     imageNavigateForward =
@@ -756,6 +792,7 @@ public class GuiResource {
         loadAsResource(display, "ui/images/show-selected.svg", ConstUi.SMALL_ICON_SIZE);
     imageSynonym = loadAsResource(display, "ui/images/view.svg", ConstUi.SMALL_ICON_SIZE);
     imageTable = loadAsResource(display, "ui/images/table.svg", ConstUi.SMALL_ICON_SIZE);
+    imageTerminal = loadAsResource(display, "ui/images/terminal.svg", ConstUi.SMALL_ICON_SIZE);
     imageUser = loadAsResource(display, "ui/images/user.svg", ConstUi.SMALL_ICON_SIZE);
     imageClose = loadAsResource(display, "ui/images/close.svg", ConstUi.SMALL_ICON_SIZE);
     imageDelete = loadAsResource(display, "ui/images/delete.svg", ConstUi.SMALL_ICON_SIZE);
@@ -765,6 +802,7 @@ public class GuiResource {
     imageView = loadAsResource(display, "ui/images/view.svg", ConstUi.SMALL_ICON_SIZE);
     imageDown = loadAsResource(display, "ui/images/down.svg", ConstUi.SMALL_ICON_SIZE);
     imageUp = loadAsResource(display, "ui/images/up.svg", ConstUi.SMALL_ICON_SIZE);
+    imageUpDisabled = loadAsResource(display, "ui/images/up-disabled.svg", ConstUi.SMALL_ICON_SIZE);
     imageLocation = loadAsResource(display, "ui/images/location.svg", ConstUi.SMALL_ICON_SIZE);
     imageOptions = loadAsResource(display, "ui/images/options.svg", ConstUi.SMALL_ICON_SIZE);
     imageUndo = loadAsResource(display, "ui/images/undo.svg", ConstUi.SMALL_ICON_SIZE);
@@ -778,7 +816,11 @@ public class GuiResource {
     //
     imageLogo = SwtSvgImageUtil.getImageAsResource(display, "ui/images/logo_icon.svg");
     imagePipeline = SwtSvgImageUtil.getImageAsResource(display, "ui/images/pipeline.svg");
+    imagePipelineDisabled =
+        SwtSvgImageUtil.getImageAsResource(display, "ui/images/pipeline-disabled.svg");
     imageWorkflow = SwtSvgImageUtil.getImageAsResource(display, "ui/images/workflow.svg");
+    imageWorkflowDisabled =
+        SwtSvgImageUtil.getImageAsResource(display, "ui/images/workflow-disabled.svg");
     imageServer = SwtSvgImageUtil.getImageAsResource(display, "ui/images/server.svg");
     imagePreview = SwtSvgImageUtil.getImageAsResource(display, "ui/images/preview.svg");
     imageTrue = SwtSvgImageUtil.getImageAsResource(display, "ui/images/true.svg");
@@ -805,6 +847,12 @@ public class GuiResource {
     imageError = SwtSvgImageUtil.getImageAsResource(display, "ui/images/error.svg");
     imageErrorDisabled =
         SwtSvgImageUtil.getImageAsResource(display, "ui/images/error-disabled.svg");
+    imageRunningIcon = SwtSvgImageUtil.getImageAsResource(display, "ui/images/running-icon.svg");
+    imageRunningIconDisabled =
+        SwtSvgImageUtil.getImageAsResource(display, "ui/images/running-icon-disabled.svg");
+    imageFinishedIcon = SwtSvgImageUtil.getImageAsResource(display, "ui/images/finished-icon.svg");
+    imageFinishedIconDisabled =
+        SwtSvgImageUtil.getImageAsResource(display, "ui/images/finished-icon-disabled.svg");
     imageInfo = SwtSvgImageUtil.getImageAsResource(display, "ui/images/info.svg");
     imageInfoDisabled = SwtSvgImageUtil.getImageAsResource(display, "ui/images/info-disabled.svg");
     imageWarning = SwtSvgImageUtil.getImageAsResource(display, "ui/images/warning.svg");
@@ -1020,13 +1068,6 @@ public class GuiResource {
   }
 
   /**
-   * @return Returns the imagesTransforms.
-   */
-  public Map<String, SwtUniversalImage> getImagesTransforms() {
-    return imagesTransforms;
-  }
-
-  /**
    * Get an image of an action or a missing image if not found.
    *
    * @param pluginId the action plugin id
@@ -1052,13 +1093,6 @@ public class GuiResource {
       return getSwtImageMissing();
     }
     return image;
-  }
-
-  /**
-   * @return Returns the imagesActions.
-   */
-  public Map<String, SwtUniversalImage> getImagesActions() {
-    return imagesActions;
   }
 
   /**
@@ -1159,6 +1193,11 @@ public class GuiResource {
         imagePipeline, display, ConstUi.SMALL_ICON_SIZE, ConstUi.SMALL_ICON_SIZE);
   }
 
+  public Image getImagePipelineDisabled() {
+    return getZoomedImaged(
+        imagePipelineDisabled, display, ConstUi.SMALL_ICON_SIZE, ConstUi.SMALL_ICON_SIZE);
+  }
+
   @Deprecated
   public Image getImageClosePanel() {
     return imageClose;
@@ -1178,6 +1217,11 @@ public class GuiResource {
   public Image getImageWorkflow() {
     return getZoomedImaged(
         imageWorkflow, display, ConstUi.SMALL_ICON_SIZE, ConstUi.SMALL_ICON_SIZE);
+  }
+
+  public Image getImageWorkflowDisabled() {
+    return getZoomedImaged(
+        imageWorkflowDisabled, display, ConstUi.SMALL_ICON_SIZE, ConstUi.SMALL_ICON_SIZE);
   }
 
   /**
@@ -1210,6 +1254,21 @@ public class GuiResource {
     } else {
       return getZoomedImaged(imageLogo, display, ConstUi.SMALL_ICON_SIZE, ConstUi.SMALL_ICON_SIZE);
     }
+  }
+
+  /**
+   * Multi-resolution icon set for {@link org.eclipse.swt.widgets.Shell#setImages(Image[])}. Giving
+   * Windows the standard sizes (16/32/48/64/128/256) lets it pick a precise match for each slot
+   * (title bar, taskbar, alt-tab, jump-list previews) instead of scaling a single 16x16 up to 64x64
+   * — which is what made the taskbar icon appear correctly only intermittently.
+   */
+  public Image[] getImagesHopUiTaskbar() {
+    int[] sizes = {16, 32, 48, 64, 128, 256};
+    Image[] images = new Image[sizes.length];
+    for (int i = 0; i < sizes.length; i++) {
+      images[i] = getZoomedImaged(imageLogo, display, sizes[i], sizes[i]);
+    }
+    return images;
   }
 
   public void drawGradient(Display display, GC gc, Rectangle rect, boolean vertical) {
@@ -1268,6 +1327,31 @@ public class GuiResource {
 
   public Image getImageError() {
     return getZoomedImaged(imageError, display, ConstUi.SMALL_ICON_SIZE, ConstUi.SMALL_ICON_SIZE);
+  }
+
+  public Image getImageErrorDisabled() {
+    return getZoomedImaged(
+        imageErrorDisabled, display, ConstUi.SMALL_ICON_SIZE, ConstUi.SMALL_ICON_SIZE);
+  }
+
+  public Image getImageRunningIcon() {
+    return getZoomedImaged(
+        imageRunningIcon, display, ConstUi.SMALL_ICON_SIZE, ConstUi.SMALL_ICON_SIZE);
+  }
+
+  public Image getImageRunningIconDisabled() {
+    return getZoomedImaged(
+        imageRunningIconDisabled, display, ConstUi.SMALL_ICON_SIZE, ConstUi.SMALL_ICON_SIZE);
+  }
+
+  public Image getImageFinishedIcon() {
+    return getZoomedImaged(
+        imageFinishedIcon, display, ConstUi.SMALL_ICON_SIZE, ConstUi.SMALL_ICON_SIZE);
+  }
+
+  public Image getImageFinishedIconDisabled() {
+    return getZoomedImaged(
+        imageFinishedIconDisabled, display, ConstUi.SMALL_ICON_SIZE, ConstUi.SMALL_ICON_SIZE);
   }
 
   public SwtUniversalImage getSwtImageError() {
@@ -1486,14 +1570,6 @@ public class GuiResource {
   }
 
   /**
-   * @return The image map used to cache images loaded from certain location using getImage(String
-   *     location);
-   */
-  public Map<String, Image> getImageMap() {
-    return imageMap;
-  }
-
-  /**
    * @return the imageTrue
    */
   public Image getImageTrue() {
@@ -1624,5 +1700,17 @@ public class GuiResource {
 
   public SwtUniversalImage getSwtImageArrowCandidate() {
     return imageArrowCandidate;
+  }
+
+  public Color getWidgetBackGroundColor() {
+    if (PropsUi.getInstance().isDarkMode() && !OsHelper.isWindows()) {
+      return display.getSystemColor(SWT.COLOR_WIDGET_BACKGROUND);
+    } else if (PropsUi.getInstance().isDarkMode() && OsHelper.isWindows()) {
+      return colorDemoGray;
+    }
+    if (OsHelper.isMac()) {
+      return colorDemoGray;
+    }
+    return colorWhite;
   }
 }

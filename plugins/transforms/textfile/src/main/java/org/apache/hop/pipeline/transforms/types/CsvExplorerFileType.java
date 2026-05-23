@@ -26,7 +26,6 @@ import org.apache.hop.ui.hopgui.file.IHopFileTypeHandler;
 import org.apache.hop.ui.hopgui.file.empty.EmptyHopFileTypeHandler;
 import org.apache.hop.ui.hopgui.perspective.explorer.ExplorerFile;
 import org.apache.hop.ui.hopgui.perspective.explorer.ExplorerPerspective;
-import org.apache.hop.ui.hopgui.perspective.explorer.file.IExplorerFileType;
 import org.apache.hop.ui.hopgui.perspective.explorer.file.capabilities.FileTypeCapabilities;
 import org.apache.hop.ui.hopgui.perspective.explorer.file.types.text.BaseTextExplorerFileType;
 
@@ -35,8 +34,7 @@ import org.apache.hop.ui.hopgui.perspective.explorer.file.types.text.BaseTextExp
     name = "CSV File Type",
     description = "CSV file handling in the explorer perspective",
     image = "textfile.svg")
-public class CsvExplorerFileType extends BaseTextExplorerFileType<TextExplorerFileTypeHandler>
-    implements IExplorerFileType<TextExplorerFileTypeHandler> {
+public class CsvExplorerFileType extends BaseTextExplorerFileType<TextExplorerFileTypeHandler> {
 
   public CsvExplorerFileType() {
     super(
@@ -46,8 +44,11 @@ public class CsvExplorerFileType extends BaseTextExplorerFileType<TextExplorerFi
         new String[] {"CSV files"},
         FileTypeCapabilities.getCapabilities(
             IHopFileType.CAPABILITY_SAVE,
+            IHopFileType.CAPABILITY_SAVE_AS,
             IHopFileType.CAPABILITY_CLOSE,
-            IHopFileType.CAPABILITY_FILE_HISTORY));
+            IHopFileType.CAPABILITY_FILE_HISTORY,
+            IHopFileType.CAPABILITY_COPY,
+            IHopFileType.CAPABILITY_SELECT));
   }
 
   @Override

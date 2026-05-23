@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.CheckResult;
 import org.apache.hop.core.ICheckResult;
 import org.apache.hop.core.annotations.ActionTransformType;
@@ -29,7 +29,6 @@ import org.apache.hop.core.annotations.Transform;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopPluginException;
 import org.apache.hop.core.exception.HopTransformException;
-import org.apache.hop.core.exception.HopXmlException;
 import org.apache.hop.core.file.IHasFilename;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.IValueMeta;
@@ -39,6 +38,7 @@ import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.core.xml.XmlHandler;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.metadata.api.HopMetadataProperty;
+import org.apache.hop.metadata.api.HopMetadataPropertyType;
 import org.apache.hop.metadata.api.IHopMetadataProvider;
 import org.apache.hop.pipeline.ISubPipelineAwareMeta;
 import org.apache.hop.pipeline.PipelineMeta;
@@ -75,7 +75,9 @@ public class PipelineExecutorMeta
   private static final Class<?> PKG = PipelineExecutorMeta.class;
 
   /** The name of the pipeline run configuration with which we want to execute the pipeline. */
-  @HopMetadataProperty(key = "run_configuration")
+  @HopMetadataProperty(
+      key = "run_configuration",
+      hopMetadataPropertyType = HopMetadataPropertyType.PIPELINE_RUN_CONFIG)
   private String runConfigurationName;
 
   /** Flag that indicate that pipeline name is specified in a stream's field */
@@ -232,31 +234,21 @@ public class PipelineExecutorMeta
     super(); // allocate BaseTransformMeta
   }
 
-  /**
-   * @deprecated Added for backwards compatibility for old parameter style
-   * @param transformNode Transform node XML
-   * @param metadataProvider Metadata provider
-   * @throws HopXmlException when unable to parse XML
-   */
+  /** Added for backwards compatibility with older parameter style XML. */
   @Override
-  @Deprecated(since = "2.13")
-  public void loadXml(Node transformNode, IHopMetadataProvider metadataProvider)
-      throws HopXmlException {
-    super.loadXml(transformNode, metadataProvider);
-    try {
-      // Load inherit_all_vars
-      //
-      String value =
-          XmlHandler.getTagValue(
-              XmlHandler.getSubNode(transformNode, "parameters"), "inherit_all_vars");
-      if (value != null) {
-        setInheritingAllVariables("Y".equalsIgnoreCase(value));
-      }
-    } catch (Exception e) {
-      throw new HopXmlException(
-          BaseMessages.getString(
-              PKG, "PipelineExecutorMeta.Exception.ErrorLoadingPipelineExecutorDetailsFromXML"),
-          e);
+  public void convertLegacyXml(Node node) throws HopException {
+    if (node == null) {
+      return;
+    }
+
+    // Load inherit_all_vars from the old nested location under <parameters>
+    Node parametersNode = XmlHandler.getSubNode(node, "parameters");
+    if (parametersNode == null) {
+      return;
+    }
+    String value = XmlHandler.getTagValue(parametersNode, "inherit_all_vars");
+    if (value != null) {
+      setInheritingAllVariables("Y".equalsIgnoreCase(value));
     }
   }
 
@@ -502,15 +494,19 @@ public class PipelineExecutorMeta
     switch (index) {
       case 0:
         setExecutionResultTargetTransformMeta(transform);
+        setExecutionResultTargetTransform(transform.getName());
         break;
       case 1:
         setOutputRowsSourceTransformMeta(transform);
+        setOutputRowsSourceTransform(transform.getName());
         break;
       case 2:
         setResultFilesTargetTransformMeta(transform);
+        setResultFilesTargetTransform(transform.getName());
         break;
       case 3:
         setExecutorsOutputTransformMeta(transform);
+        setExecutorsOutputTransform(transform.getName());
         break;
       default:
         break;
@@ -586,9 +582,13 @@ public class PipelineExecutorMeta
   public boolean cleanAfterHopFromRemove() {
 
     setExecutionResultTargetTransformMeta(null);
+    setExecutionResultTargetTransform(null);
     setOutputRowsSourceTransformMeta(null);
+    setOutputRowsSourceTransform(null);
     setResultFilesTargetTransformMeta(null);
+    setResultFilesTargetTransform(null);
     setExecutorsOutputTransformMeta(null);
+    setExecutorsOutputTransform(null);
     return true;
   }
 
@@ -604,20 +604,29 @@ public class PipelineExecutorMeta
     if (getExecutionResultTargetTransformMeta() != null
         && toTransformName.equals(getExecutionResultTargetTransformMeta().getName())) {
       setExecutionResultTargetTransformMeta(null);
+      setExecutionResultTargetTransform(null);
       hasChanged = true;
     } else if (getOutputRowsSourceTransformMeta() != null
         && toTransformName.equals(getOutputRowsSourceTransformMeta().getName())) {
       setOutputRowsSourceTransformMeta(null);
+      setOutputRowsSourceTransform(null);
       hasChanged = true;
     } else if (getResultFilesTargetTransformMeta() != null
         && toTransformName.equals(getResultFilesTargetTransformMeta().getName())) {
       setResultFilesTargetTransformMeta(null);
+      setResultFilesTargetTransform(null);
       hasChanged = true;
     } else if (getExecutorsOutputTransformMeta() != null
         && toTransformName.equals(getExecutorsOutputTransformMeta().getName())) {
       setExecutorsOutputTransformMeta(null);
+      setExecutorsOutputTransform(null);
       hasChanged = true;
     }
     return hasChanged;
+  }
+
+  @Override
+  public boolean supportsDrillDown() {
+    return true;
   }
 }

@@ -22,7 +22,7 @@ import java.net.InetAddress;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.CheckResult;
 import org.apache.hop.core.ICheckResult;
 import org.apache.hop.core.RowMetaAndData;
@@ -115,7 +115,7 @@ public class Constant extends BaseTransform<ConstantMeta, ConstantData> {
                     data.df.setDecimalFormatSymbols(data.dfs);
                   }
 
-                  rowData[i] = Double.valueOf(data.nf.parse(stringValue).doubleValue());
+                  rowData[i] = data.nf.parse(stringValue).doubleValue();
                 } catch (Exception e) {
                   String message =
                       BaseMessages.getString(
@@ -184,8 +184,7 @@ public class Constant extends BaseTransform<ConstantMeta, ConstantData> {
 
               case IValueMeta.TYPE_BOOLEAN:
                 rowData[i] =
-                    Boolean.valueOf(
-                        "Y".equalsIgnoreCase(stringValue) || "TRUE".equalsIgnoreCase(stringValue));
+                    "Y".equalsIgnoreCase(stringValue) || "TRUE".equalsIgnoreCase(stringValue);
                 break;
 
               case IValueMeta.TYPE_BINARY:
@@ -292,8 +291,7 @@ public class Constant extends BaseTransform<ConstantMeta, ConstantData> {
       if (remarks.isEmpty()) {
         return true;
       } else {
-        for (int i = 0; i < remarks.size(); i++) {
-          ICheckResult cr = remarks.get(i);
+        for (ICheckResult cr : remarks) {
           logError(cr.getText());
         }
       }

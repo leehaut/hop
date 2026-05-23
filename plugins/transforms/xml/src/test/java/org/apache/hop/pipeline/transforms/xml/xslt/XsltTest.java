@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import org.apache.hop.core.HopClientEnvironment;
 import org.apache.hop.core.HopEnvironment;
 import org.apache.hop.core.RowMetaAndData;
 import org.apache.hop.core.exception.HopValueException;
@@ -35,6 +36,7 @@ import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.row.RowMeta;
 import org.apache.hop.core.row.value.ValueMetaString;
+import org.apache.hop.junit.rules.RestoreHopEnvironmentExtension;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineHopMeta;
 import org.apache.hop.pipeline.PipelineMeta;
@@ -45,8 +47,11 @@ import org.apache.hop.pipeline.transform.TransformMeta;
 import org.apache.hop.pipeline.transforms.dummy.DummyMeta;
 import org.apache.hop.pipeline.transforms.injector.InjectorMeta;
 import org.apache.hop.pipeline.transforms.xml.RowTransformCollector;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
+@ExtendWith(RestoreHopEnvironmentExtension.class)
 class XsltTest {
 
   private static final String TEST1_XML =
@@ -63,6 +68,11 @@ class XsltTest {
           + "</xsl:stylesheet>";
 
   private static final String TEST1_FNAME = "template.xsl";
+
+  @BeforeEach
+  public void init() throws Exception {
+    HopClientEnvironment.init();
+  }
 
   /**
    * Write the file to be used as input (as a temporary file).
@@ -93,8 +103,8 @@ class XsltTest {
       new ValueMetaString("XML"), new ValueMetaString("XSL"), new ValueMetaString("filename"),
     };
 
-    for (int i = 0; i < valuesMeta.length; i++) {
-      rm.addValueMeta(valuesMeta[i]);
+    for (IValueMeta iValueMeta : valuesMeta) {
+      rm.addValueMeta(iValueMeta);
     }
 
     return rm;
@@ -120,8 +130,8 @@ class XsltTest {
       new ValueMetaString("filename"), new ValueMetaString("result"),
     };
 
-    for (int i = 0; i < valuesMeta.length; i++) {
-      rm.addValueMeta(valuesMeta[i]);
+    for (IValueMeta iValueMeta : valuesMeta) {
+      rm.addValueMeta(iValueMeta);
     }
 
     return rm;
@@ -331,13 +341,13 @@ class XsltTest {
     fields[2].setGroupSymbol("");
     fields[2].setTrimType(IValueMeta.TRIM_TYPE_NONE);
 
-    xm.setFieldname(xmlFieldname);
-    xm.setResultfieldname(resultFieldname);
-    xm.setXSLField(xslInField);
-    xm.setXSLFileField(xslFileField);
-    xm.setXSLFieldIsAFile(xslFileInField);
+    xm.setFieldName(xmlFieldname);
+    xm.setResultFieldName(resultFieldname);
+    xm.setXslFileFieldUse(xslInField);
+    xm.setXslFileField(xslFileField);
+    xm.setXslFieldIsAFile(xslFileInField);
     xm.setXslFilename(xslFilename);
-    xm.setXSLFactory(xslFactory);
+    xm.setXslFactory(xslFactory);
 
     PipelineHopMeta hi = new PipelineHopMeta(injectorTransform, xsltTransform);
     pipelineMeta.addPipelineHop(hi);

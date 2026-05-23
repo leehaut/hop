@@ -23,6 +23,7 @@ import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
+import org.apache.hop.core.io.CountingOutputStream;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.pipeline.transform.BaseTransformData;
 import org.apache.hop.pipeline.transform.ITransformData;
@@ -61,6 +62,11 @@ public class JsonOutputData extends BaseTransformData implements ITransformData 
   public String realBlocName;
   public int splitnr;
   public Writer writer;
+  public CountingOutputStream countingStream;
+
+  /** VFS path of the file currently open for write (lineage). */
+  public String openedFilename;
+
   public int nrRowsInBloc;
 
   /** */

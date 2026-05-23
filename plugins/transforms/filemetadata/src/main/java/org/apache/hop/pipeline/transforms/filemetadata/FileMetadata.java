@@ -32,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopFileException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.exception.HopTransformException;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.row.RowDataUtil;
@@ -116,7 +117,7 @@ public class FileMetadata extends BaseTransform<FileMetadataMeta, FileMetadataDa
       buildOutputRows();
 
       // log progress if it is time to to so
-      if (checkFeedback(getLinesRead())) {
+      if (checkFeedback(getLinesRead()) && isBasic()) {
         logBasic("LineNr " + getLinesRead());
       }
 
@@ -200,9 +201,9 @@ public class FileMetadata extends BaseTransform<FileMetadataMeta, FileMetadataDa
     ArrayList<Character> delimiterCandidates = new ArrayList<>(4);
     for (FileMetadataMeta.FMCandidate delimiterCandidate : meta.getDelimiterCandidates()) {
       String candidate = resolve(delimiterCandidate.getCandidate());
-      if (candidate.isEmpty()) {
+      if (candidate.isEmpty() && isBasic()) {
         logBasic("Warning: file metadata transform ignores empty delimiter candidate");
-      } else if (candidate.length() > 1) {
+      } else if (candidate.length() > 1 && isBasic()) {
         logBasic(
             "Warning: file metadata transform ignores non-character delimiter candidate: "
                 + candidate);
@@ -214,9 +215,9 @@ public class FileMetadata extends BaseTransform<FileMetadataMeta, FileMetadataDa
     ArrayList<Character> enclosureCandidates = new ArrayList<>(4);
     for (FileMetadataMeta.FMCandidate enclosureCandidate : meta.getEnclosureCandidates()) {
       String candidate = resolve(enclosureCandidate.getCandidate());
-      if (candidate.isEmpty()) {
+      if (candidate.isEmpty() && isBasic()) {
         logBasic("Warning: file metadata transform ignores empty enclosure candidate");
-      } else if (candidate.length() > 1) {
+      } else if (candidate.length() > 1 && isBasic()) {
         logBasic(
             "Warning: file metadata transform ignores non-character enclosure candidate: "
                 + candidate);
@@ -367,9 +368,9 @@ public class FileMetadata extends BaseTransform<FileMetadataMeta, FileMetadataDa
       return EncodingDetector.detectEncoding(
           stream, defaultCharset, limitRows * 500); // estimate a row is ~500 chars
     } catch (FileNotFoundException e) {
-      throw new RuntimeException("File not found: " + fileName, e);
+      throw new HopRuntimeException("File not found: " + fileName, e);
     } catch (IOException | HopFileException e) {
-      throw new RuntimeException(e.getMessage(), e);
+      throw new HopRuntimeException(e.getMessage(), e);
     }
   }
 
@@ -397,7 +398,7 @@ public class FileMetadata extends BaseTransform<FileMetadataMeta, FileMetadataDa
       return detector.detectDelimiters();
 
     } catch (IOException | HopFileException e) {
-      throw new RuntimeException(e.getMessage(), e);
+      throw new HopRuntimeException(e.getMessage(), e);
     }
   }
 }

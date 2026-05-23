@@ -558,7 +558,7 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
     fdNodesList.left = new FormAttachment(0, 0);
     fdNodesList.right = new FormAttachment(middle, 0);
     fdNodesList.top = new FormAttachment(wlNodesList, margin);
-    fdNodesList.bottom = new FormAttachment(wNewNode, -margin * 2);
+    fdNodesList.bottom = new FormAttachment(wNewNode, -margin);
     wNodesList.setLayoutData(fdNodesList);
     wNodesList.addListener(
         SWT.Selection,
@@ -573,7 +573,7 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
     PropsUi.setLook(wlNodeName);
     FormData fdlNodeName = new FormData();
     fdlNodeName.left = new FormAttachment(middle, margin);
-    fdlNodeName.top = new FormAttachment(wlNodesList, margin * 2);
+    fdlNodeName.top = new FormAttachment(wlNodesList, margin);
     wlNodeName.setLayoutData(fdlNodeName);
     wNodeName = new Text(wNodesComp, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     wNodeName.addListener(
@@ -590,7 +590,7 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
         });
     PropsUi.setLook(wNodeName);
     FormData fdNodeName = new FormData();
-    fdNodeName.left = new FormAttachment(wlNodeName, margin * 2);
+    fdNodeName.left = new FormAttachment(wlNodeName, margin);
     fdNodeName.right = new FormAttachment(100, 0);
     fdNodeName.top = new FormAttachment(wlNodeName, 0, SWT.CENTER);
     wNodeName.setLayoutData(fdNodeName);
@@ -613,7 +613,7 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
         });
     PropsUi.setLook(wNodeDescription);
     FormData fdNodeDescription = new FormData();
-    fdNodeDescription.left = new FormAttachment(wlNodeDescription, margin * 2);
+    fdNodeDescription.left = new FormAttachment(wlNodeDescription, margin);
     fdNodeDescription.right = new FormAttachment(100, 0);
     fdNodeDescription.top = new FormAttachment(wlNodeDescription, 0, SWT.CENTER);
     wNodeDescription.setLayoutData(fdNodeDescription);
@@ -680,7 +680,7 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
     fdNodeProperties.left = new FormAttachment(middle, margin);
     fdNodeProperties.right = new FormAttachment(100, 0);
     fdNodeProperties.top = new FormAttachment(wlNodeProperties, margin);
-    fdNodeProperties.bottom = new FormAttachment(wNewNode, -2 * margin);
+    fdNodeProperties.bottom = new FormAttachment(wNewNode, -margin);
     wNodeProperties.setLayoutData(fdNodeProperties);
 
     FormData fdNodesComp = new FormData();
@@ -780,10 +780,10 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
         TableEditor editor = wNodeLabels.getEditor();
         if (editor != null
             && editor.getEditor() != null
-            && (editor.getEditor() instanceof Text text)) {
-          if (!text.isDisposed() && !labels.contains(text.getText())) {
-            labels.add(text.getText());
-          }
+            && (editor.getEditor() instanceof Text text)
+            && !text.isDisposed()
+            && !labels.contains(text.getText())) {
+          labels.add(text.getText());
         }
 
         activeNode.setLabels(labels);
@@ -868,30 +868,16 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
           // add this field as a property...
           //
           IValueMeta valueMeta = inputRowMeta.searchValueMeta(field);
-          GraphPropertyType propertyType;
-          switch (valueMeta.getType()) {
-            case IValueMeta.TYPE_INTEGER:
-              propertyType = GraphPropertyType.Integer;
-              break;
-            case IValueMeta.TYPE_NUMBER:
-              propertyType = GraphPropertyType.Float;
-              break;
-            case IValueMeta.TYPE_DATE:
-              propertyType = GraphPropertyType.LocalDateTime;
-              break;
-            case IValueMeta.TYPE_BOOLEAN:
-              propertyType = GraphPropertyType.Boolean;
-              break;
-            case IValueMeta.TYPE_TIMESTAMP:
-              propertyType = GraphPropertyType.LocalDateTime;
-              break;
-            case IValueMeta.TYPE_BINARY:
-              propertyType = GraphPropertyType.ByteArray;
-              break;
-            default:
-              propertyType = GraphPropertyType.String;
-              break;
-          }
+          GraphPropertyType propertyType =
+              switch (valueMeta.getType()) {
+                case IValueMeta.TYPE_INTEGER -> GraphPropertyType.Integer;
+                case IValueMeta.TYPE_NUMBER -> GraphPropertyType.Float;
+                case IValueMeta.TYPE_DATE -> GraphPropertyType.LocalDateTime;
+                case IValueMeta.TYPE_BOOLEAN -> GraphPropertyType.Boolean;
+                case IValueMeta.TYPE_TIMESTAMP -> GraphPropertyType.LocalDateTime;
+                case IValueMeta.TYPE_BINARY -> GraphPropertyType.ByteArray;
+                default -> GraphPropertyType.String;
+              };
 
           String propertyName = Neo4jUtil.standardizePropertyName(valueMeta);
           activeNode
@@ -1031,7 +1017,7 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
     fdRelationshipsList.left = new FormAttachment(0, 0);
     fdRelationshipsList.right = new FormAttachment(middle, 0);
     fdRelationshipsList.top = new FormAttachment(wlRelationshipsList, margin);
-    fdRelationshipsList.bottom = new FormAttachment(wNewRelationship, -margin * 2);
+    fdRelationshipsList.bottom = new FormAttachment(wNewRelationship, -margin);
     wRelationshipsList.setLayoutData(fdRelationshipsList);
     wRelationshipsList.addListener(
         SWT.Selection,
@@ -1045,12 +1031,12 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
     PropsUi.setLook(wlRelName);
     FormData fdlRelName = new FormData();
     fdlRelName.left = new FormAttachment(middle, margin);
-    fdlRelName.top = new FormAttachment(wlRelationshipsList, 2 * margin);
+    fdlRelName.top = new FormAttachment(wlRelationshipsList, margin);
     wlRelName.setLayoutData(fdlRelName);
     wRelName = new Text(wRelComp, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wRelName);
     FormData fdRelName = new FormData();
-    fdRelName.left = new FormAttachment(wlRelName, margin * 2);
+    fdRelName.left = new FormAttachment(wlRelName, margin);
     fdRelName.right = new FormAttachment(100, 0);
     fdRelName.top = new FormAttachment(wlRelName, 0, SWT.CENTER);
     wRelName.setLayoutData(fdRelName);
@@ -1078,7 +1064,7 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
     wRelDescription = new Text(wRelComp, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wRelDescription);
     FormData fdRelDescription = new FormData();
-    fdRelDescription.left = new FormAttachment(wlRelDescription, margin * 2);
+    fdRelDescription.left = new FormAttachment(wlRelDescription, margin);
     fdRelDescription.right = new FormAttachment(100, 0);
     fdRelDescription.top = new FormAttachment(wlRelDescription, 0, SWT.CENTER);
     wRelDescription.setLayoutData(fdRelDescription);
@@ -1101,7 +1087,7 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
     wRelLabel = new Text(wRelComp, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wRelLabel);
     FormData fdRelLabel = new FormData();
-    fdRelLabel.left = new FormAttachment(wlRelLabel, margin * 2);
+    fdRelLabel.left = new FormAttachment(wlRelLabel, margin);
     fdRelLabel.right = new FormAttachment(100, 0);
     fdRelLabel.top = new FormAttachment(wlRelLabel, 0, SWT.CENTER);
     wRelLabel.setLayoutData(fdRelLabel);
@@ -1124,7 +1110,7 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
     wRelSource = new CCombo(wRelComp, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wRelSource);
     FormData fdRelSource = new FormData();
-    fdRelSource.left = new FormAttachment(wlRelSource, margin * 2);
+    fdRelSource.left = new FormAttachment(wlRelSource, margin);
     fdRelSource.right = new FormAttachment(100, 0);
     fdRelSource.top = new FormAttachment(wlRelSource, 0, SWT.CENTER);
     wRelSource.setLayoutData(fdRelSource);
@@ -1147,7 +1133,7 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
     wRelTarget = new CCombo(wRelComp, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wRelTarget);
     FormData fdRelTarget = new FormData();
-    fdRelTarget.left = new FormAttachment(wlRelTarget, margin * 2);
+    fdRelTarget.left = new FormAttachment(wlRelTarget, margin);
     fdRelTarget.right = new FormAttachment(100, 0);
     fdRelTarget.top = new FormAttachment(wlRelTarget, 0, SWT.CENTER);
     wRelTarget.setLayoutData(fdRelTarget);
@@ -1198,7 +1184,7 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
     fdRelProperties.left = new FormAttachment(middle, margin);
     fdRelProperties.right = new FormAttachment(100, 0);
     fdRelProperties.top = new FormAttachment(wlRelProperties, margin);
-    fdRelProperties.bottom = new FormAttachment(wNewRelationship, -2 * margin);
+    fdRelProperties.bottom = new FormAttachment(wNewRelationship, -margin);
     wRelProperties.setLayoutData(fdRelProperties);
 
     FormData fdRelComp = new FormData();
@@ -1382,7 +1368,6 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
     // Generate list of random points in the bounding box
     //
     java.util.List<Point> bestCoordinates = generateRandomPoints(bounds, nrNodes);
-    ;
     Scoring bestScore = calculateGraphScore(bestCoordinates, bounds, optDistance, nodesizes);
 
     System.out.println(
@@ -1629,8 +1614,7 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
     int size = original.size();
 
     java.util.List<Point> points = new ArrayList<>();
-    for (int i = 0; i < size; i++) {
-      Point point = original.get(i);
+    for (Point point : original) {
       points.add(new Point(point.x, point.y));
     }
 
@@ -1847,8 +1831,8 @@ public class GraphModelEditor extends MetadataEditor<GraphModel> {
       Point textExtent = gc.textExtent(graphNode.getName());
       int x = presentation.getX();
       int y = presentation.getY();
-      int width = textExtent.x + 2 * margin;
-      int height = textExtent.y + 2 * margin;
+      int width = textExtent.x + margin;
+      int height = textExtent.y + margin;
 
       gc.setForeground(GuiResource.getInstance().getColorBackground());
       gc.fillRoundRectangle(x, y, width, height, margin, margin);

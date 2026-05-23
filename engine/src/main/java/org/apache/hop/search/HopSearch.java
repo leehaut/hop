@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.HopEnvironment;
 import org.apache.hop.core.HopVersionProvider;
@@ -118,6 +118,7 @@ public class HopSearch implements Runnable, IHasHopMetadataProvider, IHopCommand
   @Override
   public void run() {
     try {
+      System.setProperty(Const.HOP_PLATFORM_RUNTIME, "SEARCH");
       LogChannel logChannel = new LogChannel("hop-search");
       logChannel.setSimplified(true);
       ILogChannel log = logChannel;

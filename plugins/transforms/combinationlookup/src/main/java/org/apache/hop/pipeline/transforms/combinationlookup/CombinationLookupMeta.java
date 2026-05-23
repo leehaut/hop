@@ -20,6 +20,7 @@ package org.apache.hop.pipeline.transforms.combinationlookup;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.CheckResult;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.ICheckResult;
@@ -28,7 +29,6 @@ import org.apache.hop.core.annotations.ActionTransformType;
 import org.apache.hop.core.annotations.Transform;
 import org.apache.hop.core.database.Database;
 import org.apache.hop.core.database.DatabaseMeta;
-import org.apache.hop.core.exception.HopDatabaseException;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopTransformException;
 import org.apache.hop.core.row.IRowMeta;
@@ -38,6 +38,7 @@ import org.apache.hop.core.row.value.ValueMetaDate;
 import org.apache.hop.core.row.value.ValueMetaInteger;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
+import org.apache.hop.core.xml.XmlHandler;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.metadata.api.HopMetadataProperty;
 import org.apache.hop.metadata.api.HopMetadataPropertyType;
@@ -46,6 +47,7 @@ import org.apache.hop.pipeline.DatabaseImpact;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransformMeta;
 import org.apache.hop.pipeline.transform.TransformMeta;
+import org.w3c.dom.Node;
 
 @Transform(
     id = "CombinationLookup",
@@ -86,11 +88,10 @@ public class CombinationLookupMeta
   /** database connection */
   @HopMetadataProperty(
       key = "connection",
-      storeWithName = true,
       injectionKey = "CONNECTIONNAME",
       injectionKeyDescription = "CombinationLookup.Injection.CONNECTION_NAME",
       hopMetadataPropertyType = HopMetadataPropertyType.RDBMS_CONNECTION)
-  private DatabaseMeta databaseMeta;
+  private String connectionName;
 
   /** replace fields with technical key? */
   @HopMetadataProperty(
@@ -158,7 +159,7 @@ public class CombinationLookupMeta
   public void setDefault() {
     schemaName = "";
     tableName = BaseMessages.getString(PKG, "CombinationLookupMeta.DimensionTableName.Label");
-    databaseMeta = null;
+    connectionName = null;
     commitSize = 100;
     cacheSize = DEFAULT_CACHE_SIZE;
     replaceFields = false;
@@ -208,6 +209,24 @@ public class CombinationLookupMeta
       IHopMetadataProvider metadataProvider) {
     CheckResult cr;
     String errorMessage = "";
+
+    DatabaseMeta databaseMeta = null;
+    try {
+      databaseMeta =
+          metadataProvider
+              .getSerializer(DatabaseMeta.class)
+              .load(variables.resolve(connectionName));
+    } catch (HopException e) {
+      cr =
+          new CheckResult(
+              ICheckResult.TYPE_RESULT_ERROR,
+              BaseMessages.getString(
+                  PKG,
+                  "TableInputMeta.CheckResult.DatabaseMetaError",
+                  variables.resolve(connectionName)),
+              transformMeta);
+      remarks.add(cr);
+    }
 
     if (databaseMeta != null) {
       Database db = new Database(loggingObject, variables, databaseMeta);
@@ -353,20 +372,18 @@ public class CombinationLookupMeta
           }
         }
 
-        if (techKeyCreation != null) {
+        if (techKeyCreation != null
+            && (!(CREATION_METHOD_AUTOINC.equals(techKeyCreation)
+                || CREATION_METHOD_SEQUENCE.equals(techKeyCreation)
+                || CREATION_METHOD_TABLEMAX.equals(techKeyCreation)))) {
           // post 2.2 version
-          if (!(CREATION_METHOD_AUTOINC.equals(techKeyCreation)
-              || CREATION_METHOD_SEQUENCE.equals(techKeyCreation)
-              || CREATION_METHOD_TABLEMAX.equals(techKeyCreation))) {
-            errorMessage +=
-                BaseMessages.getString(
-                        PKG, "CombinationLookupMeta.CheckResult.ErrorTechKeyCreation")
-                    + ": "
-                    + techKeyCreation
-                    + "!";
-            cr = new CheckResult(ICheckResult.TYPE_RESULT_ERROR, errorMessage, transformMeta);
-            remarks.add(cr);
-          }
+          errorMessage +=
+              BaseMessages.getString(PKG, "CombinationLookupMeta.CheckResult.ErrorTechKeyCreation")
+                  + ": "
+                  + techKeyCreation
+                  + "!";
+          cr = new CheckResult(ICheckResult.TYPE_RESULT_ERROR, errorMessage, transformMeta);
+          remarks.add(cr);
         }
       } catch (HopException e) {
         errorMessage =
@@ -410,6 +427,10 @@ public class CombinationLookupMeta
       TransformMeta transformMeta,
       IRowMeta prev,
       IHopMetadataProvider metadataProvider) {
+
+    DatabaseMeta databaseMeta =
+        getParentTransformMeta().getParentPipelineMeta().findDatabase(connectionName, variables);
+
     SqlStatement retval =
         new SqlStatement(transformMeta.getName(), databaseMeta, null); // default: nothing to do!
 
@@ -618,11 +639,11 @@ public class CombinationLookupMeta
             // Don't forget the sequence (optional)
             //
             String crSeq = "";
-            if (databaseMeta.supportsSequences() && !Utils.isEmpty(sequenceFrom)) {
-              if (!db.checkSequenceExists(schemaName, sequenceFrom)) {
-                crSeq += db.getCreateSequenceStatement(schemaName, sequenceFrom, 1L, 1L, -1L, true);
-                crSeq += Const.CR;
-              }
+            if (databaseMeta.supportsSequences()
+                && !Utils.isEmpty(sequenceFrom)
+                && !db.checkSequenceExists(schemaName, sequenceFrom)) {
+              crSeq += db.getCreateSequenceStatement(schemaName, sequenceFrom, 1L, 1L, -1L, true);
+              crSeq += Const.CR;
             }
             retval.setSql(variables.resolve(crTable + crUniqIndex + crIndex + crSeq));
           } catch (HopException e) {
@@ -658,6 +679,10 @@ public class CombinationLookupMeta
       String[] output,
       IRowMeta info,
       IHopMetadataProvider metadataProvider) {
+
+    DatabaseMeta databaseMeta =
+        getParentTransformMeta().getParentPipelineMeta().findDatabase(connectionName, variables);
+
     // The keys are read-only...
     for (int i = 0; i < fields.getKeyFields().size(); i++) {
       KeyField keyField = fields.getKeyFields().get(i);
@@ -702,15 +727,19 @@ public class CombinationLookupMeta
     return true;
   }
 
-  protected IRowMeta getDatabaseTableFields(Database db, String schemaName, String tableName)
-      throws HopDatabaseException {
-    // First try without connecting to the database... (can be S L O W)
-    String schemaTable = databaseMeta.getQuotedSchemaTableCombination(db, schemaName, tableName);
-    IRowMeta extraFields = db.getTableFields(schemaTable);
-    if (extraFields == null) { // now we need to connect
-      db.connect();
-      extraFields = db.getTableFields(schemaTable);
+  @Override
+  public void convertLegacyXml(Node transformNode) throws HopException {
+    // Facilitating the Kettle importer. (issue 7003)
+    //
+    Node sequenceNode = XmlHandler.getSubNode(transformNode, "sequence");
+    String sequenceName = XmlHandler.getNodeValue(sequenceNode);
+    if (StringUtils.isNotEmpty(sequenceName)) {
+      this.fields.setSequenceFrom(sequenceName);
     }
-    return extraFields;
+    Node lastUpdateFieldNode = XmlHandler.getSubNode(transformNode, "last_update_field");
+    String lastUpdateField = XmlHandler.getNodeValue(lastUpdateFieldNode);
+    if (StringUtils.isNotEmpty(lastUpdateField)) {
+      this.fields.getReturnFields().setLastUpdateField(lastUpdateField);
+    }
   }
 }

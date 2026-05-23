@@ -54,6 +54,7 @@ public class MessageDialogWithToggle {
   private Shell shell;
   private final PropsUi props;
   private int returnCode = OK;
+  private boolean buttonClicked = false;
 
   public MessageDialogWithToggle(
       Shell parent,
@@ -139,14 +140,25 @@ public class MessageDialogWithToggle {
       buttons[i].addListener(
           SWT.Selection,
           e -> {
+            buttonClicked = true;
             returnCode = index;
             dispose();
           });
     }
     BaseTransformDialog.positionBottomButtons(shell, buttons, margin, wToggle);
+    shell.setDefaultButton(buttons[0]);
 
     BaseTransformDialog.setSize(shell);
     shell.pack();
+
+    // When user closes the dialog with X, treat it as cancel (do not exit / no)
+    shell.addListener(
+        SWT.Close,
+        e -> {
+          if (!buttonClicked) {
+            cancel();
+          }
+        });
 
     shell.open();
     while (!shell.isDisposed()) {

@@ -20,7 +20,7 @@ package org.apache.hop.pipeline.transforms.sqlfileoutput;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.DbCache;
 import org.apache.hop.core.Props;
@@ -118,56 +118,12 @@ public class SQLFileOutputDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "SQLFileOutputDialog.DialogTitle"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).sql(e -> sql()).cancel(e -> cancel()).build();
 
     ModifyListener lsMod = e -> input.setChanged();
     backupChanged = input.hasChanged();
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "SQLFileOutputDialog.DialogTitle"));
-
-    // Some buttons
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wCreate = new Button(shell, SWT.PUSH);
-    wCreate.setText(BaseMessages.getString(PKG, "System.Button.SQL"));
-    wCreate.addListener(SWT.Selection, e -> sql());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wCreate, wCancel}, margin, null);
-
-    // TransformName line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "System.TransformName.Label"));
-    wlTransformName.setToolTipText(BaseMessages.getString(PKG, "System.TransformName.Tooltip"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
 
     CTabFolder wTabFolder = new CTabFolder(shell, SWT.BORDER);
     PropsUi.setLook(wTabFolder, Props.WIDGET_STYLE_TAB);
@@ -204,7 +160,7 @@ public class SQLFileOutputDialog extends BaseTransformDialog {
     wGConnection.setLayout(groupLayout);
 
     // Connection line
-    wConnection = addConnectionLine(wGConnection, wTransformName, input.getConnection(), lsMod);
+    wConnection = addConnectionLine(wGConnection, null, input.getConnection(), lsMod);
 
     // Schema line...
     Label wlSchema = new Label(wGConnection, SWT.RIGHT);
@@ -256,7 +212,7 @@ public class SQLFileOutputDialog extends BaseTransformDialog {
 
     FormData fdGConnection = new FormData();
     fdGConnection.left = new FormAttachment(0, margin);
-    fdGConnection.top = new FormAttachment(wTransformName, margin);
+    fdGConnection.top = new FormAttachment(wSpacer, margin);
     fdGConnection.right = new FormAttachment(100, -margin);
     wGConnection.setLayoutData(fdGConnection);
 
@@ -467,7 +423,7 @@ public class SQLFileOutputDialog extends BaseTransformDialog {
     PropsUi.setLook(wlAddTransformNr);
     FormData fdlAddTransformNr = new FormData();
     fdlAddTransformNr.left = new FormAttachment(0, 0);
-    fdlAddTransformNr.top = new FormAttachment(wExtension, 2 * margin);
+    fdlAddTransformNr.top = new FormAttachment(wExtension, margin);
     fdlAddTransformNr.right = new FormAttachment(middle, -margin);
     wlAddTransformNr.setLayoutData(fdlAddTransformNr);
     wAddTransformNr = new Button(wFileName, SWT.CHECK);
@@ -580,7 +536,7 @@ public class SQLFileOutputDialog extends BaseTransformDialog {
     wbShowFiles.setText(BaseMessages.getString(PKG, "SQLFileOutputDialog.ShowFiles.Button"));
     FormData fdbShowFiles = new FormData();
     fdbShowFiles.left = new FormAttachment(middle, 0);
-    fdbShowFiles.top = new FormAttachment(wSplitEvery, margin * 2);
+    fdbShowFiles.top = new FormAttachment(wSplitEvery, margin);
     wbShowFiles.setLayoutData(fdbShowFiles);
     wbShowFiles.addSelectionListener(
         new SelectionAdapter() {
@@ -639,7 +595,7 @@ public class SQLFileOutputDialog extends BaseTransformDialog {
 
     FormData fdFileName = new FormData();
     fdFileName.left = new FormAttachment(0, margin);
-    fdFileName.top = new FormAttachment(wGConnection, 2 * margin);
+    fdFileName.top = new FormAttachment(wGConnection, margin);
     fdFileName.right = new FormAttachment(100, -margin);
     wFileName.setLayoutData(fdFileName);
 
@@ -738,13 +694,7 @@ public class SQLFileOutputDialog extends BaseTransformDialog {
           }
         });
 
-    FormData fdContentComp = new FormData();
-    fdContentComp.left = new FormAttachment(0, 0);
-    fdContentComp.top = new FormAttachment(0, 0);
-    fdContentComp.right = new FormAttachment(100, 0);
-    fdContentComp.bottom = new FormAttachment(100, 0);
     wContentComp.setLayoutData(wContentComp);
-
     wContentComp.layout();
     wContentTab.setControl(wContentComp);
 
@@ -754,9 +704,9 @@ public class SQLFileOutputDialog extends BaseTransformDialog {
 
     FormData fdTabFolder = new FormData();
     fdTabFolder.left = new FormAttachment(0, 0);
-    fdTabFolder.top = new FormAttachment(wTransformName, margin);
+    fdTabFolder.top = new FormAttachment(wSpacer, margin);
     fdTabFolder.right = new FormAttachment(100, 0);
-    fdTabFolder.bottom = new FormAttachment(wOk, -2 * margin);
+    fdTabFolder.bottom = new FormAttachment(wOk, -margin);
     wTabFolder.setLayoutData(fdTabFolder);
 
     // Add listeners
@@ -784,7 +734,7 @@ public class SQLFileOutputDialog extends BaseTransformDialog {
     getData();
     activateTruncate();
     input.setChanged(changed);
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -811,7 +761,7 @@ public class SQLFileOutputDialog extends BaseTransformDialog {
       }
 
       // Now select the default!
-      String defEncoding = Const.getEnvironmentVariable("file.encoding", "UTF-8");
+      String defEncoding = Const.getEnvironmentVariable("file.encoding", Const.UTF_8);
       int idx = Const.indexOfString(defEncoding, wEncoding.getItems());
       if (idx >= 0) {
         wEncoding.select(idx);
@@ -858,9 +808,6 @@ public class SQLFileOutputDialog extends BaseTransformDialog {
     wAddToResult.setSelection(input.isAddToResult());
     wStartNewLine.setSelection(input.isStartNewLine());
     wDoNotOpenNewFileInit.setSelection(input.getFile().isDoNotOpenNewFileInit());
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   private void cancel() {
@@ -945,20 +892,23 @@ public class SQLFileOutputDialog extends BaseTransformDialog {
   private void sql() {
     try {
       SQLFileOutputMeta info = new SQLFileOutputMeta();
+      // set default value
+      info.setDefault();
+
       getInfo(info);
       IRowMeta prev = pipelineMeta.getPrevTransformFields(variables, transformName);
 
       TransformMeta transformMeta = pipelineMeta.findTransform(transformName);
-      DatabaseMeta databaseMeta = pipelineMeta.findDatabase(transformMeta.getName(), variables);
+      DatabaseMeta databaseMeta = pipelineMeta.findDatabase(info.getConnection(), variables);
 
       SqlStatement sql =
           info.getSqlStatements(variables, pipelineMeta, transformMeta, prev, metadataProvider);
       if (!sql.hasError()) {
         if (sql.hasSql()) {
-          SqlEditor sqledit =
+          SqlEditor editor =
               new SqlEditor(
                   shell, SWT.NONE, variables, databaseMeta, DbCache.getInstance(), sql.getSql());
-          sqledit.open();
+          editor.open();
         } else {
           MessageBox mb = new MessageBox(shell, SWT.OK | SWT.ICON_INFORMATION);
           mb.setMessage(BaseMessages.getString(PKG, "SQLFileOutputDialog.NoSQL.DialogMessage"));

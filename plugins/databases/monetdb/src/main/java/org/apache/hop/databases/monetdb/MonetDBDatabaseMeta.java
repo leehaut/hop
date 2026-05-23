@@ -264,7 +264,7 @@ public class MonetDBDatabaseMeta extends BaseDatabaseMeta implements IDatabase {
     int precision = v.getPrecision();
 
     Boolean mode = MonetDBDatabaseMeta.safeModeLocal.get();
-    boolean safeMode = mode != null && mode.booleanValue();
+    boolean safeMode = mode != null && mode;
 
     if (addFieldName) {
       // protect the fieldname
@@ -404,5 +404,10 @@ public class MonetDBDatabaseMeta extends BaseDatabaseMeta implements IDatabase {
   public String getSqlNextSequenceValue(String sequenceName) {
     String realSequenceName = sequenceName.replace(getStartQuote(), "").replace(getEndQuote(), "");
     return String.format("SELECT next_value_for( 'sys', '%s' )", realSequenceName);
+  }
+
+  @Override
+  public void addDefaultOptions() {
+    setSupportsBooleanDataType(true);
   }
 }

@@ -17,22 +17,37 @@
 
 package org.apache.hop.pipeline;
 
-import java.util.Arrays;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 import java.util.List;
 import org.apache.hop.core.exception.HopException;
-import org.apache.hop.junit.rules.RestoreHopEngineEnvironment;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.apache.hop.core.xml.XmlHandler;
+import org.apache.hop.junit.rules.RestoreHopEngineEnvironmentExtension;
+import org.apache.hop.metadata.serializer.xml.XmlMetadataUtil;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.w3c.dom.Node;
 
-public class ModPartitionerTest {
-  @ClassRule public static RestoreHopEngineEnvironment env = new RestoreHopEngineEnvironment();
+@ExtendWith(RestoreHopEngineEnvironmentExtension.class)
+class ModPartitionerTest {
 
   @Test
-  public void testSerialization() throws HopException {
-    List<String> attributes = Arrays.asList("FieldName");
+  void testSerialization() throws HopException {
+    List<String> attributes = List.of("FieldName");
     PartitionerLoadSaveTester<ModPartitioner> tester =
         new PartitionerLoadSaveTester<>(ModPartitioner.class, attributes);
 
+    assertNotNull(tester);
     tester.testSerialization();
+  }
+
+  @Test
+  void testSerializationRoundTrip() throws HopException {
+    ModPartitioner test = new ModPartitioner();
+    test.setFieldName("field1");
+
+    String xml = XmlHandler.aroundTag("p", XmlMetadataUtil.serializeObjectToXml(test));
+
+    Node node = XmlHandler.loadXmlString(xml, "p");
   }
 }

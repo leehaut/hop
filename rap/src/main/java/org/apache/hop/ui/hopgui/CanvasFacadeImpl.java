@@ -19,6 +19,8 @@ package org.apache.hop.ui.hopgui;
 
 import org.apache.hop.base.AbstractMeta;
 import org.apache.hop.core.gui.DPoint;
+import org.apache.hop.core.gui.Point;
+import org.apache.hop.core.gui.Rectangle;
 import org.apache.hop.pipeline.PipelineHopMeta;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.ui.core.PropsUi;
@@ -44,16 +46,32 @@ public class CanvasFacadeImpl extends CanvasFacade {
 
   private void setDataCommon(Canvas canvas, float magnification, DPoint offset, Object meta) {
     JsonObject jsonProps = new JsonObject();
-    jsonProps.add("themeId", System.getProperty(HopWeb.HOP_WEB_THEME, "light"));
-    jsonProps.add(
-        "gridSize",
-        PropsUi.getInstance().isShowCanvasGridEnabled()
-            ? PropsUi.getInstance().getCanvasGridSize()
-            : 1);
+    jsonProps.add("themeId", PropsUi.getInstance().isDarkMode() ? "dark" : "light");
+    jsonProps.add("gridSize", PropsUi.getInstance().getCanvasGridSize());
+    jsonProps.add("showGrid", PropsUi.getInstance().isShowCanvasGridEnabled());
     jsonProps.add("iconSize", PropsUi.getInstance().getIconSize());
     jsonProps.add("magnification", (float) (magnification * PropsUi.getNativeZoomFactor()));
     jsonProps.add("offsetX", offset.x);
     jsonProps.add("offsetY", offset.y);
+
+    // Add pan data if available
+    Point panStartOffset = (Point) canvas.getData("panStartOffset");
+    Rectangle panBoundaries = (Rectangle) canvas.getData("panBoundaries");
+    if (panStartOffset != null) {
+      JsonObject jsonPanStartOffset = new JsonObject();
+      jsonPanStartOffset.add("x", panStartOffset.x);
+      jsonPanStartOffset.add("y", panStartOffset.y);
+      jsonProps.add("panStartOffset", jsonPanStartOffset);
+    }
+    if (panBoundaries != null) {
+      JsonObject jsonPanBoundaries = new JsonObject();
+      jsonPanBoundaries.add("x", panBoundaries.x);
+      jsonPanBoundaries.add("y", panBoundaries.y);
+      jsonPanBoundaries.add("width", panBoundaries.width);
+      jsonPanBoundaries.add("height", panBoundaries.height);
+      jsonProps.add("panBoundaries", jsonPanBoundaries);
+    }
+
     canvas.setData("props", jsonProps);
 
     JsonArray jsonNotes = new JsonArray();

@@ -32,10 +32,12 @@ import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.metadata.api.HopMetadataProperty;
+import org.apache.hop.metadata.api.HopMetadataPropertyType;
 import org.apache.hop.metadata.api.IHopMetadataProvider;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransformMeta;
 import org.apache.hop.pipeline.transform.TransformMeta;
+import org.apache.hop.pipeline.transforms.rest.common.RestConst;
 import org.apache.hop.pipeline.transforms.rest.fields.HeaderField;
 import org.apache.hop.pipeline.transforms.rest.fields.MatrixParameterField;
 import org.apache.hop.pipeline.transforms.rest.fields.ParameterField;
@@ -104,7 +106,10 @@ public class RestMeta extends BaseTransformMeta<Rest, RestData> {
   /** The default timeout for waiting for reading data (milliseconds) */
   public static final int DEFAULT_READ_TIMEOUT = 10000;
 
-  @HopMetadataProperty(key = "connection_name", injectionKey = "CONNECTION_NAME")
+  @HopMetadataProperty(
+      key = "connection_name",
+      injectionKey = "CONNECTION_NAME",
+      hopMetadataPropertyType = HopMetadataPropertyType.REST_CONNECTION)
   private String connectionName;
 
   @HopMetadataProperty(key = "url", injectionKey = "URL")
@@ -125,7 +130,7 @@ public class RestMeta extends BaseTransformMeta<Rest, RestData> {
   @HopMetadataProperty(key = "httpLogin", injectionKey = "HTTP_LOGIN")
   private String httpLogin;
 
-  @HopMetadataProperty(key = "httpPassword", injectionKey = "HTTP_PASSWORD")
+  @HopMetadataProperty(key = "httpPassword", injectionKey = "HTTP_PASSWORD", password = true)
   private String httpPassword;
 
   @HopMetadataProperty(key = "preemptive", injectionKey = "PREEMPTIVE")
@@ -185,12 +190,44 @@ public class RestMeta extends BaseTransformMeta<Rest, RestData> {
   @HopMetadataProperty(key = "result", injectionKey = "RESULT")
   private ResultField resultField;
 
+  /**
+   * retry config retryTimes=0 retryDelayMs=500ms retryStatusCode=[429, 500, 502, 503, 504]
+   * retryMethods=[post,get,delete,put,head,option,patch]
+   */
+  /*--------------------------------------------------------------------
+  | retry config(retryTimes=0,retryDelayMs=500ms)
+  | retryStatusCode=[429, 500, 502, 503, 504]
+  | retryMethods=[get,delete,put]
+  --------------------------------------------------------------------- */
+  @HopMetadataProperty(key = "retryTimes", injectionKey = "RETRY_TIMES")
+  private Integer retryTimes;
+
+  @HopMetadataProperty(key = "retryDelayMs", injectionKey = "RETRY_DELAY_MS")
+  private Long retryDelayMs;
+
+  @HopMetadataProperty(
+      key = "retryStatusCode",
+      injectionKey = "RETRY_STATUS_CODE",
+      groupKey = "retryStatusCodes",
+      injectionGroupKey = "RETRY_STATUS_CODES")
+  private List<String> retryStatusCodes;
+
+  @HopMetadataProperty(
+      key = "retryMethod",
+      injectionKey = "RETRY_METHOD",
+      groupKey = "retryMethods",
+      injectionGroupKey = "RETRY_METHODS")
+  private List<String> retryMethods;
+
   public RestMeta() {
     super(); // allocate BaseTransformMeta
     headerFields = new ArrayList<>();
     parameterFields = new ArrayList<>();
     matrixParameterFields = new ArrayList<>();
     resultField = new ResultField();
+
+    this.retryStatusCodes = new ArrayList<>();
+    this.retryMethods = new ArrayList<>();
   }
 
   @Override
@@ -216,6 +253,12 @@ public class RestMeta extends BaseTransformMeta<Rest, RestData> {
     this.applicationType = APPLICATION_TYPE_TEXT_PLAIN;
     this.readTimeout = String.valueOf(DEFAULT_READ_TIMEOUT);
     this.connectionTimeout = String.valueOf(DEFAULT_CONNECTION_TIMEOUT);
+
+    // retry config.
+    this.retryTimes = RestConst.DEFAULT_RETRY_TIMES;
+    this.retryDelayMs = RestConst.DEFAULT_RETRY_DELAY_MS;
+    this.retryStatusCodes.addAll(RestConst.retryStatusCodes());
+    this.retryMethods.addAll(RestConst.retryMethods());
   }
 
   @Override

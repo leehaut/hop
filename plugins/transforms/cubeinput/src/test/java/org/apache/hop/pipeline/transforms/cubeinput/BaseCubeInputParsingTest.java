@@ -17,10 +17,15 @@
 
 package org.apache.hop.pipeline.transforms.cubeinput;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+import java.nio.charset.StandardCharsets;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.row.RowMeta;
 import org.apache.hop.pipeline.transforms.file.BaseFileField;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 /** Base class for all Cube Input transform tests. */
 @Disabled("No tests in abstract base class")
@@ -35,6 +40,12 @@ class BaseCubeInputParsingTest extends BaseParsingTest<CubeInputMeta, CubeInputD
     data.meta = new RowMeta();
   }
 
+  @Test
+  @Disabled("ignore sonar warning.")
+  void testDataNotNull() {
+    assertNotNull(data);
+  }
+
   /** Initialize for processing specified file. */
   protected void init(String file) throws Exception {
     meta.getFile().setName(getFile(file).getURL().getFile());
@@ -47,7 +58,7 @@ class BaseCubeInputParsingTest extends BaseParsingTest<CubeInputMeta, CubeInputD
   /** For BaseFileInput fields. */
   @Override
   protected void setFields(BaseFileField... fields) throws Exception {
-    throw new RuntimeException("Not implemented");
+    throw new HopRuntimeException("Not implemented");
   }
 
   /** CSV input transform produces byte arrays instead strings. */
@@ -55,7 +66,7 @@ class BaseCubeInputParsingTest extends BaseParsingTest<CubeInputMeta, CubeInputD
   protected void check(Object[][] expected) throws Exception {
     for (int r = 0; r < expected.length; r++) {
       for (int c = 0; c < expected[r].length; c++) {
-        expected[r][c] = expected[r][c].toString().getBytes("UTF-8");
+        expected[r][c] = expected[r][c].toString().getBytes(StandardCharsets.UTF_8);
       }
     }
     super.check(expected);

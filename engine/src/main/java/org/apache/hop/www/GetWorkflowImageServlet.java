@@ -17,13 +17,15 @@
 
 package org.apache.hop.www;
 
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Serial;
 import java.nio.charset.StandardCharsets;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import org.apache.hop.core.Const;
 import org.apache.hop.core.annotations.HopServerServlet;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.i18n.BaseMessages;
@@ -33,8 +35,7 @@ import org.apache.hop.workflow.engine.IWorkflowEngine;
 
 @HopServerServlet(id = "workflowImage", name = "Generate a PNG image of a workflow")
 public class GetWorkflowImageServlet extends BaseHttpServlet implements IHopServerPlugin {
-
-  private static final long serialVersionUID = -4365372274638005929L;
+  @Serial private static final long serialVersionUID = -4365372274638005929L;
   public static final float ZOOM_FACTOR = 1.5f;
 
   private static final Class<?> PKG = GetPipelineStatusServlet.class;
@@ -80,37 +81,33 @@ public class GetWorkflowImageServlet extends BaseHttpServlet implements IHopServ
       workflow = getWorkflowMap().getWorkflow(entry);
     }
 
-    ByteArrayOutputStream svgStream = null;
-
     try {
       if (workflow != null) {
 
         response.setStatus(HttpServletResponse.SC_OK);
 
-        response.setCharacterEncoding("UTF-8");
+        response.setCharacterEncoding(Const.UTF_8);
         response.setContentType("image/svg+xml");
 
         // Generate workflow SVG image
         //
         String svgXml =
             WorkflowSvgPainter.generateWorkflowSvg(workflow.getWorkflowMeta(), 1.0f, variables);
-        svgStream = new ByteArrayOutputStream();
-        try {
+        try (ByteArrayOutputStream svgStream = new ByteArrayOutputStream()) {
           svgStream.write(svgXml.getBytes(StandardCharsets.UTF_8));
-        } finally {
           svgStream.flush();
-        }
-        response.setContentLength(svgStream.size());
+          response.setContentLength(svgStream.size());
 
-        OutputStream out = response.getOutputStream();
-        out.write(svgStream.toByteArray());
+          OutputStream out = response.getOutputStream();
+          out.write(svgStream.toByteArray());
+        }
       }
     } catch (Exception e) {
-      e.printStackTrace();
-    } finally {
-      if (svgStream != null) {
-        svgStream.close();
-      }
+      logError("Error building SVG image of workflow", e);
+      sendSafeError(
+          response,
+          HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+          "Unable to generate workflow image.");
     }
   }
 

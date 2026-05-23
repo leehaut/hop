@@ -90,7 +90,7 @@ public class LdapOutput extends BaseTransform<LdapOutputMeta, LdapOutputData> {
           data.fieldsAttribute[i] = resolve(meta.getUpdateLookup()[i]);
 
           if (meta.getOperationType() == LdapOutputMeta.OPERATION_TYPE_UPSERT
-              && meta.getUpdate()[i].booleanValue()) {
+              && meta.getUpdate()[i]) {
             // We need also to keep care of the fields to update
             fieldsToUpdateInStreaml.add(data.fieldStream[i]);
             fieldsToUpdateAttributel.add(data.fieldsAttribute[i]);
@@ -245,6 +245,20 @@ public class LdapOutput extends BaseTransform<LdapOutputMeta, LdapOutputData> {
         case LdapOutputMeta.OPERATION_TYPE_DELETE:
           status = data.connection.delete(dn, meta.isFailIfNotExist());
           if (status == LdapConnection.STATUS_DELETED) {
+            incrementLinesUpdated();
+          } else {
+            incrementLinesSkipped();
+          }
+          break;
+        case LdapOutputMeta.OPERATION_TYPE_REMOVE_ATTRIBUTE:
+          status =
+              data.connection.removeAttribute(
+                  dn,
+                  data.fieldsAttribute,
+                  data.attributes,
+                  data.separator,
+                  meta.isFailIfNotExist());
+          if (status == LdapConnection.STATUS_REMOVED) {
             incrementLinesUpdated();
           } else {
             incrementLinesSkipped();

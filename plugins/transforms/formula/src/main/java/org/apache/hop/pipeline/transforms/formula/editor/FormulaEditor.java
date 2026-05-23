@@ -31,8 +31,6 @@ import org.eclipse.swt.events.KeyEvent;
 import org.eclipse.swt.events.KeyListener;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
-import org.eclipse.swt.events.ShellAdapter;
-import org.eclipse.swt.events.ShellEvent;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.layout.FormAttachment;
@@ -151,8 +149,7 @@ public class FormulaEditor extends Dialog implements KeyListener {
       fieldItem.setText(inputField);
     }
 
-    for (int i = 0; i < categories.length; i++) {
-      String category = categories[i];
+    for (String category : categories) {
       String i18nCategory = category;
       // Look up the category in i18n if needed.
       if (category.startsWith("%")) {
@@ -284,15 +281,6 @@ public class FormulaEditor extends Dialog implements KeyListener {
   public String open() {
     shell.layout();
     shell.open();
-
-    // Detect X or ALT-F4 or something that kills this window...
-    shell.addShellListener(
-        new ShellAdapter() {
-          @Override
-          public void shellClosed(ShellEvent e) {
-            cancel();
-          }
-        });
 
     while (!shell.isDisposed()) {
       if (!shell.getDisplay().readAndDispatch()) {

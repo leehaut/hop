@@ -26,26 +26,29 @@ import org.apache.hop.ui.core.dialog.BaseDialog;
 import org.apache.hop.ui.core.widget.TextVar;
 import org.apache.hop.ui.pipeline.transform.BaseTransformDialog;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.custom.ScrolledComposite;
 import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
+import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
+import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.swt.widgets.Text;
 
 public class TransformMetaStructureDialog extends BaseTransformDialog {
-  private static final Class<?> PKG =
-      TransformMetaStructureMeta.class; // for i18n purposes, needed by Translator2!!
+  // for i18n purposes, needed by Translator2!!
+  private static final Class<?> PKG = TransformMetaStructureMeta.class;
 
   private final TransformMetaStructureMeta input;
 
   private Button wOutputRowcount;
   private Button wIncludePosition;
-  private Button wIncludeFieldname;
+  private Button wIncludeFieldName;
   private Button wIncludeType;
   private Button wIncludeComments;
   private Button wIncludeLength;
@@ -53,14 +56,32 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
   private Button wIncludeMask;
   private Button wIncludeOrigin;
 
+  // label, text
+  private Label wlRowCountField;
   private TextVar wRowCountField;
+
+  private Label wlPositionField;
   private TextVar wPositionField;
-  private TextVar wFieldnameField;
+
+  private Label wlFieldNameField;
+  private TextVar wFieldNameField;
+
+  private Label wlCommentsField;
   private TextVar wCommentsField;
+
+  private Label wlTypeField;
   private TextVar wTypeField;
+
+  private Label wlLengthField;
   private TextVar wLengthField;
+
+  private Label wlPrecisionField;
   private TextVar wPrecisionField;
+
+  private Label wlMaskField;
   private TextVar wMaskField;
+
+  private Label wlOriginField;
   private TextVar wOriginField;
 
   public TransformMetaStructureDialog(
@@ -74,56 +95,41 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "TransformMetaStructureDialog.Shell.Title"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MIN | SWT.MAX);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
     ModifyListener lsMod = e -> input.setChanged();
     changed = input.hasChanged();
 
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
+    ScrolledComposite sc = new ScrolledComposite(shell, SWT.V_SCROLL | SWT.H_SCROLL);
+    PropsUi.setLook(sc);
+    FormData fdSc = new FormData();
+    fdSc.left = new FormAttachment(0, 0);
+    fdSc.top = new FormAttachment(wSpacer, 0);
+    fdSc.right = new FormAttachment(100, 0);
+    fdSc.bottom = new FormAttachment(wOk, -margin);
+    sc.setLayoutData(fdSc);
+    sc.setLayout(new FillLayout());
 
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "TransformMetaStructureDialog.Shell.Title"));
+    Composite wContent = new Composite(sc, SWT.NONE);
+    PropsUi.setLook(wContent);
+    FormLayout contentLayout = new FormLayout();
+    contentLayout.marginWidth = PropsUi.getFormMargin();
+    contentLayout.marginHeight = PropsUi.getFormMargin();
+    wContent.setLayout(contentLayout);
 
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // TransformName line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "System.TransformName.Label"));
-    wlTransformName.setToolTipText(BaseMessages.getString(PKG, "System.TransformName.Tooltip"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
-
-    // Rowcout Output
-    Label wlOutputRowcount = new Label(shell, SWT.RIGHT);
+    // Row count Output
+    Label wlOutputRowcount = new Label(wContent, SWT.RIGHT);
     wlOutputRowcount.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureDialog.outputRowcount.Label"));
     PropsUi.setLook(wlOutputRowcount);
     FormData fdlOutputRowcount = new FormData();
     fdlOutputRowcount.left = new FormAttachment(0, 0);
-    fdlOutputRowcount.top = new FormAttachment(wTransformName, margin);
+    fdlOutputRowcount.top = new FormAttachment(0, margin);
     fdlOutputRowcount.right = new FormAttachment(middle, -margin);
     wlOutputRowcount.setLayoutData(fdlOutputRowcount);
-    wOutputRowcount = new Button(shell, SWT.CHECK);
+    wOutputRowcount = new Button(wContent, SWT.CHECK);
     PropsUi.setLook(wOutputRowcount);
     FormData fdOutputRowcount = new FormData();
     fdOutputRowcount.left = new FormAttachment(middle, 0);
@@ -135,31 +141,22 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
           @Override
           public void widgetSelected(SelectionEvent e) {
             input.setChanged();
-
-            if (wOutputRowcount.getSelection()) {
-              wRowCountField.setEnabled(true);
-              // Default to field name by using translations
-              wRowCountField.setText(
-                  BaseMessages.getString(PKG, "TransformMetaStructureMeta.RowcountName"));
-            } else {
-              wRowCountField.setText("");
-              wRowCountField.setEnabled(false);
-            }
+            toggleTextAndLabel(wOutputRowcount, wRowCountField, wlRowCountField, "RowcountName");
           }
         });
 
     // Row count Field
-    Label wlRowCountField = new Label(shell, SWT.RIGHT);
+    wlRowCountField = new Label(wContent, SWT.RIGHT);
     wlRowCountField.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureDialog.RowcountField.Label"));
     PropsUi.setLook(wlRowCountField);
     FormData fdlRowCountField = new FormData();
     fdlRowCountField.left = new FormAttachment(0, 0);
     fdlRowCountField.right = new FormAttachment(middle, -margin);
-    fdlRowCountField.top = new FormAttachment(wlOutputRowcount, 2 * margin);
+    fdlRowCountField.top = new FormAttachment(wlOutputRowcount, margin);
     wlRowCountField.setLayoutData(fdlRowCountField);
 
-    wRowCountField = new TextVar(variables, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
+    wRowCountField = new TextVar(variables, wContent, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wRowCountField);
     wRowCountField.addModifyListener(lsMod);
     FormData fdRowCountField = new FormData();
@@ -170,7 +167,7 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
     wRowCountField.setEnabled(false);
 
     // Include position field
-    Label wlIncludePosition = new Label(shell, SWT.RIGHT);
+    Label wlIncludePosition = new Label(wContent, SWT.RIGHT);
     wlIncludePosition.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureDialog.includePosition.Label"));
     PropsUi.setLook(wlIncludePosition);
@@ -179,7 +176,7 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
     fdlIncludePosition.top = new FormAttachment(wlRowCountField, margin);
     fdlIncludePosition.right = new FormAttachment(middle, -margin);
     wlIncludePosition.setLayoutData(fdlIncludePosition);
-    wIncludePosition = new Button(shell, SWT.CHECK);
+    wIncludePosition = new Button(wContent, SWT.CHECK);
     PropsUi.setLook(wIncludePosition);
     FormData fdIncludePosition = new FormData();
     fdIncludePosition.left = new FormAttachment(middle, 0);
@@ -191,31 +188,22 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
           @Override
           public void widgetSelected(SelectionEvent e) {
             input.setChanged();
-
-            if (wIncludePosition.getSelection()) {
-              wPositionField.setEnabled(true);
-              // Default to field name by using translations
-              wPositionField.setText(
-                  BaseMessages.getString(PKG, "TransformMetaStructureMeta.PositionName"));
-            } else {
-              wPositionField.setText("");
-              wPositionField.setEnabled(false);
-            }
+            toggleTextAndLabel(wIncludePosition, wPositionField, wlPositionField, "PositionName");
           }
         });
 
     // Position Field
-    Label wlPositionField = new Label(shell, SWT.RIGHT);
+    wlPositionField = new Label(wContent, SWT.RIGHT);
     wlPositionField.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureMeta.PositionField.Label"));
     PropsUi.setLook(wlPositionField);
     FormData fdlPositionField = new FormData();
     fdlPositionField.left = new FormAttachment(0, 0);
     fdlPositionField.right = new FormAttachment(middle, -margin);
-    fdlPositionField.top = new FormAttachment(wlIncludePosition, 2 * margin);
+    fdlPositionField.top = new FormAttachment(wlIncludePosition, margin);
     wlPositionField.setLayoutData(fdlPositionField);
 
-    wPositionField = new TextVar(variables, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
+    wPositionField = new TextVar(variables, wContent, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wPositionField);
     wPositionField.addModifyListener(lsMod);
     FormData fdPositionField = new FormData();
@@ -225,74 +213,65 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
     wPositionField.setLayoutData(fdPositionField);
     wPositionField.setEnabled(false);
 
-    // Include fieldname field
-    Label wlIncludeFieldname = new Label(shell, SWT.RIGHT);
-    wlIncludeFieldname.setText(
+    // Include fieldName field
+    Label wlIncludeFieldName = new Label(wContent, SWT.RIGHT);
+    wlIncludeFieldName.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureDialog.includeFieldname.Label"));
-    PropsUi.setLook(wlIncludeFieldname);
-    FormData fdlIncludeFieldname = new FormData();
-    fdlIncludeFieldname.left = new FormAttachment(0, 0);
-    fdlIncludeFieldname.top = new FormAttachment(wlPositionField, margin);
-    fdlIncludeFieldname.right = new FormAttachment(middle, -margin);
-    wlIncludeFieldname.setLayoutData(fdlIncludeFieldname);
-    wIncludeFieldname = new Button(shell, SWT.CHECK);
-    PropsUi.setLook(wIncludeFieldname);
-    FormData fdIncludeFieldname = new FormData();
-    fdIncludeFieldname.left = new FormAttachment(middle, 0);
-    fdIncludeFieldname.top = new FormAttachment(wlIncludeFieldname, 0, SWT.CENTER);
-    fdIncludeFieldname.right = new FormAttachment(100, 0);
-    wIncludeFieldname.setLayoutData(fdIncludeFieldname);
+    PropsUi.setLook(wlIncludeFieldName);
+    FormData fdlIncludeFieldName = new FormData();
+    fdlIncludeFieldName.left = new FormAttachment(0, 0);
+    fdlIncludeFieldName.top = new FormAttachment(wlPositionField, margin);
+    fdlIncludeFieldName.right = new FormAttachment(middle, -margin);
+    wlIncludeFieldName.setLayoutData(fdlIncludeFieldName);
+    wIncludeFieldName = new Button(wContent, SWT.CHECK);
+    PropsUi.setLook(wIncludeFieldName);
+    FormData fdIncludeFieldName = new FormData();
+    fdIncludeFieldName.left = new FormAttachment(middle, 0);
+    fdIncludeFieldName.top = new FormAttachment(wlIncludeFieldName, 0, SWT.CENTER);
+    fdIncludeFieldName.right = new FormAttachment(100, 0);
+    wIncludeFieldName.setLayoutData(fdIncludeFieldName);
 
-    wIncludeFieldname.addSelectionListener(
+    wIncludeFieldName.addSelectionListener(
         new SelectionAdapter() {
           @Override
           public void widgetSelected(SelectionEvent e) {
             input.setChanged();
-
-            if (wIncludeFieldname.getSelection()) {
-              wFieldnameField.setEnabled(true);
-              // Default to field name by using translations
-              wFieldnameField.setText(
-                  BaseMessages.getString(PKG, "TransformMetaStructureMeta.FieldName"));
-            } else {
-              wFieldnameField.setText("");
-              wFieldnameField.setEnabled(false);
-            }
+            toggleTextAndLabel(wIncludeFieldName, wFieldNameField, wlFieldNameField, "FieldName");
           }
         });
 
     // Fieldname Field
-    Label wlFieldnameField = new Label(shell, SWT.RIGHT);
-    wlFieldnameField.setText(
+    wlFieldNameField = new Label(wContent, SWT.RIGHT);
+    wlFieldNameField.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureMeta.FieldnameField.Label"));
-    PropsUi.setLook(wlFieldnameField);
-    FormData fdlFieldnameField = new FormData();
-    fdlFieldnameField.left = new FormAttachment(0, 0);
-    fdlFieldnameField.right = new FormAttachment(middle, -margin);
-    fdlFieldnameField.top = new FormAttachment(wlIncludeFieldname, 2 * margin);
-    wlFieldnameField.setLayoutData(fdlFieldnameField);
+    PropsUi.setLook(wlFieldNameField);
+    FormData fdlFieldNameField = new FormData();
+    fdlFieldNameField.left = new FormAttachment(0, 0);
+    fdlFieldNameField.right = new FormAttachment(middle, -margin);
+    fdlFieldNameField.top = new FormAttachment(wlIncludeFieldName, margin);
+    wlFieldNameField.setLayoutData(fdlFieldNameField);
 
-    wFieldnameField = new TextVar(variables, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    PropsUi.setLook(wFieldnameField);
-    wFieldnameField.addModifyListener(lsMod);
-    FormData fdFieldnameField = new FormData();
-    fdFieldnameField.left = new FormAttachment(middle, 0);
-    fdFieldnameField.top = new FormAttachment(wlFieldnameField, 0, SWT.CENTER);
-    fdFieldnameField.right = new FormAttachment(100, -margin);
-    wFieldnameField.setLayoutData(fdFieldnameField);
-    wFieldnameField.setEnabled(false);
+    wFieldNameField = new TextVar(variables, wContent, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
+    PropsUi.setLook(wFieldNameField);
+    wFieldNameField.addModifyListener(lsMod);
+    FormData fdFieldNameField = new FormData();
+    fdFieldNameField.left = new FormAttachment(middle, 0);
+    fdFieldNameField.top = new FormAttachment(wlFieldNameField, 0, SWT.CENTER);
+    fdFieldNameField.right = new FormAttachment(100, -margin);
+    wFieldNameField.setLayoutData(fdFieldNameField);
+    wFieldNameField.setEnabled(false);
 
     // Include Comment field
-    Label wlIncludeComment = new Label(shell, SWT.RIGHT);
+    Label wlIncludeComment = new Label(wContent, SWT.RIGHT);
     wlIncludeComment.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureDialog.includeComments.Label"));
     PropsUi.setLook(wlIncludeComment);
     FormData fdlIncludeComment = new FormData();
     fdlIncludeComment.left = new FormAttachment(0, 0);
-    fdlIncludeComment.top = new FormAttachment(wlFieldnameField, margin);
+    fdlIncludeComment.top = new FormAttachment(wlFieldNameField, margin);
     fdlIncludeComment.right = new FormAttachment(middle, -margin);
     wlIncludeComment.setLayoutData(fdlIncludeComment);
-    wIncludeComments = new Button(shell, SWT.CHECK);
+    wIncludeComments = new Button(wContent, SWT.CHECK);
     PropsUi.setLook(wIncludeComments);
     FormData fdIncludeComment = new FormData();
     fdIncludeComment.left = new FormAttachment(middle, 0);
@@ -305,31 +284,22 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
           @Override
           public void widgetSelected(SelectionEvent e) {
             input.setChanged();
-
-            if (wIncludeComments.getSelection()) {
-              wCommentsField.setEnabled(true);
-              // Default to field name by using translations
-              wCommentsField.setText(
-                  BaseMessages.getString(PKG, "TransformMetaStructureMeta.CommentsName"));
-            } else {
-              wCommentsField.setText("");
-              wCommentsField.setEnabled(false);
-            }
+            toggleTextAndLabel(wIncludeComments, wCommentsField, wlCommentsField, "CommentsName");
           }
         });
 
     // Comments Field
-    Label wlCommentsField = new Label(shell, SWT.RIGHT);
+    wlCommentsField = new Label(wContent, SWT.RIGHT);
     wlCommentsField.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureMeta.CommentsField.Label"));
     PropsUi.setLook(wlCommentsField);
     FormData fdlCommentsField = new FormData();
     fdlCommentsField.left = new FormAttachment(0, 0);
     fdlCommentsField.right = new FormAttachment(middle, -margin);
-    fdlCommentsField.top = new FormAttachment(wlIncludeComment, 2 * margin);
+    fdlCommentsField.top = new FormAttachment(wlIncludeComment, margin);
     wlCommentsField.setLayoutData(fdlCommentsField);
 
-    wCommentsField = new TextVar(variables, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
+    wCommentsField = new TextVar(variables, wContent, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wCommentsField);
     wCommentsField.addModifyListener(lsMod);
     FormData fdCommentsField = new FormData();
@@ -340,7 +310,7 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
     wCommentsField.setEnabled(true);
 
     // Include Type field
-    Label wlIncludeType = new Label(shell, SWT.RIGHT);
+    Label wlIncludeType = new Label(wContent, SWT.RIGHT);
     wlIncludeType.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureDialog.includeType.Label"));
     PropsUi.setLook(wlIncludeType);
@@ -349,7 +319,7 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
     fdlIncludeType.top = new FormAttachment(wlCommentsField, margin);
     fdlIncludeType.right = new FormAttachment(middle, -margin);
     wlIncludeType.setLayoutData(fdlIncludeType);
-    wIncludeType = new Button(shell, SWT.CHECK);
+    wIncludeType = new Button(wContent, SWT.CHECK);
     PropsUi.setLook(wIncludeType);
     FormData fdIncludeType = new FormData();
     fdIncludeType.left = new FormAttachment(middle, 0);
@@ -362,30 +332,21 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
           @Override
           public void widgetSelected(SelectionEvent e) {
             input.setChanged();
-
-            if (wIncludeType.getSelection()) {
-              wTypeField.setEnabled(true);
-              // Default to field name by using translations
-              wTypeField.setText(
-                  BaseMessages.getString(PKG, "TransformMetaStructureMeta.TypeName"));
-            } else {
-              wTypeField.setText("");
-              wTypeField.setEnabled(false);
-            }
+            toggleTextAndLabel(wIncludeType, wTypeField, wlTypeField, "TypeName");
           }
         });
 
     // Type Field
-    Label wlTypeField = new Label(shell, SWT.RIGHT);
+    wlTypeField = new Label(wContent, SWT.RIGHT);
     wlTypeField.setText(BaseMessages.getString(PKG, "TransformMetaStructureMeta.TypeField.Label"));
     PropsUi.setLook(wlTypeField);
     FormData fdlTypeField = new FormData();
     fdlTypeField.left = new FormAttachment(0, 0);
     fdlTypeField.right = new FormAttachment(middle, -margin);
-    fdlTypeField.top = new FormAttachment(wlIncludeType, 2 * margin);
+    fdlTypeField.top = new FormAttachment(wlIncludeType, margin);
     wlTypeField.setLayoutData(fdlTypeField);
 
-    wTypeField = new TextVar(variables, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
+    wTypeField = new TextVar(variables, wContent, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wTypeField);
     wTypeField.addModifyListener(lsMod);
     FormData fdTypeField = new FormData();
@@ -396,7 +357,7 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
     wTypeField.setEnabled(true);
 
     // Include Mask field
-    Label wlIncludeMask = new Label(shell, SWT.RIGHT);
+    Label wlIncludeMask = new Label(wContent, SWT.RIGHT);
     wlIncludeMask.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureDialog.includeMask.Label"));
     PropsUi.setLook(wlIncludeMask);
@@ -405,8 +366,8 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
     fdlIncludeMask.top = new FormAttachment(wlTypeField, margin);
     fdlIncludeMask.right = new FormAttachment(middle, -margin);
     wlIncludeMask.setLayoutData(fdlIncludeMask);
-    wIncludeMask = new Button(shell, SWT.CHECK);
-    PropsUi.setLook(wIncludeOrigin);
+    wIncludeMask = new Button(wContent, SWT.CHECK);
+    PropsUi.setLook(wIncludeMask);
     FormData fdIncludeMask = new FormData();
     fdIncludeMask.left = new FormAttachment(middle, 0);
     fdIncludeMask.top = new FormAttachment(wlIncludeMask, 0, SWT.CENTER);
@@ -418,29 +379,21 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
           @Override
           public void widgetSelected(SelectionEvent e) {
             input.setChanged();
-
-            if (wIncludeMask.getSelection()) {
-              wMaskField.setEnabled(true);
-              // Default to field name by using translations
-              wMaskField.setText(
-                  BaseMessages.getString(PKG, "TransformMetaStructureMeta.MaskName"));
-            } else {
-              wMaskField.setEnabled(false);
-            }
+            toggleTextAndLabel(wIncludeMask, wMaskField, wlMaskField, "MaskName");
           }
         });
 
     // Mask Field
-    Label wlMaskField = new Label(shell, SWT.RIGHT);
+    wlMaskField = new Label(wContent, SWT.RIGHT);
     wlMaskField.setText(BaseMessages.getString(PKG, "TransformMetaStructureMeta.MaskField.Label"));
     PropsUi.setLook(wlMaskField);
     FormData fdlMaskField = new FormData();
     fdlMaskField.left = new FormAttachment(0, 0);
     fdlMaskField.right = new FormAttachment(middle, -margin);
-    fdlMaskField.top = new FormAttachment(wlIncludeMask, 2 * margin);
+    fdlMaskField.top = new FormAttachment(wlIncludeMask, margin);
     wlMaskField.setLayoutData(fdlMaskField);
 
-    wMaskField = new TextVar(variables, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
+    wMaskField = new TextVar(variables, wContent, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wMaskField);
     wMaskField.addModifyListener(lsMod);
     FormData fdMaskField = new FormData();
@@ -451,16 +404,16 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
     wMaskField.setEnabled(true);
 
     // Include Length field
-    Label wlIncludeLength = new Label(shell, SWT.RIGHT);
+    Label wlIncludeLength = new Label(wContent, SWT.RIGHT);
     wlIncludeLength.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureDialog.includeLength.Label"));
     PropsUi.setLook(wlIncludeLength);
     FormData fdlIncludeLength = new FormData();
     fdlIncludeLength.left = new FormAttachment(0, 0);
-    fdlIncludeLength.top = new FormAttachment(wlTypeField, margin);
+    fdlIncludeLength.top = new FormAttachment(wlMaskField, margin);
     fdlIncludeLength.right = new FormAttachment(middle, -margin);
     wlIncludeLength.setLayoutData(fdlIncludeLength);
-    wIncludeLength = new Button(shell, SWT.CHECK);
+    wIncludeLength = new Button(wContent, SWT.CHECK);
     PropsUi.setLook(wIncludeLength);
     FormData fdIncludeLength = new FormData();
     fdIncludeLength.left = new FormAttachment(middle, 0);
@@ -473,31 +426,22 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
           @Override
           public void widgetSelected(SelectionEvent e) {
             input.setChanged();
-
-            if (wIncludeLength.getSelection()) {
-              wLengthField.setEnabled(true);
-              // Default to field name by using translations
-              wLengthField.setText(
-                  BaseMessages.getString(PKG, "TransformMetaStructureMeta.LengthName"));
-            } else {
-              wLengthField.setText("");
-              wLengthField.setEnabled(false);
-            }
+            toggleTextAndLabel(wIncludeLength, wLengthField, wlLengthField, "LengthName");
           }
         });
 
     // Length Field
-    Label wlLengthField = new Label(shell, SWT.RIGHT);
+    wlLengthField = new Label(wContent, SWT.RIGHT);
     wlLengthField.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureMeta.LengthField.Label"));
     PropsUi.setLook(wlLengthField);
     FormData fdlLengthField = new FormData();
     fdlLengthField.left = new FormAttachment(0, 0);
     fdlLengthField.right = new FormAttachment(middle, -margin);
-    fdlLengthField.top = new FormAttachment(wlIncludeLength, 2 * margin);
+    fdlLengthField.top = new FormAttachment(wlIncludeLength, margin);
     wlLengthField.setLayoutData(fdlLengthField);
 
-    wLengthField = new TextVar(variables, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
+    wLengthField = new TextVar(variables, wContent, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wLengthField);
     wLengthField.addModifyListener(lsMod);
     FormData fdLengthField = new FormData();
@@ -508,7 +452,7 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
     wLengthField.setEnabled(true);
 
     // Include Precision field
-    Label wlIncludePrecision = new Label(shell, SWT.RIGHT);
+    Label wlIncludePrecision = new Label(wContent, SWT.RIGHT);
     wlIncludePrecision.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureDialog.includePrecision.Label"));
     PropsUi.setLook(wlIncludePrecision);
@@ -517,7 +461,7 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
     fdlIncludePrecision.top = new FormAttachment(wlLengthField, margin);
     fdlIncludePrecision.right = new FormAttachment(middle, -margin);
     wlIncludePrecision.setLayoutData(fdlIncludePrecision);
-    wIncludePrecision = new Button(shell, SWT.CHECK);
+    wIncludePrecision = new Button(wContent, SWT.CHECK);
     PropsUi.setLook(wIncludePrecision);
     FormData fdIncludePrecision = new FormData();
     fdIncludePrecision.left = new FormAttachment(middle, 0);
@@ -530,31 +474,23 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
           @Override
           public void widgetSelected(SelectionEvent e) {
             input.setChanged();
-
-            if (wIncludePrecision.getSelection()) {
-              wPrecisionField.setEnabled(true);
-              // Default to field name by using translations
-              wPrecisionField.setText(
-                  BaseMessages.getString(PKG, "TransformMetaStructureMeta.PrecisionName"));
-            } else {
-              wIncludePrecision.setText("");
-              wPrecisionField.setEnabled(false);
-            }
+            toggleTextAndLabel(
+                wIncludePrecision, wPrecisionField, wlPrecisionField, "PrecisionName");
           }
         });
 
     // Precision Field
-    Label wlPrecisionField = new Label(shell, SWT.RIGHT);
+    wlPrecisionField = new Label(wContent, SWT.RIGHT);
     wlPrecisionField.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureMeta.PrecisionField.Label"));
     PropsUi.setLook(wlPrecisionField);
     FormData fdlPrecisionField = new FormData();
     fdlPrecisionField.left = new FormAttachment(0, 0);
     fdlPrecisionField.right = new FormAttachment(middle, -margin);
-    fdlPrecisionField.top = new FormAttachment(wlIncludePrecision, 2 * margin);
+    fdlPrecisionField.top = new FormAttachment(wlIncludePrecision, margin);
     wlPrecisionField.setLayoutData(fdlPrecisionField);
 
-    wPrecisionField = new TextVar(variables, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
+    wPrecisionField = new TextVar(variables, wContent, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wPrecisionField);
     wPrecisionField.addModifyListener(lsMod);
     FormData fdPrecisionField = new FormData();
@@ -565,7 +501,7 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
     wPrecisionField.setEnabled(true);
 
     // Include Origin field
-    Label wlIncludeOrigin = new Label(shell, SWT.RIGHT);
+    Label wlIncludeOrigin = new Label(wContent, SWT.RIGHT);
     wlIncludeOrigin.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureDialog.includeOrigin.Label"));
     PropsUi.setLook(wlIncludeOrigin);
@@ -574,7 +510,7 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
     fdlIncludeOrigin.top = new FormAttachment(wlPrecisionField, margin);
     fdlIncludeOrigin.right = new FormAttachment(middle, -margin);
     wlIncludeOrigin.setLayoutData(fdlIncludeOrigin);
-    wIncludeOrigin = new Button(shell, SWT.CHECK);
+    wIncludeOrigin = new Button(wContent, SWT.CHECK);
     PropsUi.setLook(wIncludeOrigin);
     FormData fdIncludeOrigin = new FormData();
     fdIncludeOrigin.left = new FormAttachment(middle, 0);
@@ -587,30 +523,22 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
           @Override
           public void widgetSelected(SelectionEvent e) {
             input.setChanged();
-
-            if (wIncludeOrigin.getSelection()) {
-              wOriginField.setEnabled(true);
-              // Default to field name by using translations
-              wOriginField.setText(
-                  BaseMessages.getString(PKG, "TransformMetaStructureMeta.OriginName"));
-            } else {
-              wOriginField.setEnabled(false);
-            }
+            toggleTextAndLabel(wIncludeOrigin, wOriginField, wlOriginField, "OriginName");
           }
         });
 
     // Origin Field
-    Label wlOriginField = new Label(shell, SWT.RIGHT);
+    wlOriginField = new Label(wContent, SWT.RIGHT);
     wlOriginField.setText(
         BaseMessages.getString(PKG, "TransformMetaStructureMeta.OriginField.Label"));
     PropsUi.setLook(wlOriginField);
     FormData fdlOriginField = new FormData();
     fdlOriginField.left = new FormAttachment(0, 0);
     fdlOriginField.right = new FormAttachment(middle, -margin);
-    fdlOriginField.top = new FormAttachment(wlIncludeOrigin, 2 * margin);
+    fdlOriginField.top = new FormAttachment(wlIncludeOrigin, margin);
     wlOriginField.setLayoutData(fdlOriginField);
 
-    wOriginField = new TextVar(variables, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
+    wOriginField = new TextVar(variables, wContent, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wOriginField);
     wOriginField.addModifyListener(lsMod);
     FormData fdOriginField = new FormData();
@@ -620,18 +548,17 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
     wOriginField.setLayoutData(fdOriginField);
     wOriginField.setEnabled(true);
 
-    // Some buttons
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wCancel}, margin, wOriginField);
+    wContent.pack();
+    Rectangle bounds = wContent.getBounds();
+    sc.setContent(wContent);
+    sc.setExpandHorizontal(true);
+    sc.setExpandVertical(true);
+    sc.setMinWidth(bounds.width);
+    sc.setMinHeight(bounds.height);
 
     getData();
     input.setChanged(changed);
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -642,67 +569,74 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
     if (input.isOutputRowcount()) {
       wRowCountField.setText(input.getRowcountField());
     }
+
+    wlRowCountField.setEnabled(input.isOutputRowcount());
     wRowCountField.setEnabled(input.isOutputRowcount());
     wOutputRowcount.setSelection(input.isOutputRowcount());
 
     if (input.isIncludePositionField()) {
-      wPositionField.setText(input.getPositionFieldname());
+      wPositionField.setText(input.getPositionFieldName());
     }
 
+    wlPositionField.setEnabled(input.isIncludePositionField());
     wPositionField.setEnabled(input.isIncludePositionField());
     wIncludePosition.setSelection(input.isIncludePositionField());
 
-    if (input.isIncludeFieldnameField()) {
-      wFieldnameField.setText(input.getFieldFieldname());
+    if (input.isIncludeFieldNameField()) {
+      wFieldNameField.setText(input.getFieldFieldName());
     }
 
-    wFieldnameField.setEnabled(input.isIncludeFieldnameField());
-    wIncludeFieldname.setSelection(input.isIncludeFieldnameField());
+    wlFieldNameField.setEnabled(input.isIncludeFieldNameField());
+    wFieldNameField.setEnabled(input.isIncludeFieldNameField());
+    wIncludeFieldName.setSelection(input.isIncludeFieldNameField());
 
     if (input.isIncludeCommentsField()) {
-      wCommentsField.setText(input.getCommentsFieldname());
+      wCommentsField.setText(input.getCommentsFieldName());
     }
 
+    wlCommentsField.setEnabled(input.isIncludeCommentsField());
     wCommentsField.setEnabled(input.isIncludeCommentsField());
     wIncludeComments.setSelection(input.isIncludeCommentsField());
 
     if (input.isIncludeTypeField()) {
-      wTypeField.setText(input.getTypeFieldname());
+      wTypeField.setText(input.getTypeFieldName());
     }
 
     if (input.isIncludeMaskField()) {
-      wMaskField.setText(input.getMaskFieldname());
+      wMaskField.setText(input.getMaskFieldName());
     }
 
+    wlMaskField.setEnabled(input.isIncludeMaskField());
     wMaskField.setEnabled(input.isIncludeMaskField());
     wIncludeMask.setSelection(input.isIncludeMaskField());
 
+    wlTypeField.setEnabled(input.isIncludeTypeField());
     wTypeField.setEnabled(input.isIncludeTypeField());
     wIncludeType.setSelection(input.isIncludeTypeField());
 
     if (input.isIncludeLengthField()) {
-      wLengthField.setText(input.getLengthFieldname());
+      wLengthField.setText(input.getLengthFieldName());
     }
 
+    wlLengthField.setEnabled(input.isIncludeLengthField());
     wLengthField.setEnabled(input.isIncludeLengthField());
     wIncludeLength.setSelection(input.isIncludeLengthField());
 
     if (input.isIncludePrecisionField()) {
-      wPrecisionField.setText(input.getPrecisionFieldname());
+      wPrecisionField.setText(input.getPrecisionFieldName());
     }
 
+    wlPrecisionField.setEnabled(input.isIncludePrecisionField());
     wPrecisionField.setEnabled(input.isIncludePrecisionField());
     wIncludePrecision.setSelection(input.isIncludePrecisionField());
 
     if (input.isIncludeOriginField()) {
-      wOriginField.setText(input.getOriginFieldname());
+      wOriginField.setText(input.getOriginFieldName());
     }
 
+    wlOriginField.setEnabled(input.isIncludeOriginField());
     wOriginField.setEnabled(input.isIncludeOriginField());
     wIncludeOrigin.setSelection(input.isIncludeOriginField());
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   private void cancel() {
@@ -716,31 +650,52 @@ public class TransformMetaStructureDialog extends BaseTransformDialog {
       return;
     }
 
-    transformName = wTransformName.getText(); // return value
+    // return value
+    transformName = wTransformName.getText();
 
     getInfo(input);
-
     dispose();
   }
 
-  private void getInfo(TransformMetaStructureMeta tfoi) {
-    tfoi.setOutputRowcount(wOutputRowcount.getSelection());
-    tfoi.setRowcountField(wRowCountField.getText());
-    tfoi.setIncludePositionField(wIncludePosition.getSelection());
-    tfoi.setPositionFieldname(wPositionField.getText());
-    tfoi.setIncludeFieldnameField(wIncludeFieldname.getSelection());
-    tfoi.setFieldFieldname(wFieldnameField.getText());
-    tfoi.setIncludeCommentsField(wIncludeComments.getSelection());
-    tfoi.setCommentsFieldname(wCommentsField.getText());
-    tfoi.setIncludeTypeField(wIncludeType.getSelection());
-    tfoi.setTypeFieldname(wTypeField.getText());
-    tfoi.setIncludeMaskField(wIncludeMask.getSelection());
-    tfoi.setMaskFieldname(wMaskField.getText());
-    tfoi.setIncludePrecisionField(wIncludePrecision.getSelection());
-    tfoi.setPrecisionFieldname(wPrecisionField.getText());
-    tfoi.setIncludeLengthField(wIncludeLength.getSelection());
-    tfoi.setLengthFieldname(wLengthField.getText());
-    tfoi.setIncludeOriginField(wIncludeOrigin.getSelection());
-    tfoi.setOriginFieldname(wOriginField.getText());
+  private void getInfo(TransformMetaStructureMeta meta) {
+    meta.setOutputRowcount(wOutputRowcount.getSelection());
+    meta.setRowcountField(wRowCountField.getText());
+    meta.setIncludePositionField(wIncludePosition.getSelection());
+    meta.setPositionFieldName(wPositionField.getText());
+    meta.setIncludeFieldNameField(wIncludeFieldName.getSelection());
+    meta.setFieldFieldName(wFieldNameField.getText());
+    meta.setIncludeCommentsField(wIncludeComments.getSelection());
+    meta.setCommentsFieldName(wCommentsField.getText());
+    meta.setIncludeTypeField(wIncludeType.getSelection());
+    meta.setTypeFieldName(wTypeField.getText());
+    meta.setIncludeMaskField(wIncludeMask.getSelection());
+    meta.setMaskFieldName(wMaskField.getText());
+    meta.setIncludePrecisionField(wIncludePrecision.getSelection());
+    meta.setPrecisionFieldName(wPrecisionField.getText());
+    meta.setIncludeLengthField(wIncludeLength.getSelection());
+    meta.setLengthFieldName(wLengthField.getText());
+    meta.setIncludeOriginField(wIncludeOrigin.getSelection());
+    meta.setOriginFieldName(wOriginField.getText());
+  }
+
+  /**
+   * Updates the enabled state of the given TextVar and Label based on the checkbox selection.
+   *
+   * @param check the checkbox controlling the state
+   * @param text the text field to update
+   * @param label the label associated with the text field
+   * @param message the message key used to retrieve the default value
+   */
+  private void toggleTextAndLabel(Button check, TextVar text, Label label, String message) {
+    if (check.getSelection()) {
+      text.setEnabled(true);
+      label.setEnabled(true);
+      // Default to field name by using translations
+      text.setText(BaseMessages.getString(PKG, "TransformMetaStructureMeta." + message));
+    } else {
+      text.setText("");
+      text.setEnabled(false);
+      label.setEnabled(false);
+    }
   }
 }

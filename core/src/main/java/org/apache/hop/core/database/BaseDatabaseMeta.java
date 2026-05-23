@@ -36,6 +36,7 @@ import lombok.Setter;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopDatabaseException;
 import org.apache.hop.core.exception.HopPluginException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.exception.HopValueException;
 import org.apache.hop.core.gui.plugin.GuiElementType;
 import org.apache.hop.core.gui.plugin.GuiWidgetElement;
@@ -119,8 +120,8 @@ public abstract class BaseDatabaseMeta implements Cloneable, IDatabase {
   public static final String ELEMENT_ID_PASSWORD = "password";
 
   /**
-   * Boolean to indicate if savepoints can be released Most databases do, so we set it to true.
-   * Child classes can overwrite with false if need be.
+   * Boolean to indicate if savepoint can be released Most databases do, so we set it to true. Child
+   * classes can overwrite with false if need be.
    */
   protected boolean releaseSavepoint = true;
 
@@ -184,6 +185,21 @@ public abstract class BaseDatabaseMeta implements Cloneable, IDatabase {
   @HopMetadataProperty protected String pluginId;
   @HopMetadataProperty protected String pluginName;
 
+  // SSH Tunnel fields
+  @HopMetadataProperty protected boolean sshTunnelEnabled;
+  @HopMetadataProperty protected String sshTunnelHost;
+  @HopMetadataProperty protected String sshTunnelPort;
+  @HopMetadataProperty protected String sshTunnelUsername;
+
+  @HopMetadataProperty(password = true)
+  protected String sshTunnelPassword;
+
+  @HopMetadataProperty protected boolean sshTunnelUsePrivateKey;
+  @HopMetadataProperty protected String sshTunnelPrivateKeyFile;
+
+  @HopMetadataProperty(password = true)
+  protected String sshTunnelPassphrase;
+
   public BaseDatabaseMeta() {
     attributes = Collections.synchronizedMap(new HashMap<>());
     changed = false;
@@ -223,9 +239,6 @@ public abstract class BaseDatabaseMeta implements Cloneable, IDatabase {
   public void setPluginName(String pluginName) {
     this.pluginName = pluginName;
   }
-
-  @Override
-  public abstract int[] getAccessTypeList();
 
   /**
    * @return Returns the accessType.
@@ -438,7 +451,7 @@ public abstract class BaseDatabaseMeta implements Cloneable, IDatabase {
         retval.attributes.put(key, attributes.get(key));
       }
     } catch (CloneNotSupportedException e) {
-      throw new RuntimeException(e);
+      throw new HopRuntimeException(e);
     }
     return retval;
   }
@@ -1415,7 +1428,7 @@ public abstract class BaseDatabaseMeta implements Cloneable, IDatabase {
   /**
    * @param string
    * @return A string that is properly quoted for use in a SQL statement (insert, update, delete,
-   *     etc)
+   *     etc.)
    */
   @Override
   public String quoteSqlString(String string) {
@@ -1954,8 +1967,7 @@ public abstract class BaseDatabaseMeta implements Cloneable, IDatabase {
     try {
       switch (typeName) {
           // Most dbs expose uuid as "UUID", sql server (native) as "UNIQUEIDENTIFIER"
-        case "uniqueidentifier":
-        case "uuid":
+        case "uniqueidentifier", "uuid":
           {
             int uuidTypeId = ValueMetaFactory.getIdForValueMeta("UUID");
 
@@ -1967,9 +1979,10 @@ public abstract class BaseDatabaseMeta implements Cloneable, IDatabase {
 
             return u;
           }
-        case "json":
-        case "jsonb":
+        case "json", "jsonb":
           return ValueMetaFactory.cloneValueMeta(v, IValueMeta.TYPE_JSON);
+        default:
+          break;
       }
     } catch (HopPluginException ignore) {
       // plugin not present

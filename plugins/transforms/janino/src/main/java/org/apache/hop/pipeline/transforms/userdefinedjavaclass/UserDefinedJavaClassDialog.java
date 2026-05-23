@@ -17,10 +17,6 @@
 
 package org.apache.hop.pipeline.transforms.userdefinedjavaclass;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.PrintWriter;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -44,10 +40,11 @@ import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineHopMeta;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.TransformMeta;
+import org.apache.hop.pipeline.transforms.janino.JaninoMeta;
 import org.apache.hop.pipeline.transforms.rowgenerator.GeneratorField;
 import org.apache.hop.pipeline.transforms.rowgenerator.RowGeneratorMeta;
-import org.apache.hop.pipeline.transforms.userdefinedjavaclass.UserDefinedJavaClassCodeSnippits.Category;
-import org.apache.hop.pipeline.transforms.userdefinedjavaclass.UserDefinedJavaClassCodeSnippits.Snippit;
+import org.apache.hop.pipeline.transforms.userdefinedjavaclass.UserDefinedJavaClassCodeSnippets.Category;
+import org.apache.hop.pipeline.transforms.userdefinedjavaclass.UserDefinedJavaClassCodeSnippets.Snippet;
 import org.apache.hop.pipeline.transforms.userdefinedjavaclass.UserDefinedJavaClassDef.ClassType;
 import org.apache.hop.pipeline.transforms.userdefinedjavaclass.UserDefinedJavaClassMeta.FieldInfo;
 import org.apache.hop.pipeline.transforms.util.JaninoCheckerUtil;
@@ -57,8 +54,8 @@ import org.apache.hop.ui.core.dialog.BaseDialog;
 import org.apache.hop.ui.core.dialog.EnterTextDialog;
 import org.apache.hop.ui.core.dialog.ErrorDialog;
 import org.apache.hop.ui.core.dialog.MessageBox;
+import org.apache.hop.ui.core.dialog.MessageDialogWithToggle;
 import org.apache.hop.ui.core.dialog.PreviewRowsDialog;
-import org.apache.hop.ui.core.dialog.ShowMessageDialog;
 import org.apache.hop.ui.core.gui.GuiResource;
 import org.apache.hop.ui.core.widget.ColumnInfo;
 import org.apache.hop.ui.core.widget.JavaStyledTextComp;
@@ -70,6 +67,7 @@ import org.apache.hop.ui.pipeline.transform.BaseTransformDialog;
 import org.apache.hop.ui.util.EnvironmentUtils;
 import org.apache.hop.ui.util.SwtSvgImageUtil;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.custom.CCombo;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabFolder2Adapter;
 import org.eclipse.swt.custom.CTabFolderEvent;
@@ -90,6 +88,7 @@ import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Listener;
@@ -111,9 +110,16 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
   public static final String CONST_SET_VALUE = "setValue()";
   public static final String CONST_SNIPPITS_CATEGORY = "Snippits Category";
 
+  private static final String[] JAVA_TARGET_VERSION_ITEMS =
+      new String[] {
+        "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"
+      };
+
   private ModifyListener lsMod;
 
   private TableView wFields;
+
+  private CCombo wJavaTargetVersion;
 
   private Label wlPosition;
 
@@ -149,7 +155,7 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
   private String strActiveScript;
 
   private UserDefinedJavaClassMeta input;
-  private UserDefinedJavaClassCodeSnippits snippitsHelper;
+  private UserDefinedJavaClassCodeSnippets snippitsHelper;
 
   private static final GuiResource guiResource = GuiResource.getInstance();
 
@@ -164,12 +170,13 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
 
   private CTabItem fieldsTab;
 
-  private int margin;
   private TableView wInfoTransforms;
   private TableView wTargetTransforms;
   private TableView wParameters;
   private String[] prevTransformNames;
   private String[] nextTransformNames;
+
+  public static final String WARNING_CLOSE_UNSAVED_PARAMETER = "UserDefinedJavaClassCloseWarning";
 
   public UserDefinedJavaClassDialog(
       Shell parent,
@@ -200,7 +207,7 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
     }
 
     try {
-      snippitsHelper = UserDefinedJavaClassCodeSnippits.getSnippitsHelper();
+      snippitsHelper = UserDefinedJavaClassCodeSnippets.getSnippetsHelper();
     } catch (Exception e) {
       new ErrorDialog(
           shell,
@@ -212,57 +219,41 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "UserDefinedJavaClassDialog.Shell.Title"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar()
+        .ok(e -> ok())
+        .custom(
+            BaseMessages.getString(PKG, "UserDefinedJavaClassDialog.TestClass.Button"), e -> test())
+        .cancel(e -> cancel())
+        .build();
 
     lsMod = e -> input.setChanged();
     changed = input.hasChanged();
 
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
+    Control lastControl = wSpacer;
 
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "UserDefinedJavaClassDialog.Shell.Title"));
+    Label wlJavaTargetVersion = new Label(shell, SWT.RIGHT);
+    wlJavaTargetVersion.setText(
+        BaseMessages.getString(PKG, "UserDefinedJavaClassDialog.JavaTargetVersion.Label"));
+    PropsUi.setLook(wlJavaTargetVersion);
+    FormData fdlJavaTargetVersion = new FormData();
+    fdlJavaTargetVersion.left = new FormAttachment(0, 0);
+    fdlJavaTargetVersion.right = new FormAttachment(middle, -margin);
+    fdlJavaTargetVersion.top = new FormAttachment(lastControl, margin);
+    wlJavaTargetVersion.setLayoutData(fdlJavaTargetVersion);
 
-    int middle = props.getMiddlePct();
-    margin = PropsUi.getMargin();
+    wJavaTargetVersion = new CCombo(shell, SWT.BORDER | SWT.READ_ONLY);
+    PropsUi.setLook(wJavaTargetVersion);
+    wJavaTargetVersion.setItems(JAVA_TARGET_VERSION_ITEMS);
+    wJavaTargetVersion.addModifyListener(lsMod);
+    FormData fdJavaTargetVersion = new FormData();
+    fdJavaTargetVersion.left = new FormAttachment(middle, 0);
+    fdJavaTargetVersion.right = new FormAttachment(100, 0);
+    fdJavaTargetVersion.top = new FormAttachment(lastControl, margin);
+    wJavaTargetVersion.setLayoutData(fdJavaTargetVersion);
 
-    // Buttons go at the very bottom
-    //
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    Button wTest = new Button(shell, SWT.PUSH);
-    wTest.setText(BaseMessages.getString(PKG, "UserDefinedJavaClassDialog.TestClass.Button"));
-    wTest.addListener(SWT.Selection, e -> test());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wTest, wCancel}, margin, null);
-
-    // Filename line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(
-        BaseMessages.getString(PKG, "UserDefinedJavaClassDialog.TransformName.Label"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
+    lastControl = wJavaTargetVersion;
 
     SashForm wSash = new SashForm(shell, SWT.VERTICAL);
 
@@ -324,6 +315,8 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
     fdScript.top = new FormAttachment(wlScript, margin);
     fdScript.right = new FormAttachment(100, -5);
     fdScript.bottom = new FormAttachment(wlPosition, -margin);
+    fdScript.width = 500;
+    fdScript.height = 400;
     folder.setLayoutData(fdScript);
 
     Text wlHelpLabel = new Text(wTop, SWT.V_SCROLL | SWT.LEFT);
@@ -357,7 +350,9 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
     fdTabFolder.left = new FormAttachment(0, 0);
     fdTabFolder.right = new FormAttachment(100, 0);
     fdTabFolder.top = new FormAttachment(0, 0);
-    fdTabFolder.bottom = new FormAttachment(wOk, -2 * margin);
+    fdTabFolder.bottom = new FormAttachment(wOk, -margin);
+    fdTabFolder.width = 500;
+    fdTabFolder.height = 400;
     wTabFolder.setLayoutData(fdTabFolder);
 
     // The Fields tab...
@@ -381,13 +376,15 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
     wTabFolder.setSelection(fieldsTab);
 
     FormData fdSash = new FormData();
-    fdSash.left = new FormAttachment(0, 0);
-    fdSash.top = new FormAttachment(wTransformName, 0);
-    fdSash.right = new FormAttachment(100, 0);
-    fdSash.bottom = new FormAttachment(wOk, -2 * margin);
+    fdSash.left = new FormAttachment(0, margin);
+    fdSash.top = new FormAttachment(lastControl, margin);
+    fdSash.right = new FormAttachment(100, -margin);
+    fdSash.bottom = new FormAttachment(wOk, -margin);
+    fdSash.width = 500;
+    fdSash.height = 400;
     wSash.setLayoutData(fdSash);
 
-    wSash.setWeights(new int[] {75, 25});
+    wSash.setWeights(new int[] {70, 30});
 
     wTree.addListener(SWT.MouseDoubleClick, this::treeDblClick);
 
@@ -527,59 +524,10 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
             event.data = wTree.getSelection()[0].getData();
           }
         });
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), this::cancel);
 
     return transformName;
-  }
-
-  protected boolean createPlugin() {
-
-    // Create a transform with the information in this dialog
-    UserDefinedJavaClassMeta udjcMeta = new UserDefinedJavaClassMeta();
-    getInfo(udjcMeta);
-
-    try {
-      String pluginName = "Processor";
-      for (UserDefinedJavaClassDef def : udjcMeta.getDefinitions()) {
-        if (def.isTransformClass()) {
-          pluginName = def.getClassName();
-        }
-      }
-      File pluginFile =
-          new File(String.format("plugins/transforms/%s/%s.transform.xml", pluginName, pluginName));
-      pluginFile.getParentFile().mkdirs();
-      PrintWriter pw = new PrintWriter(new FileWriter(pluginFile));
-      StringBuilder outXML = new StringBuilder("<transform>\n");
-      outXML.append(String.format("\t<name>%s</name>\n", transformName));
-      outXML.append("\t<type>UserDefinedJavaClass</type>\n");
-      outXML.append("\t<description/>\n\t");
-      outXML.append(udjcMeta.getXml());
-      outXML.append("</transform>");
-      pw.println(outXML.toString());
-      pw.flush();
-      pw.close();
-      ShowMessageDialog msgDialog =
-          new ShowMessageDialog(
-              shell,
-              SWT.ICON_INFORMATION | SWT.OK,
-              BaseMessages.getString(PKG, "UserDefinedJavaClassDialog.Plugin.CreateSuccess"),
-              BaseMessages.getString(
-                  PKG, "UserDefinedJavaClassDialog.Plugin.CreatedFile", pluginFile.getPath()),
-              false);
-      msgDialog.open();
-
-    } catch (IOException e) {
-      e.printStackTrace();
-      new ErrorDialog(
-          shell,
-          BaseMessages.getString(PKG, "UserDefinedJavaClassDialog.Plugin.CreateErrorTitle"),
-          BaseMessages.getString(
-              PKG, "UserDefinedJavaClassDialog.Plugin.CreateErrorMessage", transformName),
-          e);
-    }
-
-    return true;
   }
 
   private void addFieldsTab() {
@@ -614,7 +562,7 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
     fdClearResultFields.top = new FormAttachment(0, 0);
     wClearResultFields.setLayoutData(fdClearResultFields);
 
-    final int fieldsRows = input.getFieldInfo().size();
+    final int fieldsRows = input.getFields().size();
 
     ColumnInfo[] colinf =
         new ColumnInfo[] {
@@ -956,9 +904,9 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
 
   private TreeItem getTreeItemByName(String strTabName) {
     TreeItem[] tItems = wTreeClassesItem.getItems();
-    for (int i = 0; i < tItems.length; i++) {
-      if (tItems[i].getText().equals(strTabName)) {
-        return tItems[i];
+    for (TreeItem tItem : tItems) {
+      if (tItem.getText().equals(strTabName)) {
+        return tItem;
       }
     }
     return null;
@@ -976,9 +924,9 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
 
   private CTabItem getCTabItemByName(String strTabName) {
     CTabItem[] cItems = folder.getItems();
-    for (int i = 0; i < cItems.length; i++) {
-      if (cItems[i].getText().equals(strTabName)) {
-        return cItems[i];
+    for (CTabItem cItem : cItems) {
+      if (cItem.getText().equals(strTabName)) {
+        return cItem;
       }
     }
     return null;
@@ -1063,16 +1011,16 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
   /** Copy information from the meta-data input to the dialog fields. */
   public void getData() {
     int i = 0;
-    for (FieldInfo fi : input.getFieldInfo()) {
+    for (FieldInfo fi : input.getFields()) {
       TableItem item = wFields.table.getItem(i);
       i++;
-      item.setText(1, fi.name);
-      item.setText(2, ValueMetaFactory.getValueMetaName(fi.type));
-      if (fi.length >= 0) {
-        item.setText(3, "" + fi.length);
+      item.setText(1, fi.getName());
+      item.setText(2, ValueMetaFactory.getValueMetaName(fi.getType()));
+      if (fi.getLength() >= 0) {
+        item.setText(3, "" + fi.getLength());
       }
-      if (fi.precision >= 0) {
-        item.setText(4, "" + fi.precision);
+      if (fi.getPrecision() >= 0) {
+        item.setText(4, "" + fi.getPrecision());
       }
     }
 
@@ -1086,7 +1034,7 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
             new UserDefinedJavaClassDef(
                 ClassType.TRANSFORM_CLASS,
                 "Processor",
-                UserDefinedJavaClassCodeSnippits.getSnippitsHelper().getDefaultCode()));
+                UserDefinedJavaClassCodeSnippets.getSnippetsHelper().getDefaultCode()));
         input.replaceDefinitions(definitions);
       } catch (HopXmlException e) {
         e.printStackTrace();
@@ -1110,6 +1058,8 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
 
     wClearResultFields.setSelection(input.isClearingResultFields());
 
+    wJavaTargetVersion.setText(Integer.toString(input.getEffectiveJavaTargetVersion()));
+
     wFields.setRowNums();
     wFields.optWidth(true);
 
@@ -1117,13 +1067,13 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
     for (InfoTransformDefinition transformDefinition : input.getInfoTransformDefinitions()) {
       TableItem item = wInfoTransforms.table.getItem(rowNr++);
       int colNr = 1;
-      item.setText(colNr++, Const.NVL(transformDefinition.tag, ""));
+      item.setText(colNr++, Const.NVL(transformDefinition.getTag(), ""));
       item.setText(
           colNr++,
           transformDefinition.transformMeta != null
               ? transformDefinition.transformMeta.getName()
               : "");
-      item.setText(colNr++, Const.NVL(transformDefinition.description, ""));
+      item.setText(colNr++, Const.NVL(transformDefinition.getDescription(), ""));
     }
     wInfoTransforms.setRowNums();
     wInfoTransforms.optWidth(true);
@@ -1147,15 +1097,12 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
     for (UsageParameter usageParameter : input.getUsageParameters()) {
       TableItem item = wParameters.table.getItem(rowNr++);
       int colNr = 1;
-      item.setText(colNr++, Const.NVL(usageParameter.tag, ""));
-      item.setText(colNr++, Const.NVL(usageParameter.value, ""));
-      item.setText(colNr++, Const.NVL(usageParameter.description, ""));
+      item.setText(colNr++, Const.NVL(usageParameter.getTag(), ""));
+      item.setText(colNr++, Const.NVL(usageParameter.getValue(), ""));
+      item.setText(colNr++, Const.NVL(usageParameter.getDescription(), ""));
     }
     wParameters.setRowNums();
     wParameters.optWidth(true);
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   private void refresh() {
@@ -1171,16 +1118,30 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
 
   private boolean cancel() {
     if (input.hasChanged()) {
-      MessageBox box = new MessageBox(shell, SWT.YES | SWT.NO | SWT.APPLICATION_MODAL);
-      box.setText(
-          BaseMessages.getString(PKG, "UserDefinedJavaClassDialog.WarningDialogChanged.Title"));
-      box.setMessage(
-          BaseMessages.getString(
-              PKG, "UserDefinedJavaClassDialog.WarningDialogChanged.Message", Const.CR));
-      int answer = box.open();
-
-      if (answer == SWT.NO) {
-        return false;
+      if ("Y".equalsIgnoreCase(props.getCustomParameter(WARNING_CLOSE_UNSAVED_PARAMETER, "Y"))) {
+        MessageDialogWithToggle md =
+            new MessageDialogWithToggle(
+                shell,
+                BaseMessages.getString(
+                    PKG, "UserDefinedJavaClassDialog.WarningDialogChanged.Title"),
+                BaseMessages.getString(
+                    PKG, "UserDefinedJavaClassDialog.WarningDialogChanged.Message", Const.CR),
+                SWT.ICON_WARNING,
+                new String[] {
+                  BaseMessages.getString(
+                      PKG, "UserDefinedJavaClassDialog.WarningDialogChanged.Yes"),
+                  BaseMessages.getString(PKG, "UserDefinedJavaClassDialog.WarningDialogChanged.No")
+                },
+                BaseMessages.getString(
+                    PKG, "UserDefinedJavaClassDialog.WarningDialogChanged.DoNotShowAgain"),
+                "N"
+                    .equalsIgnoreCase(
+                        props.getCustomParameter(WARNING_CLOSE_UNSAVED_PARAMETER, "Y")));
+        int answer = md.open();
+        props.setCustomParameter(WARNING_CLOSE_UNSAVED_PARAMETER, md.getToggleState() ? "N" : "Y");
+        if (answer == 1) {
+          return false;
+        }
       }
     }
     transformName = null;
@@ -1190,6 +1151,9 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
   }
 
   private void getInfo(UserDefinedJavaClassMeta meta) {
+    meta.setJavaTargetVersion(
+        Const.toInt(wJavaTargetVersion.getText(), JaninoMeta.JAVA_TARGET_VERSION_DEFAULT));
+
     int nrFields = wFields.nrNonEmpty();
     List<FieldInfo> newFields = new ArrayList<>(nrFields);
     for (int i = 0; i < nrFields; i++) {
@@ -1205,9 +1169,9 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
 
     CTabItem[] cTabs = folder.getItems();
     if (cTabs.length > 0) {
-      for (int i = 0; i < cTabs.length; i++) {
+      for (CTabItem cTab : cTabs) {
         JaninoCheckerUtil janinoCheckerUtil = new JaninoCheckerUtil();
-        List<String> codeCheck = janinoCheckerUtil.checkCode(getStyledTextComp(cTabs[i]).getText());
+        List<String> codeCheck = janinoCheckerUtil.checkCode(getStyledTextComp(cTab).getText());
         if (!codeCheck.isEmpty()) {
           MessageBox mb = new MessageBox(shell, SWT.OK | SWT.ICON_ERROR);
           mb.setText("Invalid Code");
@@ -1220,11 +1184,11 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
 
     if (cTabs.length > 0) {
       List<UserDefinedJavaClassDef> definitions = new ArrayList<>(cTabs.length);
-      for (int i = 0; i < cTabs.length; i++) {
+      for (CTabItem cTab : cTabs) {
         UserDefinedJavaClassDef def =
             new UserDefinedJavaClassDef(
-                ClassType.NORMAL_CLASS, cTabs[i].getText(), getStyledTextComp(cTabs[i]).getText());
-        if (cTabs[i].getImage().equals(imageActiveScript)) {
+                ClassType.NORMAL_CLASS, cTab.getText(), getStyledTextComp(cTab).getText());
+        if (cTab.getImage().equals(imageActiveScript)) {
           def.setClassType(ClassType.TRANSFORM_CLASS);
         }
         definitions.add(def);
@@ -1239,11 +1203,11 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
       TableItem item = wInfoTransforms.getNonEmpty(i);
       InfoTransformDefinition transformDefinition = new InfoTransformDefinition();
       int colNr = 1;
-      transformDefinition.tag = item.getText(colNr++);
-      transformDefinition.transformName = item.getText(colNr++);
+      transformDefinition.setTag(item.getText(colNr++));
+      transformDefinition.setTransformName(item.getText(colNr++));
       transformDefinition.transformMeta =
-          pipelineMeta.findTransform(transformDefinition.transformName);
-      transformDefinition.description = item.getText(colNr++);
+          pipelineMeta.findTransform(transformDefinition.getTransformName());
+      transformDefinition.setDescription(item.getText(colNr++));
       meta.getInfoTransformDefinitions().add(transformDefinition);
     }
 
@@ -1267,9 +1231,9 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
       TableItem item = wParameters.getNonEmpty(i);
       UsageParameter usageParameter = new UsageParameter();
       int colNr = 1;
-      usageParameter.tag = item.getText(colNr++);
-      usageParameter.value = item.getText(colNr++);
-      usageParameter.description = item.getText(colNr++);
+      usageParameter.setTag(item.getText(colNr++));
+      usageParameter.setValue(item.getText(colNr++));
+      usageParameter.setDescription(item.getText(colNr++));
       meta.getUsageParameters().add(usageParameter);
     }
   }
@@ -1335,12 +1299,12 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
         new ErrorDialog(shell, "Error during class compilation", e.toString(), e);
       }
 
-      if (udjcMeta.cookErrors.size() == 1) {
-        Exception e = udjcMeta.cookErrors.get(0);
+      if (udjcMeta.getCookErrors().size() == 1) {
+        Exception e = udjcMeta.getCookErrors().get(0);
         new ErrorDialog(shell, "Error during class compilation", e.toString(), e);
         return false;
-      } else if (udjcMeta.cookErrors.size() > 1) {
-        Exception e = udjcMeta.cookErrors.get(0);
+      } else if (udjcMeta.getCookErrors().size() > 1) {
+        Exception e = udjcMeta.getCookErrors().get(0);
         new ErrorDialog(
             shell,
             "Errors during class compilation",
@@ -1388,12 +1352,12 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
               case IValueMeta.TYPE_INTEGER:
                 field.setFormat("#");
                 valueMeta.setConversionMask(field.getFormat());
-                string = valueMeta.getString(Long.valueOf(0L));
+                string = valueMeta.getString(0L);
                 break;
               case IValueMeta.TYPE_NUMBER:
                 field.setFormat("#.#");
                 valueMeta.setConversionMask(field.getFormat());
-                string = valueMeta.getString(Double.valueOf(0.0D));
+                string = valueMeta.getString(0.0D);
                 break;
               case IValueMeta.TYPE_BIGNUMBER:
                 field.setFormat("#.#");
@@ -1525,13 +1489,13 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
       categoryTreeItems.put(cat, itemGroup);
     }
 
-    Collection<Snippit> snippits = snippitsHelper.getSnippits();
-    for (Snippit snippit : snippits) {
-      TreeItem itemGroup = categoryTreeItems.get(snippit.category);
+    Collection<Snippet> snippets = snippitsHelper.getSnippets();
+    for (UserDefinedJavaClassCodeSnippets.Snippet snippet : snippets) {
+      TreeItem itemGroup = categoryTreeItems.get(snippet.getCategory());
       TreeItem itemSnippit = new TreeItem(itemGroup, SWT.NULL);
-      itemSnippit.setText(snippit.name);
+      itemSnippit.setText(snippet.getName());
       itemSnippit.setImage(GuiResource.getInstance().getImageLabel());
-      itemSnippit.setData(snippit.code);
+      itemSnippit.setData(snippet.getCode());
     }
   }
 
@@ -1539,8 +1503,8 @@ public class UserDefinedJavaClassDialog extends BaseTransformDialog {
     boolean bRC = false;
     if (itemToCheck.getItemCount() > 0) {
       TreeItem[] items = itemToCheck.getItems();
-      for (int i = 0; i < items.length; i++) {
-        if (items[i].getText().equals(strItemName)) {
+      for (TreeItem item : items) {
+        if (item.getText().equals(strItemName)) {
           return true;
         }
       }

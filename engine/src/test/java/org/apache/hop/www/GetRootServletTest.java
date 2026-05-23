@@ -17,30 +17,50 @@
 
 package org.apache.hop.www;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import org.junit.Test;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import org.junit.jupiter.api.Test;
 
 /**
  * Tests for GetRootServlet class
  *
  * @see GetRootServlet
  */
-public class GetRootServletTest {
+class GetRootServletTest {
+
   @Test
-  public void testDoGetReturn404StatusCode() throws ServletException, IOException {
+  void testDoGetWritesHtmlForRootUri() throws ServletException, IOException {
+    GetRootServlet servlet = new GetRootServlet();
+    servlet.setJettyMode(true);
+    StringWriter body = new StringWriter();
+    HttpServletRequest request =
+        when(mock(HttpServletRequest.class).getRequestURI()).thenReturn("/").getMock();
+    HttpServletResponse response = mock(HttpServletResponse.class);
+    when(response.getWriter()).thenReturn(new PrintWriter(body));
+
+    servlet.doGet(request, response);
+
+    verify(response).setStatus(HttpServletResponse.SC_OK);
+    assertTrue(body.toString().contains("<HTML>"));
+  }
+
+  @Test
+  void testDoGetReturn404StatusCode() throws ServletException, IOException {
     GetRootServlet servlet = new GetRootServlet();
     servlet.setJettyMode(true);
     HttpServletRequest request =
         when(mock(HttpServletRequest.class).getRequestURI()).thenReturn("/wrong_path").getMock();
     HttpServletResponse response = mock(HttpServletResponse.class);
     servlet.doGet(request, response);
-    verify(response).sendError(HttpServletResponse.SC_NOT_FOUND);
+    verify(response).sendError(HttpServletResponse.SC_NOT_FOUND, "Not found.");
   }
 }

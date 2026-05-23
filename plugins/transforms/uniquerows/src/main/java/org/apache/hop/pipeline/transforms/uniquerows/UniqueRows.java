@@ -19,6 +19,7 @@ package org.apache.hop.pipeline.transforms.uniquerows;
 
 import java.util.List;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopTransformException;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.RowDataUtil;
 import org.apache.hop.core.util.Utils;
@@ -123,16 +124,8 @@ public class UniqueRows extends BaseTransform<UniqueRowsMeta, UniqueRowsData> {
       data.previous = data.inputRowMeta.cloneRow(r);
       data.counter = 1;
     } else {
+      handleDuplicateErrorRow(r);
       data.counter++;
-      if (data.sendDuplicateRows && !first) {
-        putError(
-            getInputRowMeta(),
-            r,
-            1,
-            data.realErrorDescription,
-            Utils.isEmpty(data.compareFields) ? null : data.compareFields,
-            "UNR001");
-      }
     }
 
     if (checkFeedback(getLinesRead()) && isBasic()) {
@@ -142,9 +135,32 @@ public class UniqueRows extends BaseTransform<UniqueRowsMeta, UniqueRowsData> {
     return true;
   }
 
+  /**
+   * Handles sending a duplicate row to the error stream.
+   *
+   * @param r input row
+   * @throws HopTransformException If routing the row to the error stream fails.
+   */
+  private void handleDuplicateErrorRow(Object[] r) throws HopTransformException {
+    if (data.sendDuplicateRows && !first) {
+      Object[] errRow =
+          meta.isCountRows()
+              ? RowDataUtil.addValueData(r, data.outputRowMeta.size() - 1, data.counter)
+              : r;
+
+      putError(
+          data.outputRowMeta,
+          errRow,
+          1,
+          data.realErrorDescription,
+          Utils.isEmpty(data.compareFields) ? null : data.compareFields,
+          "UNR001");
+    }
+  }
+
   private Object[] addCounter(IRowMeta outputRowMeta, Object[] r, long count) {
     if (meta.isCountRows()) {
-      return RowDataUtil.addValueData(r, outputRowMeta.size() - 1, Long.valueOf(count));
+      return RowDataUtil.addValueData(r, outputRowMeta.size() - 1, count);
     } else {
       return r; // nothing to do
     }

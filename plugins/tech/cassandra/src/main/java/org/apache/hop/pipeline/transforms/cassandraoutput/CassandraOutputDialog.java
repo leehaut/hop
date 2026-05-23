@@ -17,7 +17,7 @@
 package org.apache.hop.pipeline.transforms.cassandraoutput;
 
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.Props;
 import org.apache.hop.core.exception.HopException;
@@ -33,6 +33,7 @@ import org.apache.hop.databases.cassandra.util.CassandraUtils;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.TransformMeta;
+import org.apache.hop.ui.core.FormDataBuilder;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.dialog.BaseDialog;
 import org.apache.hop.ui.core.dialog.EnterSelectionDialog;
@@ -53,7 +54,6 @@ import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.swt.widgets.Text;
 
 /** Dialog class for the CassandraOutput transform. */
 public class CassandraOutputDialog extends BaseTransformDialog {
@@ -116,53 +116,9 @@ public class CassandraOutputDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
+    createShell(BaseMessages.getString(PKG, "CassandraOutputDialog.Shell.Title"));
 
-    Shell parent = getParent();
-
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MIN | SWT.MAX);
-
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "CassandraOutputDialog.Shell.Title"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // Buttons at the bottom of the dialog
-    //
-    wOk = new Button(shell, SWT.PUSH | SWT.CENTER);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wCancel = new Button(shell, SWT.PUSH | SWT.CENTER);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wCancel}, margin, wTabFolder);
-
-    // transformName line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(
-        BaseMessages.getString(PKG, "CassandraOutputDialog.transformName.Label"));
-    PropsUi.setLook(wlTransformName);
-    FormData fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    FormData fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.right = new FormAttachment(100, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    wTransformName.setLayoutData(fdTransformName);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
     wTabFolder = new CTabFolder(shell, SWT.BORDER);
     PropsUi.setLook(wTabFolder, Props.WIDGET_STYLE_TAB);
@@ -229,19 +185,14 @@ public class CassandraOutputDialog extends BaseTransformDialog {
     Label wlTable = new Label(wWriteComp, SWT.RIGHT);
     PropsUi.setLook(wlTable);
     wlTable.setText(BaseMessages.getString(PKG, "CassandraOutputDialog.Table.Label"));
-    FormData fdlTable = new FormData();
-    fdlTable.left = new FormAttachment(0, 0);
-    fdlTable.top = new FormAttachment(0, 0);
-    fdlTable.right = new FormAttachment(middle, -margin);
-    wlTable.setLayoutData(fdlTable);
+    wlTable.setLayoutData(
+        FormDataBuilder.builder().left().top(0, margin).right(middle, -margin).build());
 
     Button wbGetTables = new Button(wWriteComp, SWT.PUSH | SWT.CENTER);
     PropsUi.setLook(wbGetTables);
     wbGetTables.setText(BaseMessages.getString(PKG, "CassandraOutputDialog.GetTable.Button"));
-    FormData fdbTable = new FormData();
-    fdbTable.right = new FormAttachment(100, 0);
-    fdbTable.top = new FormAttachment(wlTable, 0, SWT.CENTER);
-    wbGetTables.setLayoutData(fdbTable);
+    wbGetTables.setLayoutData(
+        FormDataBuilder.builder().top(wlTable, margin, SWT.CENTER).right(100, 0).build());
     wbGetTables.addListener(SWT.Selection, e -> setupTablesCombo());
 
     wTable = new CCombo(wWriteComp, SWT.BORDER);
@@ -369,7 +320,7 @@ public class CassandraOutputDialog extends BaseTransformDialog {
     wlTtl.setText(BaseMessages.getString(PKG, "CassandraOutputDialog.TTL.Label"));
     FormData fdlTtl = new FormData();
     fdlTtl.left = new FormAttachment(0, 0);
-    fdlTtl.top = new FormAttachment(wlUnloggedBatch, 2 * margin);
+    fdlTtl.top = new FormAttachment(wlUnloggedBatch, margin);
     fdlTtl.right = new FormAttachment(middle, -margin);
     wlTtl.setLayoutData(fdlTtl);
 
@@ -396,7 +347,7 @@ public class CassandraOutputDialog extends BaseTransformDialog {
     wTtlValue = new TextVar(variables, wWriteComp, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wTtlValue);
     FormData fdTtlValue = new FormData();
-    fdTtlValue.right = new FormAttachment(wTtlUnits, -2 * margin);
+    fdTtlValue.right = new FormAttachment(wTtlUnits, -margin);
     fdTtlValue.top = new FormAttachment(wlTtl, 0, SWT.CENTER);
     fdTtlValue.left = new FormAttachment(middle, 0);
     wTtlValue.setLayoutData(fdTtlValue);
@@ -410,7 +361,7 @@ public class CassandraOutputDialog extends BaseTransformDialog {
     wlKeyField.setText(BaseMessages.getString(PKG, "CassandraOutputDialog.KeyField.Label"));
     FormData fdlKeyField = new FormData();
     fdlKeyField.left = new FormAttachment(0, 0);
-    fdlKeyField.top = new FormAttachment(wTtlValue, 2 * margin);
+    fdlKeyField.top = new FormAttachment(wTtlValue, margin);
     fdlKeyField.right = new FormAttachment(middle, -margin);
     wlKeyField.setLayoutData(fdlKeyField);
 
@@ -432,6 +383,16 @@ public class CassandraOutputDialog extends BaseTransformDialog {
     fdKeyField.left = new FormAttachment(middle, 0);
     wKeyField.setLayoutData(fdKeyField);
 
+    // Show schema button - directly under Get fields button
+    Button wbShowSchema = new Button(wWriteComp, SWT.PUSH | SWT.CENTER);
+    wbShowSchema.setText(BaseMessages.getString(PKG, "CassandraOutputDialog.Schema.Button"));
+    PropsUi.setLook(wbShowSchema);
+    FormData fdbShowSchema = new FormData();
+    fdbShowSchema.top = new FormAttachment(wbGetFields, margin);
+    fdbShowSchema.right = new FormAttachment(100, 0);
+    wbShowSchema.setLayoutData(fdbShowSchema);
+    wbShowSchema.addListener(SWT.Selection, e -> popupSchemaInfo());
+
     FormData fdWriteComp = new FormData();
     fdWriteComp.left = new FormAttachment(0, 0);
     fdWriteComp.top = new FormAttachment(0, 0);
@@ -440,16 +401,6 @@ public class CassandraOutputDialog extends BaseTransformDialog {
     wWriteComp.setLayoutData(fdWriteComp);
 
     wWriteTab.setControl(wWriteComp);
-
-    // show schema button
-    Button wbShowSchema = new Button(wWriteComp, SWT.PUSH | SWT.CENTER);
-    wbShowSchema.setText(BaseMessages.getString(PKG, "CassandraOutputDialog.Schema.Button"));
-    PropsUi.setLook(wbShowSchema);
-    FormData fdbShowSchema = new FormData();
-    fdbShowSchema.right = new FormAttachment(100, 0);
-    fdbShowSchema.bottom = new FormAttachment(100, -margin * 2);
-    wbShowSchema.setLayoutData(fdbShowSchema);
-    wbShowSchema.addListener(SWT.Selection, e -> popupSchemaInfo());
 
     // ---- start of the schema options tab ----
     CTabItem wSchemaTab = new CTabItem(wTabFolder, SWT.NONE);
@@ -495,7 +446,7 @@ public class CassandraOutputDialog extends BaseTransformDialog {
     PropsUi.setLook(wlWithClause);
     FormData fdlWithClause = new FormData();
     fdlWithClause.left = new FormAttachment(0, 0);
-    fdlWithClause.top = new FormAttachment(wlCreateTable, 2 * margin);
+    fdlWithClause.top = new FormAttachment(wlCreateTable, margin);
     fdlWithClause.right = new FormAttachment(middle, -margin);
     wlWithClause.setLayoutData(fdlWithClause);
 
@@ -541,7 +492,7 @@ public class CassandraOutputDialog extends BaseTransformDialog {
         BaseMessages.getString(PKG, "CassandraOutputDialog.UpdateTableMetaData.TipText"));
     FormData fdlUpdateTableMetaData = new FormData();
     fdlUpdateTableMetaData.left = new FormAttachment(0, 0);
-    fdlUpdateTableMetaData.top = new FormAttachment(wlTruncateTable, 2 * margin);
+    fdlUpdateTableMetaData.top = new FormAttachment(wlTruncateTable, margin);
     fdlUpdateTableMetaData.right = new FormAttachment(middle, -margin);
     wlUpdateTableMetaData.setLayoutData(fdlUpdateTableMetaData);
 
@@ -565,7 +516,7 @@ public class CassandraOutputDialog extends BaseTransformDialog {
             PKG, "CassandraOutputDialog.InsertFieldsNotInTableMetaData.TipText"));
     FormData fdlInsertFieldsNotInTableMeta = new FormData();
     fdlInsertFieldsNotInTableMeta.left = new FormAttachment(0, 0);
-    fdlInsertFieldsNotInTableMeta.top = new FormAttachment(wlUpdateTableMetaData, 2 * margin);
+    fdlInsertFieldsNotInTableMeta.top = new FormAttachment(wlUpdateTableMetaData, margin);
     fdlInsertFieldsNotInTableMeta.right = new FormAttachment(middle, -margin);
     wlInsertFieldsNotInTableMeta.setLayoutData(fdlInsertFieldsNotInTableMeta);
 
@@ -593,15 +544,15 @@ public class CassandraOutputDialog extends BaseTransformDialog {
 
     FormData fdTabFolder = new FormData();
     fdTabFolder.left = new FormAttachment(0, 0);
-    fdTabFolder.top = new FormAttachment(wlTransformName, margin);
+    fdTabFolder.top = new FormAttachment(wSpacer, margin);
     fdTabFolder.right = new FormAttachment(100, 0);
-    fdTabFolder.bottom = new FormAttachment(wOk, -2 * margin);
+    fdTabFolder.bottom = new FormAttachment(wOk, -margin);
     wTabFolder.setLayoutData(fdTabFolder);
 
     wTabFolder.setSelection(0);
 
     getData();
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -896,7 +847,6 @@ public class CassandraOutputDialog extends BaseTransformDialog {
   }
 
   protected void getData() {
-    wTransformName.setText(Const.NVL(transformName, ""));
     wConnection.setText(Const.NVL(input.getConnectionName(), ""));
     wTable.setText(Const.NVL(input.getTableName(), ""));
     wConsistency.setText(Const.NVL(input.getConsistency(), ""));

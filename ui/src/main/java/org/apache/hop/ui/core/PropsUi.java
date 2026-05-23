@@ -19,15 +19,17 @@ package org.apache.hop.ui.core;
 
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.Props;
 import org.apache.hop.core.gui.IGuiPosition;
+import org.apache.hop.core.gui.IGuiSize;
 import org.apache.hop.core.gui.Point;
 import org.apache.hop.core.logging.LogChannel;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.history.AuditManager;
 import org.apache.hop.history.AuditState;
+import org.apache.hop.history.AuditStateMap;
 import org.apache.hop.ui.core.gui.GuiResource;
 import org.apache.hop.ui.core.gui.WindowProperty;
 import org.apache.hop.ui.core.widget.OsHelper;
@@ -42,10 +44,10 @@ import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
-import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.ExpandBar;
 import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Layout;
 import org.eclipse.swt.widgets.Shell;
@@ -75,15 +77,40 @@ public class PropsUi extends Props {
   private static final String USE_DOUBLE_CLICK_ON_CANVAS = "UseDoubleClickOnCanvas";
   private static final String DRAW_BORDER_AROUND_CANVAS_NAMES = "DrawBorderAroundCanvasNames";
   private static final String USE_GLOBAL_FILE_BOOKMARKS = "UseGlobalFileBookmarks";
+  private static final String RELOAD_FILES_ON_CHANGE = "ReloadFilesOnChange";
   private static final String DARK_MODE = "DarkMode";
   private static final String GLOBAL_ZOOMFACTOR = "GlobalZoomFactor";
   private static final String MAX_EXECUTION_LOGGING_TEXT_SIZE = "MaxExecutionLoggingTextSize";
   private static final String GRAPH_EXTRA_VIEW_VERTICAL_ORIENTATION =
       "GraphExtraViewVerticalOrientation";
+  private static final String DISABLE_ZOOM_SCROLLING = "DisableZoomScrolling";
+  private static final String METRICS_ABOVE_SELECTED_TRANSFORMS = "MetricsAboveSelectedTransforms";
+  private static final String ENABLE_INFINITE_CANVAS_MOVE = "EnableInfiniteCanvasMove";
+  private static final String USE_ADVANCED_TERMINAL = "UseAdvancedTerminal";
+  private static final String RESET_DIALOG_POSITIONS_ON_RESTART = "ResetDialogPositionsOnRestart";
+
+  // Metrics panel (pipeline execution grid) – "Show" options
+  private static final String METRICS_PANEL_SHOW_UNITS = "MetricsPanel.ShowUnits";
+  private static final String METRICS_PANEL_SHOW_INPUT = "MetricsPanel.ShowInput";
+  private static final String METRICS_PANEL_SHOW_READ = "MetricsPanel.ShowRead";
+  private static final String METRICS_PANEL_SHOW_OUTPUT = "MetricsPanel.ShowOutput";
+  private static final String METRICS_PANEL_SHOW_UPDATED = "MetricsPanel.ShowUpdated";
+  private static final String METRICS_PANEL_SHOW_REJECTED = "MetricsPanel.ShowRejected";
+  private static final String METRICS_PANEL_SHOW_BUFFERS_INPUT = "MetricsPanel.ShowBuffersInput";
+  private static final String METRICS_PANEL_SHOW_DATA_VOLUME = "MetricsPanel.ShowDataVolume";
+  private static final String METRICS_PANEL_SHOW_DATA_VOLUME_IN = "MetricsPanel.ShowDataVolumeIn";
+  private static final String METRICS_PANEL_SHOW_DATA_VOLUME_OUT = "MetricsPanel.ShowDataVolumeOut";
 
   public static final int DEFAULT_MAX_EXECUTION_LOGGING_TEXT_SIZE = 2000000;
   private Map<RGB, RGB> contrastingColors;
   private static PropsUi instance;
+
+  /**
+   * Session-only window position storage for dialogs. This map is kept in memory only and is
+   * cleared when the application restarts. Used for modal dialogs that should remember their
+   * position during a session but start fresh on each application launch.
+   */
+  private final Map<String, WindowProperty> sessionWindowProperties = new HashMap<>();
 
   public static PropsUi getInstance() {
     if (instance == null) {
@@ -149,7 +176,7 @@ public class PropsUi extends Props {
       }
     }
 
-    // Various tweaks to improve dark theme experience on Windows
+    // Various tweaks to improve the dark theme experience on Windows
     if (OsHelper.isWindows() && isDarkMode()) {
       display.setData("org.eclipse.swt.internal.win32.useDarkModeExplorerTheme", true);
       display.setData("org.eclipse.swt.internal.win32.useShellTitleColoring", true);
@@ -306,7 +333,7 @@ public class PropsUi extends Props {
    */
   /** The margin between the different dialog components &amp; widgets */
   public static int getMargin() {
-    return (int) Math.round(4 * getNativeZoomFactor());
+    return (int) Math.round(8 * getNativeZoomFactor());
   }
 
   public void setLineWidth(int width) {
@@ -394,6 +421,93 @@ public class PropsUi extends Props {
     return new WindowProperty(windowName, auditState.getStateMap());
   }
 
+  /**
+   * Stores a window's position and size for the current session only (in-memory storage). This is
+   * useful for modal dialogs that should remember their position during a work session but start
+   * fresh on application restart. The position is not persisted to disk.
+   *
+   * @param windowProperty the window property containing position/size information
+   */
+  public void setSessionScreen(WindowProperty windowProperty) {
+    if (windowProperty != null && windowProperty.getName() != null) {
+      sessionWindowProperties.put(windowProperty.getName(), windowProperty);
+    }
+  }
+
+  /**
+   * Retrieves a window's position and size from session-only storage (in-memory). Returns null if
+   * no position has been stored for this window during the current session.
+   *
+   * @param windowName the name/title of the window
+   * @return the stored WindowProperty, or null if not found in session storage
+   */
+  public WindowProperty getSessionScreen(String windowName) {
+    if (windowName == null) {
+      return null;
+    }
+    return sessionWindowProperties.get(windowName);
+  }
+
+  /**
+   * Clears all session-only window positions. This is useful for resetting dialog positions during
+   * the current session without restarting the application.
+   */
+  public void clearSessionScreens() {
+    sessionWindowProperties.clear();
+  }
+
+  /**
+   * Clears all persisted window positions from storage (except the main window). This removes saved
+   * dialog positions from the audit state, forcing dialogs to center on their next opening.
+   */
+  public void clearPersistedDialogScreens() {
+    try {
+      // Load all stored shell states
+      AuditStateMap shellStates =
+          AuditManager.getActive().loadAuditStateMap(HopGui.DEFAULT_HOP_GUI_NAMESPACE, "shells");
+
+      if (shellStates != null && shellStates.getNameStateMap() != null) {
+        // Create a new map with only the main window state
+        AuditStateMap filteredStates = new AuditStateMap();
+        Map<String, AuditState> stateMap = shellStates.getNameStateMap();
+
+        for (Map.Entry<String, AuditState> entry : stateMap.entrySet()) {
+          String windowName = entry.getKey();
+          // Keep the main window position (identified by "Hop" in the name)
+          if (windowName != null && (windowName.equals("Hop") || windowName.contains("Hop"))) {
+            filteredStates.getNameStateMap().put(windowName, entry.getValue());
+          }
+        }
+
+        // Save the filtered map (only main window)
+        AuditManager.getActive()
+            .saveAuditStateMap(HopGui.DEFAULT_HOP_GUI_NAMESPACE, "shells", filteredStates);
+      }
+    } catch (Exception e) {
+      LogChannel.UI.logError("Error clearing persisted dialog positions", e);
+    }
+  }
+
+  /**
+   * Gets whether dialog positions should be reset on application restart. When true, dialogs will
+   * only remember their position during the current session. When false, dialog positions will be
+   * persisted across application restarts.
+   *
+   * @return true if dialog positions should reset on restart, false otherwise
+   */
+  public boolean getResetDialogPositionsOnRestart() {
+    return YES.equalsIgnoreCase(getProperty(RESET_DIALOG_POSITIONS_ON_RESTART, YES));
+  }
+
+  /**
+   * Sets whether dialog positions should be reset on application restart.
+   *
+   * @param reset true to reset dialog positions on restart, false to persist them
+   */
+  public void setResetDialogPositionsOnRestart(boolean reset) {
+    setProperty(RESET_DIALOG_POSITIONS_ON_RESTART, reset ? YES : NO);
+  }
+
   public void setOpenLastFile(boolean open) {
     setProperty(STRING_OPEN_LAST_FILE, open ? YES : NO);
   }
@@ -401,6 +515,15 @@ public class PropsUi extends Props {
   public boolean openLastFile() {
     String open = getProperty(STRING_OPEN_LAST_FILE);
     return !NO.equalsIgnoreCase(open);
+  }
+
+  public void setReloadingFilesOnChange(boolean reload) {
+    setProperty(RELOAD_FILES_ON_CHANGE, reload ? YES : NO);
+  }
+
+  public boolean isReloadingFilesOnChange() {
+    String reload = getProperty(RELOAD_FILES_ON_CHANGE);
+    return YES.equalsIgnoreCase(reload); // Default = OFF
   }
 
   public void setAutoSave(boolean autosave) {
@@ -476,6 +599,87 @@ public class PropsUi extends Props {
     setProperty(STRING_SHOW_TABLE_VIEW_TOOLBAR, show ? YES : NO);
   }
 
+  /** Show units in grid cells (default false). */
+  public boolean isMetricsPanelShowUnits() {
+    return YES.equalsIgnoreCase(getProperty(METRICS_PANEL_SHOW_UNITS, NO));
+  }
+
+  public void setMetricsPanelShowUnits(boolean show) {
+    setProperty(METRICS_PANEL_SHOW_UNITS, show ? YES : NO);
+  }
+
+  public boolean isMetricsPanelShowInput() {
+    return YES.equalsIgnoreCase(getProperty(METRICS_PANEL_SHOW_INPUT, YES));
+  }
+
+  public void setMetricsPanelShowInput(boolean show) {
+    setProperty(METRICS_PANEL_SHOW_INPUT, show ? YES : NO);
+  }
+
+  public boolean isMetricsPanelShowRead() {
+    return YES.equalsIgnoreCase(getProperty(METRICS_PANEL_SHOW_READ, YES));
+  }
+
+  public void setMetricsPanelShowRead(boolean show) {
+    setProperty(METRICS_PANEL_SHOW_READ, show ? YES : NO);
+  }
+
+  public boolean isMetricsPanelShowOutput() {
+    return YES.equalsIgnoreCase(getProperty(METRICS_PANEL_SHOW_OUTPUT, YES));
+  }
+
+  public void setMetricsPanelShowOutput(boolean show) {
+    setProperty(METRICS_PANEL_SHOW_OUTPUT, show ? YES : NO);
+  }
+
+  public boolean isMetricsPanelShowUpdated() {
+    return YES.equalsIgnoreCase(getProperty(METRICS_PANEL_SHOW_UPDATED, YES));
+  }
+
+  public void setMetricsPanelShowUpdated(boolean show) {
+    setProperty(METRICS_PANEL_SHOW_UPDATED, show ? YES : NO);
+  }
+
+  public boolean isMetricsPanelShowRejected() {
+    return YES.equalsIgnoreCase(getProperty(METRICS_PANEL_SHOW_REJECTED, YES));
+  }
+
+  public void setMetricsPanelShowRejected(boolean show) {
+    setProperty(METRICS_PANEL_SHOW_REJECTED, show ? YES : NO);
+  }
+
+  public boolean isMetricsPanelShowBuffersInput() {
+    return YES.equalsIgnoreCase(getProperty(METRICS_PANEL_SHOW_BUFFERS_INPUT, YES));
+  }
+
+  public void setMetricsPanelShowBuffersInput(boolean show) {
+    setProperty(METRICS_PANEL_SHOW_BUFFERS_INPUT, show ? YES : NO);
+  }
+
+  public boolean isMetricsPanelShowDataVolume() {
+    return YES.equalsIgnoreCase(getProperty(METRICS_PANEL_SHOW_DATA_VOLUME, YES));
+  }
+
+  public void setMetricsPanelShowDataVolume(boolean show) {
+    setProperty(METRICS_PANEL_SHOW_DATA_VOLUME, show ? YES : NO);
+  }
+
+  public boolean isMetricsPanelShowDataVolumeIn() {
+    return YES.equalsIgnoreCase(getProperty(METRICS_PANEL_SHOW_DATA_VOLUME_IN, YES));
+  }
+
+  public void setMetricsPanelShowDataVolumeIn(boolean show) {
+    setProperty(METRICS_PANEL_SHOW_DATA_VOLUME_IN, show ? YES : NO);
+  }
+
+  public boolean isMetricsPanelShowDataVolumeOut() {
+    return YES.equalsIgnoreCase(getProperty(METRICS_PANEL_SHOW_DATA_VOLUME_OUT, YES));
+  }
+
+  public void setMetricsPanelShowDataVolumeOut(boolean show) {
+    setProperty(METRICS_PANEL_SHOW_DATA_VOLUME_OUT, show ? YES : NO);
+  }
+
   public static void setLook(Widget widget) {
     int style = WIDGET_STYLE_DEFAULT;
     if (widget instanceof Table) {
@@ -486,6 +690,8 @@ public class PropsUi extends Props {
       style = WIDGET_STYLE_TOOLBAR;
     } else if (widget instanceof CTabFolder) {
       style = WIDGET_STYLE_TAB;
+    } else if (widget instanceof ExpandBar) {
+      style = WIDGET_STYLE_EXPANDBAR;
     } else if (OS.contains("mac") && (widget instanceof Group)) {
       style = WIDGET_STYLE_OSX_GROUP;
     } else if (widget instanceof Button) {
@@ -506,6 +712,10 @@ public class PropsUi extends Props {
   }
 
   public static void setLook(final Widget widget, int style) {
+    if (EnvironmentUtils.getInstance().isWeb()) {
+      setLookOnWeb(widget, style);
+      return;
+    }
     if (OsHelper.isWindows()) {
       setLookOnWindows(widget, style);
     } else if (OsHelper.isMac()) {
@@ -515,70 +725,175 @@ public class PropsUi extends Props {
     }
   }
 
-  protected static void setLookOnWindows(final Widget widget, int style) {
+  /** Hop Web (RAP) specific look. Keeps web theme logic separate from OS-specific setLookOn*. */
+  protected static void setLookOnWeb(final Widget widget, int style) {
     final GuiResource gui = GuiResource.getInstance();
     Font font = gui.getFontDefault();
-    Color background = null;
-    Color foreground = null;
+    Color background = gui.getWidgetBackGroundColor();
+    Color foreground = gui.getColorBlack();
 
     if (widget instanceof Shell shell) {
-      background = gui.getColorWhite();
-      foreground = gui.getColorBlack();
       shell.setBackgroundMode(SWT.INHERIT_FORCE);
-      shell.setForeground(gui.getColorBlack());
-      shell.setBackground(gui.getColorWhite());
+      shell.setForeground(foreground);
+      shell.setBackground(background);
       return;
     }
 
     switch (style) {
       case WIDGET_STYLE_DEFAULT:
-        background = gui.getColorWhite();
-        foreground = gui.getColorBlack();
         break;
       case WIDGET_STYLE_FIXED:
         font = gui.getFontFixed();
-        background = gui.getColorWhite();
-        foreground = gui.getColorBlack();
         break;
       case WIDGET_STYLE_TABLE:
-        if (PropsUi.getInstance().isDarkMode()) {
-          background = gui.getColorWhite();
-          foreground = gui.getColorBlack();
-          Table table = (Table) widget;
-          table.setHeaderBackground(gui.getColorLightGray());
-          table.setHeaderForeground(gui.getColorDarkGray());
-        }
+        background = gui.getWidgetBackGroundColor();
+        Table table = (Table) widget;
+        table.setHeaderBackground(background);
+        table.setHeaderForeground(gui.getColorBlack());
         break;
       case WIDGET_STYLE_TREE:
-        if (PropsUi.getInstance().isDarkMode()) {
-          background = gui.getColorWhite();
-          foreground = gui.getColorBlack();
-          Tree tree = (Tree) widget;
-          tree.setHeaderBackground(gui.getColorLightGray());
-          tree.setHeaderForeground(gui.getColorDarkGray());
-        }
         break;
       case WIDGET_STYLE_TOOLBAR:
-        if (PropsUi.getInstance().isDarkMode()) {
-          background = gui.getColorLightGray();
-          foreground = gui.getColorBlack();
-        }
+        background = gui.getWidgetBackGroundColor();
         break;
       case WIDGET_STYLE_TAB:
         CTabFolder tabFolder = (CTabFolder) widget;
         tabFolder.setBorderVisible(true);
         tabFolder.setTabHeight(28);
         if (PropsUi.getInstance().isDarkMode()) {
-          tabFolder.setBackground(gui.getColorWhite());
-          tabFolder.setForeground(gui.getColorBlack());
-          tabFolder.setSelectionBackground(gui.getColorWhite());
-          tabFolder.setSelectionForeground(gui.getColorBlack());
+          tabFolder.setBackground(background);
+          tabFolder.setForeground(foreground);
+          tabFolder.setSelectionBackground(background);
+          tabFolder.setSelectionForeground(foreground);
         }
         break;
       case WIDGET_STYLE_PUSH_BUTTON:
         break;
       default:
-        background = gui.getColorGray();
+        background = gui.getWidgetBackGroundColor();
+        font = null;
+        break;
+    }
+
+    if (font != null && !font.isDisposed() && (widget instanceof Control controlWidget)) {
+      controlWidget.setFont(font);
+    }
+    if (background != null
+        && !background.isDisposed()
+        && (widget instanceof Control controlWidget)) {
+      controlWidget.setBackground(background);
+    }
+    if (foreground != null
+        && !foreground.isDisposed()
+        && (widget instanceof Control controlWidget)) {
+      controlWidget.setForeground(foreground);
+    }
+  }
+
+  /**
+   * Ensures that a CTabFolder has a safe renderer that catches IllegalArgumentException when
+   * drawing tab images. This prevents crashes on some Linux desktop environments (e.g., KDE Plasma
+   * on Wayland) where images may be invalid or disposed. Only applied on Linux to avoid any
+   * potential impact on unaffected platforms.
+   *
+   * <p>SafeCTabFolderRenderer is in the RCP module (desktop-specific) and loaded via reflection.
+   * Since this method short-circuits in web mode and SafeCTabFolderRenderer is not included in web
+   * builds (hop-ui-rcp is excluded), it will never be loaded in RAP/web mode.
+   *
+   * @param tabFolder the CTabFolder to protect
+   */
+  private static void ensureSafeRenderer(CTabFolder tabFolder) {
+    // CTabFolderRenderer is not available in RAP (web mode), so skip entirely.
+    // SafeCTabFolderRenderer is in the RCP module (not included in web builds), so it's never
+    // available in web mode.
+    if (EnvironmentUtils.getInstance().isWeb()) {
+      return;
+    }
+    // Only apply safe renderer on Linux where the issue occurs
+    if (Const.isLinux()) {
+      try {
+        // Use reflection to load SafeCTabFolderRenderer from the RCP module (desktop-specific).
+        // This avoids compile-time dependencies and ensures the class isn't loaded in web mode
+        // (where hop-ui-rcp is excluded from the build).
+        Class<?> rendererClass = Class.forName("org.apache.hop.ui.core.SafeCTabFolderRenderer");
+        Object currentRenderer = tabFolder.getRenderer();
+        if (currentRenderer == null || !rendererClass.isInstance(currentRenderer)) {
+          Object safeRenderer =
+              rendererClass.getConstructor(CTabFolder.class).newInstance(tabFolder);
+          // Use reflection to call setRenderer to avoid compile-time dependency on
+          // CTabFolderRenderer which doesn't exist in RAP/web mode
+          Class<?> rendererParamClass = Class.forName("org.eclipse.swt.custom.CTabFolderRenderer");
+          java.lang.reflect.Method setRendererMethod =
+              CTabFolder.class.getMethod("setRenderer", rendererParamClass);
+          setRendererMethod.invoke(tabFolder, safeRenderer);
+        }
+      } catch (ClassNotFoundException e) {
+        // SafeCTabFolderRenderer not available (e.g., in web builds where hop-ui-rcp is excluded)
+        // This is expected and safe to ignore
+      } catch (Exception e) {
+        // If CTabFolderRenderer can't be loaded or setRenderer fails, just continue without
+        // the safe renderer
+        LogChannel.GENERAL.logDetailed("Could not apply SafeCTabFolderRenderer: " + e.getMessage());
+      }
+    }
+  }
+
+  protected static void setLookOnWindows(final Widget widget, int style) {
+    final GuiResource gui = GuiResource.getInstance();
+    Font font = gui.getFontDefault();
+    Color background = gui.getWidgetBackGroundColor();
+    Color foreground = gui.getColorBlack();
+
+    if (widget instanceof Shell shell) {
+      shell.setBackgroundMode(SWT.INHERIT_FORCE);
+      shell.setForeground(foreground);
+      shell.setBackground(background);
+      return;
+    }
+
+    switch (style) {
+      case WIDGET_STYLE_DEFAULT:
+        break;
+      case WIDGET_STYLE_FIXED:
+        font = gui.getFontFixed();
+        break;
+      case WIDGET_STYLE_TABLE:
+        if (PropsUi.getInstance().isDarkMode()) {
+          Table table = (Table) widget;
+          table.setHeaderBackground(background);
+          table.setHeaderForeground(foreground);
+        }
+        break;
+      case WIDGET_STYLE_TREE:
+        if (PropsUi.getInstance().isDarkMode()) {
+          Tree tree = (Tree) widget;
+          tree.setHeaderBackground(background);
+          tree.setHeaderForeground(foreground);
+        }
+        break;
+      case WIDGET_STYLE_TOOLBAR:
+        break;
+      case WIDGET_STYLE_EXPANDBAR:
+        if (PropsUi.getInstance().isDarkMode()) {
+          foreground = gui.getColorWhite();
+        }
+        break;
+      case WIDGET_STYLE_TAB:
+        CTabFolder tabFolder = (CTabFolder) widget;
+        tabFolder.setBorderVisible(true);
+        tabFolder.setTabHeight(28);
+        ensureSafeRenderer(tabFolder);
+        if (PropsUi.getInstance().isDarkMode()) {
+          tabFolder.setBackground(background);
+          tabFolder.setForeground(foreground);
+          tabFolder.setSelectionBackground(background);
+          tabFolder.setSelectionForeground(foreground);
+        }
+        break;
+      case WIDGET_STYLE_PUSH_BUTTON:
+        break;
+      default:
+        background = gui.getWidgetBackGroundColor();
         font = null;
         break;
     }
@@ -603,59 +918,50 @@ public class PropsUi extends Props {
   protected static void setLookOnMac(final Widget widget, int style) {
     final GuiResource gui = GuiResource.getInstance();
     Font font = gui.getFontDefault();
-    Color background = gui.getColorWhite();
-    Color foreground = gui.getColorBlack();
+    Color background = null;
+
+    Display display = Display.getCurrent();
+    if (display == null) {
+      return;
+    }
+
+    // Handle Shell windows with appropriate background color
+    if (widget instanceof Shell shell) {
+      shell.setBackgroundMode(SWT.INHERIT_FORCE);
+      // Use gray background in light mode, system background in dark mode
+      if (PropsUi.getInstance().isDarkMode()) {
+        shell.setBackground(display.getSystemColor(SWT.COLOR_WIDGET_BACKGROUND));
+      } else {
+        shell.setBackground(gui.getColorDemoGray());
+      }
+      return;
+    }
 
     switch (style) {
       case WIDGET_STYLE_DEFAULT:
-        break;
-      case WIDGET_STYLE_OSX_GROUP:
-        background = gui.getColorWhite();
-        foreground = gui.getColorBlack();
-        font = gui.getFontDefault();
-        Group group = ((Group) widget);
-        group.addPaintListener(
-            paintEvent -> {
-              paintEvent.gc.setForeground(gui.getColorBlack());
-              paintEvent.gc.setBackground(gui.getColorWhite());
-              paintEvent.gc.fillRectangle(
-                  2, 0, group.getBounds().width - 8, group.getBounds().height - 20);
-            });
         break;
       case WIDGET_STYLE_FIXED:
         font = gui.getFontFixed();
         break;
       case WIDGET_STYLE_TABLE:
-        background = gui.getColorLightGray();
-        foreground = gui.getColorDarkGray();
         Table table = (Table) widget;
-        table.setHeaderBackground(gui.getColorLightGray());
-        table.setHeaderForeground(gui.getColorDarkGray());
+        table.setHeaderBackground(background);
+        // Don't set foreground colors - let macOS handle them
         break;
       case WIDGET_STYLE_TREE:
-        // TODO: Adjust for Linux
         break;
       case WIDGET_STYLE_TOOLBAR:
-        if (PropsUi.getInstance().isDarkMode()) {
-          background = gui.getColorLightGray();
-        } else {
-          background = gui.getColorDemoGray();
-        }
         break;
       case WIDGET_STYLE_TAB:
         CTabFolder tabFolder = (CTabFolder) widget;
         tabFolder.setBorderVisible(true);
-        tabFolder.setBackground(gui.getColorGray());
-        tabFolder.setForeground(gui.getColorBlack());
-        tabFolder.setSelectionBackground(gui.getColorWhite());
-        tabFolder.setSelectionForeground(gui.getColorBlack());
+        tabFolder.setBackground(background);
+        tabFolder.setSelectionBackground(background);
+        ensureSafeRenderer(tabFolder);
         break;
       case WIDGET_STYLE_PUSH_BUTTON:
-        background = null;
-        foreground = null;
         break;
       default:
-        background = gui.getColorBackground();
         font = null;
         break;
     }
@@ -669,22 +975,12 @@ public class PropsUi extends Props {
         && (widget instanceof Control controlWidget)) {
       controlWidget.setBackground(background);
     }
-
-    if (foreground != null
-        && !foreground.isDisposed()
-        && (widget instanceof Control controlWidget)) {
-      controlWidget.setForeground(foreground);
-    }
-
-    if (widget instanceof Combo combo) {
-      combo.setBackground(gui.getColorWhite());
-    }
   }
 
   protected static void setLookOnLinux(final Widget widget, int style) {
     final GuiResource gui = GuiResource.getInstance();
     Font font = gui.getFontDefault();
-    Color background = gui.getColorWhite();
+    Color background = GuiResource.getInstance().getWidgetBackGroundColor();
     Color foreground = gui.getColorBlack();
 
     switch (style) {
@@ -718,6 +1014,7 @@ public class PropsUi extends Props {
         tabFolder.setBorderVisible(true);
         tabFolder.setBackground(gui.getColorGray());
         tabFolder.setForeground(gui.getColorBlack());
+        ensureSafeRenderer(tabFolder);
         tabFolder.setSelectionBackground(gui.getColorWhite());
         tabFolder.setSelectionForeground(gui.getColorBlack());
         break;
@@ -907,13 +1204,42 @@ public class PropsUi extends Props {
       // Snap to grid...
       //
       return new Point(
-          gridSize * Math.round((float) p.x / gridSize),
-          gridSize * Math.round((float) p.y / gridSize));
+          gridSize * (int) Math.round((float) (p.x / gridSize)),
+          gridSize * (int) Math.round((float) (p.y / gridSize)));
     } else {
       // Normal draw
       //
       return p;
     }
+  }
+
+  /**
+   * Sets the size of a given GUI element, ensuring that the width and height do not fall below a
+   * predefined minimum size. The size is adjusted to align with a grid through calculation.
+   *
+   * @param element the GUI element whose size is to be set
+   * @param width the desired width of the element
+   * @param height the desired height of the element
+   */
+  public static void setSize(IGuiSize element, int width, int height) {
+
+    if (width < ConstUi.NOTE_MIN_SIZE) {
+      width = ConstUi.NOTE_MIN_SIZE;
+    }
+    if (height < ConstUi.NOTE_MIN_SIZE) {
+      height = ConstUi.NOTE_MIN_SIZE;
+    }
+    int gridSize = PropsUi.getInstance().getCanvasGridSize();
+    if (gridSize > 1) {
+      int w = width / gridSize;
+      if (width % gridSize > 0) w += 1;
+      int h = height / gridSize;
+      if (height % gridSize > 0) h += 1;
+      width = gridSize * w;
+      height = gridSize * h;
+    }
+    element.setWidth(width);
+    element.setHeight(height);
   }
 
   public boolean isIndicateSlowPipelineTransformsEnabled() {
@@ -971,6 +1297,14 @@ public class PropsUi extends Props {
     contrastingColors.put(new RGB(215, 215, 215), new RGB(100, 100, 100));
     contrastingColors.put(new RGB(100, 100, 100), new RGB(215, 215, 215));
     contrastingColors.put(new RGB(50, 50, 50), new RGB(235, 235, 235));
+
+    // Muted color variants for explorer (non-openable items); dark mode = lighter on dark bg
+    contrastingColors.put(new RGB(85, 115, 85), new RGB(120, 155, 120)); // DarkGreenMuted
+    contrastingColors.put(new RGB(75, 95, 165), new RGB(130, 150, 215)); // LightBlueMuted
+    contrastingColors.put(new RGB(130, 85, 85), new RGB(175, 120, 120)); // RedMuted
+    contrastingColors.put(new RGB(255, 200, 200), new RGB(120, 65, 65)); // LightRed (dark mode)
+    contrastingColors.put(new RGB(105, 105, 105), new RGB(145, 145, 145)); // DarkGrayMuted
+    contrastingColors.put(new RGB(90, 90, 90), new RGB(135, 135, 135)); // BlackMuted
 
     // Add all the inverse color mappings as well
     //
@@ -1083,5 +1417,29 @@ public class PropsUi extends Props {
     formLayout.marginBottom = getFormMargin();
     formLayout.marginRight = getFormMargin();
     return formLayout;
+  }
+
+  public boolean isZoomScrollingDisabled() {
+    return YES.equalsIgnoreCase(getProperty(DISABLE_ZOOM_SCROLLING, NO));
+  }
+
+  public void setZoomScrollingDisabled(boolean disabled) {
+    setProperty(DISABLE_ZOOM_SCROLLING, disabled ? YES : NO);
+  }
+
+  public boolean isShowingMetricsAboveRunningTransforms() {
+    return YES.equalsIgnoreCase(getProperty(METRICS_ABOVE_SELECTED_TRANSFORMS, YES));
+  }
+
+  public void setShowingMetricsAboveRunningTransforms(boolean enabled) {
+    setProperty(METRICS_ABOVE_SELECTED_TRANSFORMS, enabled ? YES : NO);
+  }
+
+  public boolean isInfiniteCanvasMoveEnabled() {
+    return YES.equalsIgnoreCase(getProperty(ENABLE_INFINITE_CANVAS_MOVE, NO));
+  }
+
+  public void setInfiniteCanvasMoveEnabled(boolean enabled) {
+    setProperty(ENABLE_INFINITE_CANVAS_MOVE, enabled ? YES : NO);
   }
 }

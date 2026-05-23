@@ -19,11 +19,10 @@ package org.apache.hop.pipeline.transforms.cassandrasstableoutput;
 
 import java.io.File;
 import java.net.URI;
-import java.security.Permission;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.hop.core.exception.HopException;
-import org.apache.hop.core.logging.ILogChannel;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.i18n.BaseMessages;
@@ -36,8 +35,6 @@ import org.apache.hop.pipeline.transforms.cassandrasstableoutput.writer.SSTableW
 
 /** Output transform for writing Cassandra SSTables (sorted-string tables). */
 public class SSTableOutput extends BaseTransform<SSTableOutputMeta, SSTableOutputData> {
-  private static final SecurityManager sm = System.getSecurityManager();
-
   /** The number of rows seen so far for this batch */
   protected int rowsSeen;
 
@@ -80,8 +77,11 @@ public class SSTableOutput extends BaseTransform<SSTableOutputMeta, SSTableOutpu
       throw new Exception(
           BaseMessages.getString(SSTableOutputMeta.PKG, "SSTableOutput.Error.NoPathToYAML"));
     }
-    logBasic(
-        BaseMessages.getString(SSTableOutputMeta.PKG, "SSTableOutput.Message.YAMLPath", yamlPath));
+    if (isBasic()) {
+      logBasic(
+          BaseMessages.getString(
+              SSTableOutputMeta.PKG, "SSTableOutput.Message.YAMLPath", yamlPath));
+    }
 
     File outputDir;
     if (Utils.isEmpty(directory)) {
@@ -90,12 +90,10 @@ public class SSTableOutput extends BaseTransform<SSTableOutputMeta, SSTableOutpu
       outputDir = new File(new URI(directory));
     }
 
-    if (!outputDir.exists()) {
-      if (!outputDir.mkdirs()) {
-        throw new HopException(
-            BaseMessages.getString(
-                SSTableOutputMeta.PKG, "SSTableOutput.Error.OutputDirDoesntExist"));
-      }
+    if (!outputDir.exists() && !outputDir.mkdirs()) {
+      throw new HopException(
+          BaseMessages.getString(
+              SSTableOutputMeta.PKG, "SSTableOutput.Error.OutputDirDoesntExist"));
     }
 
     if (Utils.isEmpty(table)) {
@@ -137,31 +135,10 @@ public class SSTableOutput extends BaseTransform<SSTableOutputMeta, SSTableOutpu
 
     writer = builder.build();
     try {
-      disableSystemExit(sm, getLogChannel());
       writer.init();
     } catch (Exception e) {
-      throw new RuntimeException(
+      throw new HopRuntimeException(
           BaseMessages.getString(SSTableOutputMeta.PKG, "SSTableOutput.Error.InvalidConfig"), e);
-    } finally {
-      // Restore original security manager if needed
-      if (System.getSecurityManager() != sm) {
-        System.setSecurityManager(sm);
-      }
-    }
-  }
-
-  void disableSystemExit(SecurityManager sm, ILogChannel log) {
-    // Workaround JVM exit caused by org.apache.cassandra.config.DatabaseDescriptor in case of any
-    // issue with
-    // cassandra config. Do this by preventing JVM from exit for writer initialization time or give
-    // user a clue at
-    // least.
-    try {
-      System.setSecurityManager(new NoSystemExitDelegatingSecurityManager(sm));
-    } catch (SecurityException se) {
-      log.logError(
-          BaseMessages.getString(SSTableOutputMeta.PKG, "SSTableOutput.Error.JVMExitProtection"),
-          se);
     }
   }
 
@@ -236,35 +213,6 @@ public class SSTableOutput extends BaseTransform<SSTableOutputMeta, SSTableOutpu
                 SSTableOutputMeta.PKG, "SSTableOutput.Error.FailedToCloseWriter"),
             e);
       }
-    }
-  }
-
-  private class JVMShutdownAttemptedException extends SecurityException {}
-
-  private class NoSystemExitDelegatingSecurityManager extends SecurityManager {
-    private SecurityManager delegate;
-
-    NoSystemExitDelegatingSecurityManager(SecurityManager delegate) {
-      this.delegate = delegate;
-    }
-
-    @Override
-    public void checkPermission(Permission perm) {
-      if (delegate != null) {
-        delegate.checkPermission(perm);
-      }
-    }
-
-    @Override
-    public void checkPermission(Permission perm, Object context) {
-      if (delegate != null) {
-        delegate.checkPermission(perm, context);
-      }
-    }
-
-    @Override
-    public void checkExit(int status) {
-      throw new JVMShutdownAttemptedException();
     }
   }
 }

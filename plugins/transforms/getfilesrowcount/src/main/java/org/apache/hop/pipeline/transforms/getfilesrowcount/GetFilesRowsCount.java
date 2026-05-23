@@ -20,7 +20,7 @@ package org.apache.hop.pipeline.transforms.getfilesrowcount;
 import static org.apache.hop.pipeline.transforms.getfilesrowcount.GetFilesRowsCountMeta.SeparatorFormat.CRLF;
 
 import java.io.InputStream;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileType;
 import org.apache.hop.core.ResultFile;
 import org.apache.hop.core.exception.HopException;
@@ -127,16 +127,14 @@ public class GetFilesRowsCount extends BaseTransform<GetFilesRowsCountMeta, GetF
                     // we have a carriage return
                     // keep track of it..maybe we will have a line feed right after :-)
                     prevCR = true;
-                  } else if (buf[i] == '\n') {
+                  } else if (buf[i] == '\n' && prevCR) {
                     // we have a line feed
                     // let's see if we had previously a carriage return
-                    if (prevCR) {
-                      // we have a carriage return followed by a line feed
-                      data.rowNumber++;
-                      // Maybe we won't have data after
-                      data.foundData = false;
-                      prevCR = false;
-                    }
+                    // we have a carriage return followed by a line feed
+                    data.rowNumber++;
+                    // Maybe we won't have data after
+                    data.foundData = false;
+                    prevCR = false;
                   }
                 } else {
                   // we have another char (other than \n , \r)

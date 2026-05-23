@@ -20,6 +20,7 @@ package org.apache.hop.pipeline.transform;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.MissingResourceException;
 import org.apache.hop.core.ICheckResult;
 import org.apache.hop.core.SqlStatement;
 import org.apache.hop.core.exception.HopDatabaseException;
@@ -35,6 +36,7 @@ import org.apache.hop.metadata.api.HopMetadataObject;
 import org.apache.hop.metadata.api.IHopMetadata;
 import org.apache.hop.metadata.api.IHopMetadataObjectFactory;
 import org.apache.hop.metadata.api.IHopMetadataProvider;
+import org.apache.hop.metadata.serializer.xml.ILegacyXml;
 import org.apache.hop.pipeline.DatabaseImpact;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineMeta;
@@ -48,8 +50,6 @@ import org.w3c.dom.Node;
  * This interface allows custom transforms to talk to Hop. The ITransformMeta is the main Java
  * interface that a plugin implements. The responsibilities of the implementing class are listed
  * below:
- *
- * <p>
  *
  * <ul>
  *   <li><b>Keep track of the transform settings</b> The implementing class typically keeps track of
@@ -71,7 +71,6 @@ import org.w3c.dom.Node;
  *       such as lists or custom helper objects. See
  *       org.apache.hop.pipeline.transforms.rowgenerator.RowGeneratorMeta.clone() for an example on
  *       creating a deep copy.
- *       <p>
  *   <li><b>Serialize transform settings</b><br>
  *       The plugin needs to be able to serialize its settings to XML . The interface methods are as
  *       follows.
@@ -86,7 +85,6 @@ import org.w3c.dom.Node;
  *       XML. The XML node containing the transform's settings is passed in as an argument. Again,
  *       the helper class org.apache.hop.core.xml.XmlHandler is typically used to conveniently read
  *       the transform settings from the XML node.
- *       <p>
  *   <li><b>Provide instances of other plugin classes</b><br>
  *       The ITransformMeta plugin class is the main class tying in with the rest of Apache Hop
  *       architecture. It is responsible for supplying instances of the other plugin classes
@@ -130,7 +128,7 @@ import org.w3c.dom.Node;
  * </ul>
  */
 @HopMetadataObject(xmlKey = "type", objectFactory = ITransformMeta.TransformFactory.class)
-public interface ITransformMeta {
+public interface ITransformMeta extends ILegacyXml {
   /** Set default values */
   void setDefault();
 
@@ -251,7 +249,7 @@ public interface ITransformMeta {
    * @return The fields used by this transform, this is being used for the Impact analyses.
    * @param variables
    */
-  IRowMeta getTableFields(IVariables variables);
+  IRowMeta getTableFields(IVariables variables) throws HopDatabaseException;
 
   /** This method is added to exclude certain transforms from layout checking. */
   boolean excludeFromRowLayoutVerification();
@@ -497,17 +495,6 @@ public interface ITransformMeta {
   }
 
   /**
-   * True if the transform passes it's result data straight to the servlet output. See exposing Hop
-   * data over a web service
-   *
-   * @return True if the transform passes it's result data straight to the servlet output, false
-   *     otherwise
-   */
-  default boolean passDataToServletOutput() {
-    return false;
-  }
-
-  /**
    * ￼ * This returns the expected name for the dialog that edits a action. The expected name is in
    * the org.apache.hop.ui ￼ * tree and has a class name that is the name of the action with
    * 'Dialog' added to the end. ￼ *
@@ -524,13 +511,32 @@ public interface ITransformMeta {
   final class TransformFactory implements IHopMetadataObjectFactory {
     @Override
     public Object createObject(String id, Object parentObject) throws HopException {
-      return PluginRegistry.getInstance()
-          .loadClass(TransformPluginType.class, id, ITransformMeta.class);
+      ITransformMeta transformMeta =
+          PluginRegistry.getInstance()
+              .loadClass(TransformPluginType.class, id, ITransformMeta.class);
+      if (transformMeta == null) {
+        throw new MissingResourceException(
+            "Transform plugin with ID '" + id + "' was not found",
+            ITransformMeta.class.getName(),
+            id);
+      }
+      return transformMeta;
     }
 
     @Override
     public String getObjectId(Object object) throws HopException {
       return PluginRegistry.getInstance().getPluginId(TransformPluginType.class, object);
     }
+  }
+
+  /**
+   * Returns whether this transform supports drill-down functionality to view executing
+   * sub-pipelines or sub-workflows.
+   *
+   * @return true if this transform executes pipelines/workflows that can be drilled into, false
+   *     otherwise (default)
+   */
+  default boolean supportsDrillDown() {
+    return false;
   }
 }

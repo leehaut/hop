@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.FileSystemException;
 import org.apache.commons.vfs2.FileType;
@@ -37,12 +37,15 @@ import org.apache.hop.core.Result;
 import org.apache.hop.core.annotations.Action;
 import org.apache.hop.core.annotations.ActionTransformType;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.core.vfs.HopVfs;
 import org.apache.hop.i18n.BaseMessages;
+import org.apache.hop.mail.common.MailConst;
 import org.apache.hop.mail.metadata.MailServerConnection;
 import org.apache.hop.metadata.api.HopMetadataProperty;
+import org.apache.hop.metadata.api.HopMetadataPropertyType;
 import org.apache.hop.metadata.api.IHopMetadataProvider;
 import org.apache.hop.resource.ResourceEntry;
 import org.apache.hop.resource.ResourceEntry.ResourceType;
@@ -76,13 +79,19 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
   static final int FOLDER_OUTPUT = 0;
 
   static final int FOLDER_ATTACHMENTS = 1;
+  public static final String ACTION_GET_MAILS_FROM_POP_MESSAGE_MOVED =
+      "ActionGetMailsFromPOP.MessageMoved";
+  public static final String ACTION_GET_MAILS_FROM_POP_ERROR_RECEIVED_DATES_SEARCH_TERM_EMPTY =
+      "ActionGetMailsFromPOP.Error.ReceivedDatesSearchTermEmpty";
 
   public int actionType;
 
+  @HopMetadataProperty(key = "conditionreceiveddate")
   public int conditionReceivedDate;
 
   public int valueIMAPList;
 
+  @HopMetadataProperty(key = "aftergetimap")
   public int afterGetIMAP;
 
   @HopMetadataProperty(key = "servername")
@@ -190,7 +199,8 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
   @HopMetadataProperty(key = "createlocalfolder")
   private boolean createLocalFolder;
 
-  @HopMetadataProperty private String connectionName;
+  @HopMetadataProperty(hopMetadataPropertyType = HopMetadataPropertyType.MAIL_SERVER_CONNECTION)
+  private String connectionName;
 
   private static final String DEFAULT_FILE_NAME_PATTERN =
       "name_{SYS|hhmmss_MMddyyyy|}_#IdFile#.mail";
@@ -221,7 +231,7 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
     firstMails = null;
     delete = false;
     if (!StringUtils.isEmpty(getConnectionName())) {
-      protocol = MailServerConnection.PROTOCOL_STRING_POP3;
+      protocol = MailConst.PROTOCOL_STRING_POP3;
     } else {
       protocol = MailConnectionMeta.PROTOCOL_STRING_POP3;
     }
@@ -320,7 +330,7 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
 
       boolean usePOP3;
       if (connectionName != null) {
-        usePOP3 = getProtocol().equals(MailServerConnection.PROTOCOL_STRING_POP3);
+        usePOP3 = getProtocol().equals(MailConst.PROTOCOL_STRING_POP3);
       } else {
         usePOP3 = getProtocol().equals(MailConnectionMeta.PROTOCOL_STRING_POP3);
       }
@@ -336,7 +346,7 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
       // Check destination folder
       String realMoveToIMAPFolder = resolve(getMoveToIMAPFolder());
       if (StringUtils.isEmpty(connectionName)) {
-        if (getProtocol().equals(MailServerConnection.PROTOCOL_STRING_IMAP)
+        if (getProtocol().equals(MailConst.PROTOCOL_STRING_IMAP)
                 && (getActionType() == MailServerConnection.ACTION_TYPE_MOVE)
             || (getActionType() == MailServerConnection.ACTION_TYPE_GET
                 && getAfterGetIMAP() == MailServerConnection.AFTER_GET_IMAP_MOVE)) {
@@ -379,14 +389,14 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
             if (Utils.isEmpty(realBeginDate)) {
               throw new HopException(
                   BaseMessages.getString(
-                      PKG, "ActionGetMailsFromPOP.Error.ReceivedDatesSearchTermEmpty"));
+                      PKG, ACTION_GET_MAILS_FROM_POP_ERROR_RECEIVED_DATES_SEARCH_TERM_EMPTY));
             }
             beginDate = df.parse(realBeginDate);
             String realEndDate = resolve(getReceivedDate2());
             if (Utils.isEmpty(realEndDate)) {
               throw new HopException(
                   BaseMessages.getString(
-                      PKG, "ActionGetMailsFromPOP.Error.ReceivedDatesSearchTermEmpty"));
+                      PKG, ACTION_GET_MAILS_FROM_POP_ERROR_RECEIVED_DATES_SEARCH_TERM_EMPTY));
             }
             endDate = df.parse(realEndDate);
             break;
@@ -411,14 +421,14 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
             if (Utils.isEmpty(realBeginDate)) {
               throw new HopException(
                   BaseMessages.getString(
-                      PKG, "ActionGetMailsFromPOP.Error.ReceivedDatesSearchTermEmpty"));
+                      PKG, ACTION_GET_MAILS_FROM_POP_ERROR_RECEIVED_DATES_SEARCH_TERM_EMPTY));
             }
             beginDate = df.parse(realBeginDate);
             String realEndDate = resolve(getReceivedDate2());
             if (Utils.isEmpty(realEndDate)) {
               throw new HopException(
                   BaseMessages.getString(
-                      PKG, "ActionGetMailsFromPOP.Error.ReceivedDatesSearchTermEmpty"));
+                      PKG, ACTION_GET_MAILS_FROM_POP_ERROR_RECEIVED_DATES_SEARCH_TERM_EMPTY));
             }
             endDate = df.parse(realEndDate);
             break;
@@ -445,14 +455,14 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
           connection =
               getMetadataProvider().getSerializer(MailServerConnection.class).load(connectionName);
         } catch (HopException e) {
-          throw new RuntimeException(
+          throw new HopRuntimeException(
               "Mail server connection '" + connectionName + "' could not be found", e);
         }
         try {
           connection.getSession(getVariables());
           connection.getStore().connect();
         } catch (Exception e) {
-          throw new RuntimeException(
+          throw new HopRuntimeException(
               "A connection to mail server connection '"
                   + connectionName
                   + "' could not be established",
@@ -501,7 +511,7 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
       if (!Utils.isEmpty(realSearchReceipient)) {
         // apply TO
         if (connection != null) {
-          connection.setReceipientTerm(realSearchReceipient);
+          connection.setRecipientTerm(realSearchReceipient);
         } else {
           mailConn.setReceipientTerm(realSearchReceipient);
         }
@@ -662,10 +672,10 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
             logDebug(BaseMessages.getString(PKG, "ActionGetPOP.NoSubFolders"));
           }
         } else {
-          for (int i = 0; i < subfolders.length; i++) {
+          for (String subfolder : subfolders) {
             fetchOneFolder(
                 usePOP3,
-                subfolders[i],
+                subfolder,
                 realOutputFolder,
                 targetAttachmentFolder,
                 realMoveToIMAPFolder,
@@ -781,7 +791,7 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
                 "ActionGetMailsFromPOP.TotalMessagesFolder.Label",
                 "" + messagesCount,
                 (connection != null)
-                    ? Const.NVL(connection.getFolderName(), MailServerConnection.INBOX_FOLDER)
+                    ? Const.NVL(connection.getFolderName(), MailConst.INBOX_FOLDER)
                     : Const.NVL(mailConn.getFolderName(), MailConnectionMeta.INBOX_FOLDER)));
       }
 
@@ -829,7 +839,7 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
                     logDebug(
                         BaseMessages.getString(
                             PKG,
-                            "ActionGetMailsFromPOP.MessageMoved",
+                            ACTION_GET_MAILS_FROM_POP_MESSAGE_MOVED,
                             "" + i,
                             realMoveToIMAPFolder));
                   }
@@ -948,7 +958,7 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
                           logDebug(
                               BaseMessages.getString(
                                   PKG,
-                                  "ActionGetMailsFromPOP.MessageMoved",
+                                  ACTION_GET_MAILS_FROM_POP_MESSAGE_MOVED,
                                   "" + messagenumber,
                                   realMoveToIMAPFolder));
                         }
@@ -998,7 +1008,7 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
                     logDebug(
                         BaseMessages.getString(
                             PKG,
-                            "ActionGetMailsFromPOP.MessageMoved",
+                            ACTION_GET_MAILS_FROM_POP_MESSAGE_MOVED,
                             "" + i,
                             realMoveToIMAPFolder));
                   }
@@ -1117,7 +1127,7 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
                           logDebug(
                               BaseMessages.getString(
                                   PKG,
-                                  "ActionGetMailsFromPOP.MessageMoved",
+                                  ACTION_GET_MAILS_FROM_POP_MESSAGE_MOVED,
                                   "" + messagenumber,
                                   realMoveToIMAPFolder));
                         }
@@ -1234,13 +1244,11 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
   public List<ResourceReference> getResourceDependencies(
       IVariables variables, WorkflowMeta workflowMeta) {
     List<ResourceReference> references = super.getResourceDependencies(variables, workflowMeta);
-    if (connection != null) {
-      if (!Utils.isEmpty(serverName)) {
-        String realServername = resolve(serverName);
-        ResourceReference reference = new ResourceReference(this);
-        reference.getEntries().add(new ResourceEntry(realServername, ResourceType.SERVER));
-        references.add(reference);
-      }
+    if (connection != null && !Utils.isEmpty(serverName)) {
+      String realServername = resolve(serverName);
+      ResourceReference reference = new ResourceReference(this);
+      reference.getEntries().add(new ResourceEntry(realServername, ResourceType.SERVER));
+      references.add(reference);
     }
     return references;
   }
@@ -1263,6 +1271,8 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
           folderName = getRealOutputDirectory();
         }
         break;
+      default:
+        break;
     }
     if (Utils.isEmpty(folderName)) {
       switch (folderType) {
@@ -1272,6 +1282,8 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
         case ActionGetPOP.FOLDER_ATTACHMENTS:
           throw new HopException(
               BaseMessages.getString(PKG, "ActionGetMailsFromPOP.Error.AttachmentFolderEmpty"));
+        default:
+          break;
       }
     }
     FileObject folder = HopVfs.getFileObject(folderName);
@@ -1286,6 +1298,8 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
             throw new HopException(
                 BaseMessages.getString(
                     PKG, "ActionGetMailsFromPOP.Error.AttachmentFolderNotAFolder", folderName));
+          default:
+            break;
         }
       }
       if (isDebug()) {
@@ -1299,6 +1313,8 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
             logDebug(
                 BaseMessages.getString(
                     PKG, "ActionGetMailsFromPOP.Log.AttachmentFolderExists", folderName));
+            break;
+          default:
             break;
         }
       }
@@ -1315,6 +1331,8 @@ public class ActionGetPOP extends ActionBase implements Cloneable, IAction {
             throw new HopException(
                 BaseMessages.getString(
                     PKG, "ActionGetMailsFromPOP.Error.AttachmentFolderNotExist", folderName));
+          default:
+            break;
         }
       }
     }

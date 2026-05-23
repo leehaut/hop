@@ -20,7 +20,7 @@ package org.apache.hop.pipeline.transforms.rowgenerator;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.CheckResult;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.ICheckResult;
@@ -249,12 +249,9 @@ public class RowGenerator extends BaseTransform<RowGeneratorMeta, RowGeneratorDa
               data.outputRowMeta.getString(r)));
     }
 
-    if (checkFeedback(data.rowsWritten)) {
-      if (isBasic()) {
-        logBasic(
-            BaseMessages.getString(
-                PKG, "RowGenerator.Log.LineNr", Long.toString(data.rowsWritten)));
-      }
+    if (checkFeedback(data.rowsWritten) && isBasic()) {
+      logBasic(
+          BaseMessages.getString(PKG, "RowGenerator.Log.LineNr", Long.toString(data.rowsWritten)));
     }
 
     return retval;
@@ -279,8 +276,8 @@ public class RowGenerator extends BaseTransform<RowGeneratorMeta, RowGeneratorDa
         List<ICheckResult> remarks = new ArrayList<>(); // stores the errors...
         RowMetaAndData outputRow = buildRow(meta, remarks, getTransformName());
         if (!remarks.isEmpty()) {
-          for (int i = 0; i < remarks.size(); i++) {
-            CheckResult cr = (CheckResult) remarks.get(i);
+          for (ICheckResult remark : remarks) {
+            CheckResult cr = (CheckResult) remark;
             logError(cr.getText());
           }
           return false;

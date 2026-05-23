@@ -17,41 +17,41 @@
 
 package org.apache.hop.www;
 
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.apache.hop.core.gui.Point;
 import org.apache.hop.core.logging.HopLogStore;
 import org.apache.hop.core.logging.ILogChannel;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineMeta;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.owasp.encoder.Encode;
 
-public class GetPipelineStatusServletTest {
+class GetPipelineStatusServletTest {
   private PipelineMap mockPipelineMap;
 
   private GetPipelineStatusServlet getPipelineStatusServlet;
 
-  @Before
-  public void setup() {
+  @BeforeEach
+  void setup() {
     mockPipelineMap = mock(PipelineMap.class);
     getPipelineStatusServlet = new GetPipelineStatusServlet(mockPipelineMap);
   }
 
   @Test
-  public void testGetPipelineStatusServletEscapesHtmlWhenPipelineNotFound()
+  void testGetPipelineStatusServletEscapesHtmlWhenPipelineNotFound()
       throws ServletException, IOException {
     HttpServletRequest mockHttpServletRequest = mock(HttpServletRequest.class);
     HttpServletResponse mockHttpServletResponse = mock(HttpServletResponse.class);
@@ -70,7 +70,7 @@ public class GetPipelineStatusServletTest {
   }
 
   @Test
-  public void testGetPipelineStatusServletEscapesHtmlWhenPipelineFound()
+  void testGetPipelineStatusServletEscapesHtmlWhenPipelineFound()
       throws ServletException, IOException {
     HopLogStore.init();
     HttpServletRequest mockHttpServletRequest = mock(HttpServletRequest.class);

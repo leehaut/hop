@@ -39,24 +39,26 @@ import org.apache.hop.ui.core.widget.ColumnInfo;
 import org.apache.hop.ui.core.widget.TableView;
 import org.apache.hop.ui.pipeline.transform.BaseTransformDialog;
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.events.ModifyListener;
+import org.eclipse.swt.custom.CCombo;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
-import org.eclipse.swt.layout.FormLayout;
-import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 public class JaninoDialog extends BaseTransformDialog {
   private static final Class<?> PKG = JaninoMeta.class;
 
-  private Text wTransformName;
+  private static final String[] JAVA_TARGET_VERSION_ITEMS =
+      new String[] {
+        "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"
+      };
 
   private TableView wFields;
+
+  private CCombo wJavaTargetVersion;
 
   private final JaninoMeta currentMeta;
   private final JaninoMeta originalMeta;
@@ -75,63 +77,40 @@ public class JaninoDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "JaninoDialog.DialogTitle"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MIN | SWT.MAX);
-    PropsUi.setLook(shell);
-    setShellImage(shell, currentMeta);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
-    ModifyListener lsMod = e -> currentMeta.setChanged();
     changed = currentMeta.hasChanged();
 
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
+    Label wlJavaTargetVersion = new Label(shell, SWT.RIGHT);
+    wlJavaTargetVersion.setText(
+        BaseMessages.getString(PKG, "JaninoDialog.JavaTargetVersion.Label"));
+    PropsUi.setLook(wlJavaTargetVersion);
+    FormData fdlJavaTargetVersion = new FormData();
+    fdlJavaTargetVersion.left = new FormAttachment(0, 0);
+    fdlJavaTargetVersion.right = new FormAttachment(middle, -margin);
+    fdlJavaTargetVersion.top = new FormAttachment(wSpacer, margin);
+    wlJavaTargetVersion.setLayoutData(fdlJavaTargetVersion);
 
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "JaninoDialog.DialogTitle"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // Some buttons at the bottom
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wCancel}, margin, null);
-
-    // TransformName line
-    Label wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "System.TransformName.Label"));
-    wlTransformName.setToolTipText(BaseMessages.getString(PKG, "System.TransformName.Tooltip"));
-    PropsUi.setLook(wlTransformName);
-    FormData fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    FormData fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
+    wJavaTargetVersion = new CCombo(shell, SWT.BORDER | SWT.READ_ONLY);
+    PropsUi.setLook(wJavaTargetVersion);
+    wJavaTargetVersion.setItems(JAVA_TARGET_VERSION_ITEMS);
+    FormData fdJavaTargetVersion = new FormData();
+    fdJavaTargetVersion.left = new FormAttachment(middle, 0);
+    fdJavaTargetVersion.right = new FormAttachment(100, 0);
+    fdJavaTargetVersion.top = new FormAttachment(wSpacer, margin);
+    wJavaTargetVersion.setLayoutData(fdJavaTargetVersion);
 
     Label wlFields = new Label(shell, SWT.NONE);
     wlFields.setText(BaseMessages.getString(PKG, "JaninoDialog.Fields.Label"));
     PropsUi.setLook(wlFields);
     FormData fdlFields = new FormData();
     fdlFields.left = new FormAttachment(0, 0);
-    fdlFields.top = new FormAttachment(wTransformName, margin);
+    fdlFields.top = new FormAttachment(wJavaTargetVersion, margin);
     wlFields.setLayoutData(fdlFields);
 
-    final int FieldsRows = currentMeta.getFormula() != null ? currentMeta.getFormula().length : 1;
+    final int nrFields = currentMeta.getFunctions().size();
 
     colinf =
         new ColumnInfo[] {
@@ -167,15 +146,15 @@ public class JaninoDialog extends BaseTransformDialog {
             shell,
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
             colinf,
-            FieldsRows,
-            lsMod,
+            nrFields,
+            null,
             props);
 
     FormData fdFields = new FormData();
     fdFields.left = new FormAttachment(0, 0);
     fdFields.top = new FormAttachment(wlFields, margin);
     fdFields.right = new FormAttachment(100, 0);
-    fdFields.bottom = new FormAttachment(wOk, -2 * margin);
+    fdFields.bottom = new FormAttachment(wOk, -margin);
     wFields.setLayoutData(fdFields);
 
     //
@@ -241,7 +220,7 @@ public class JaninoDialog extends BaseTransformDialog {
 
     getData();
     currentMeta.setChanged(changed);
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -262,28 +241,33 @@ public class JaninoDialog extends BaseTransformDialog {
 
   /** Copy information from the meta-data currentMeta to the dialog fields. */
   public void getData() {
-    if (currentMeta.getFormula() != null) {
-      for (int i = 0; i < currentMeta.getFormula().length; i++) {
-        JaninoMetaFunction fn = currentMeta.getFormula()[i];
+    int effectiveVersion = currentMeta.getEffectiveJavaTargetVersion();
+    int versionIndex = effectiveVersion - JaninoMeta.JAVA_TARGET_VERSION_MIN;
+    if (versionIndex >= 0 && versionIndex < JAVA_TARGET_VERSION_ITEMS.length) {
+      wJavaTargetVersion.select(versionIndex);
+    } else {
+      wJavaTargetVersion.select(0);
+    }
+
+    if (currentMeta.getFunctions() != null) {
+      for (int i = 0; i < currentMeta.getFunctions().size(); i++) {
+        JaninoMetaFunction function = currentMeta.getFunctions().get(i);
         TableItem item = wFields.table.getItem(i);
-        item.setText(1, Const.NVL(fn.getFieldName(), ""));
-        item.setText(2, Const.NVL(fn.getFormula(), ""));
-        item.setText(3, Const.NVL(ValueMetaFactory.getValueMetaName(fn.getValueType()), ""));
-        if (fn.getValueLength() >= 0) {
-          item.setText(4, "" + fn.getValueLength());
+        item.setText(1, Const.NVL(function.getFieldName(), ""));
+        item.setText(2, Const.NVL(function.getFormula(), ""));
+        item.setText(3, Const.NVL(ValueMetaFactory.getValueMetaName(function.getValueType()), ""));
+        if (function.getValueLength() >= 0) {
+          item.setText(4, "" + function.getValueLength());
         }
-        if (fn.getValuePrecision() >= 0) {
-          item.setText(5, "" + fn.getValuePrecision());
+        if (function.getValuePrecision() >= 0) {
+          item.setText(5, "" + function.getValuePrecision());
         }
-        item.setText(6, Const.NVL(fn.getReplaceField(), ""));
+        item.setText(6, Const.NVL(function.getReplaceField(), ""));
       }
     }
 
     wFields.setRowNums();
     wFields.optWidth(true);
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   private void cancel() {
@@ -316,21 +300,19 @@ public class JaninoDialog extends BaseTransformDialog {
 
     transformName = wTransformName.getText(); // return value
 
-    currentMeta.allocate(wFields.nrNonEmpty());
+    currentMeta.setJavaTargetVersion(
+        Const.toInt(wJavaTargetVersion.getText(), JaninoMeta.JAVA_TARGET_VERSION_DEFAULT));
 
-    for (int i = 0; i < nrNonEmptyFields; i++) {
-      TableItem item = wFields.getNonEmpty(i);
-
-      String fieldName = item.getText(1);
-      String formula = item.getText(2);
-      int valueType = ValueMetaFactory.getIdForValueMeta(item.getText(3));
-      int valueLength = Const.toInt(item.getText(4), -1);
-      int valuePrecision = Const.toInt(item.getText(5), -1);
-      String replaceField = item.getText(6);
-
-      currentMeta.getFormula()[i] =
-          new JaninoMetaFunction(
-              fieldName, formula, valueType, valueLength, valuePrecision, replaceField);
+    currentMeta.getFunctions().clear();
+    for (TableItem item : wFields.getNonEmptyItems()) {
+      JaninoMetaFunction function = new JaninoMetaFunction();
+      function.setFieldName(item.getText(1));
+      function.setFormula(item.getText(2));
+      function.setValueType(ValueMetaFactory.getIdForValueMeta(item.getText(3)));
+      function.setValueLength(Const.toInt(item.getText(4), -1));
+      function.setValuePrecision(Const.toInt(item.getText(5), -1));
+      function.setReplaceField(item.getText(6));
+      currentMeta.getFunctions().add(function);
     }
 
     if (!originalMeta.equals(currentMeta)) {

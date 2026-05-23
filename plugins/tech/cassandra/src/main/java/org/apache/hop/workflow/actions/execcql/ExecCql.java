@@ -27,7 +27,7 @@ import com.datastax.oss.driver.api.core.type.DataType;
 import java.util.Iterator;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Result;
 import org.apache.hop.core.RowMetaAndData;
 import org.apache.hop.core.annotations.Action;
@@ -42,6 +42,7 @@ import org.apache.hop.databases.cassandra.datastax.DriverCqlRowHandler;
 import org.apache.hop.databases.cassandra.datastax.TableMetaData;
 import org.apache.hop.databases.cassandra.metadata.CassandraConnection;
 import org.apache.hop.metadata.api.HopMetadataProperty;
+import org.apache.hop.metadata.api.HopMetadataPropertyType;
 import org.apache.hop.metadata.api.IHopMetadataSerializer;
 import org.apache.hop.workflow.action.ActionBase;
 import org.apache.hop.workflow.action.IAction;
@@ -58,7 +59,9 @@ import org.apache.hop.workflow.action.IAction;
 @Setter
 public class ExecCql extends ActionBase implements IAction {
 
-  @HopMetadataProperty(key = "connection")
+  @HopMetadataProperty(
+      key = "connection",
+      hopMetadataPropertyType = HopMetadataPropertyType.CASSANDRA_CONNECTION)
   private String connectionName;
 
   @HopMetadataProperty(key = "script")
@@ -120,9 +123,13 @@ public class ExecCql extends ActionBase implements IAction {
         executeCqlStatements(this, getLogChannel(), result, cassandraConnection, cqlStatements);
 
     if (result.getNrErrors() == 0) {
-      logBasic("Cassandra executed " + nrExecuted + " CQL commands without error");
+      if (isBasic()) {
+        logBasic("Cassandra executed " + nrExecuted + " CQL commands without error");
+      }
     } else {
-      logBasic("Cassandra Exec CQL: some command(s) executed with error(s)");
+      if (isBasic()) {
+        logBasic("Cassandra Exec CQL: some command(s) executed with error(s)");
+      }
     }
 
     return result;
@@ -174,7 +181,9 @@ public class ExecCql extends ActionBase implements IAction {
                 Thread.sleep(50);
               }
               nrExecuted++;
-              log.logDetailed("Executed cql statement: " + cql);
+              if (log.isDetailed()) {
+                log.logDetailed("Executed cql statement: " + cql);
+              }
             }
           }
         } catch (Exception e) {

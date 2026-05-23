@@ -18,7 +18,8 @@
 
 package org.apache.hop.ui.www.service;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.hc.core5.http.ContentType;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.NotePadMeta;
 import org.apache.hop.core.logging.LogChannel;
@@ -39,9 +40,7 @@ import org.apache.hop.ui.core.widget.MetaSelectionLine;
 import org.apache.hop.ui.core.widget.TextVar;
 import org.apache.hop.ui.hopgui.HopGui;
 import org.apache.hop.ui.hopgui.file.pipeline.HopPipelineFileType;
-import org.apache.hop.ui.hopgui.perspective.dataorch.HopDataOrchestrationPerspective;
 import org.apache.hop.www.service.WebService;
-import org.apache.http.entity.ContentType;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
@@ -189,10 +188,8 @@ public class WebServiceEditor extends MetadataEditor<WebService> {
             PipelineRunConfiguration.class,
             parent,
             SWT.NONE,
-            "Pipeline run configuration",
-            "This is the pipeline run configuration to use on the server. "
-                + "If left blank a standard local pipeline engine is used. "
-                + "To return values please use a local pipeline engine.");
+            BaseMessages.getString(PKG, "WebServiceEditor.Runconfiguration.Label"),
+            BaseMessages.getString(PKG, "WebServiceEditor.Runconfiguration.Tooltip"));
     FormData fdRunConfiguration = new FormData();
     fdRunConfiguration.left = new FormAttachment(0, 0);
     fdRunConfiguration.top = new FormAttachment(lastControl, margin);
@@ -410,15 +407,13 @@ public class WebServiceEditor extends MetadataEditor<WebService> {
         pipelineMeta.setFilename(realFilename);
         pipelineMeta.clearChanged();
 
-        HopDataOrchestrationPerspective perspective = HopGui.getDataOrchestrationPerspective();
+        // Open it in the Hop GUI
+        //
+        HopGui.getExplorerPerspective().addPipeline(pipelineMeta);
 
         // Switch to the perspective
         //
-        perspective.activate();
-
-        // Open it in the Hop GUI
-        //
-        HopGui.getDataOrchestrationPerspective().addPipeline(hopGui, pipelineMeta, type);
+        HopGui.getExplorerPerspective().activate();
 
         // Save the file
         hopGui.fileDelegate.fileSave();

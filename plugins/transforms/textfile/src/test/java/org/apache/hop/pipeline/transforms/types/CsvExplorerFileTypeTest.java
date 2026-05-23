@@ -72,6 +72,11 @@ class CsvExplorerFileTypeTest {
   }
 
   @Test
+  void testHasCapabilitySaveAs() {
+    assertTrue(fileType.hasCapability(IHopFileType.CAPABILITY_SAVE_AS));
+  }
+
+  @Test
   void testHasCapabilityClose() {
     assertTrue(fileType.hasCapability(IHopFileType.CAPABILITY_CLOSE));
   }
@@ -82,13 +87,18 @@ class CsvExplorerFileTypeTest {
   }
 
   @Test
-  void testDoesNotHaveCapabilityCopy() {
-    assertFalse(fileType.hasCapability(IHopFileType.CAPABILITY_COPY));
+  void testHasCapabilityCopy() {
+    assertTrue(fileType.hasCapability(IHopFileType.CAPABILITY_COPY));
   }
 
   @Test
-  void testDoesNotHaveCapabilitySelect() {
-    assertFalse(fileType.hasCapability(IHopFileType.CAPABILITY_SELECT));
+  void testHasCapabilitySelect() {
+    assertTrue(fileType.hasCapability(IHopFileType.CAPABILITY_SELECT));
+  }
+
+  @Test
+  void testDoesNotHaveCapabilityStart() {
+    assertFalse(fileType.hasCapability(IHopFileType.CAPABILITY_START));
   }
 
   @Test
@@ -117,7 +127,7 @@ class CsvExplorerFileTypeTest {
   @Test
   void testGetCapabilities() {
     assertNotNull(fileType.getCapabilities());
-    assertTrue(fileType.getCapabilities().size() > 0);
+    assertFalse(fileType.getCapabilities().isEmpty());
   }
 
   @Test

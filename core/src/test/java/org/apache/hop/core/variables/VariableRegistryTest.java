@@ -17,21 +17,21 @@
 
 package org.apache.hop.core.variables;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import org.apache.hop.core.Const;
-import org.apache.hop.junit.rules.RestoreHopEnvironment;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.apache.hop.junit.rules.RestoreHopEnvironmentExtension;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
-public class VariableRegistryTest {
-
-  @ClassRule public static RestoreHopEnvironment env = new RestoreHopEnvironment();
+/** Unit test for {@link VariableRegistry} */
+@ExtendWith(RestoreHopEnvironmentExtension.class)
+class VariableRegistryTest {
 
   @Test
-  public void testInit() throws Exception {
-
+  void testInit() throws Exception {
     VariableRegistry.init();
 
     VariableRegistry registry = VariableRegistry.getInstance();
@@ -39,8 +39,8 @@ public class VariableRegistryTest {
         registry.findDescribedVariable(Const.HOP_PASSWORD_ENCODER_PLUGIN);
     assertNotNull(describedVariable);
 
-    boolean actual = Boolean.valueOf(describedVariable.getValue());
-    assertEquals(false, actual);
+    boolean actual = Boolean.parseBoolean(describedVariable.getValue());
+    assertFalse(actual);
 
     assertEquals(
         "Specifies the password encoder plugin to use by ID (Hop is the default).",

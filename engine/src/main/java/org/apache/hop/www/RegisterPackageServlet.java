@@ -16,13 +16,14 @@
  */
 package org.apache.hop.www;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.Serial;
 import java.nio.charset.StandardCharsets;
 import java.text.MessageFormat;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.annotations.HopServerServlet;
@@ -52,8 +53,7 @@ import org.w3c.dom.Node;
 public class RegisterPackageServlet extends BaseWorkflowServlet {
 
   public static final String CONTEXT_PATH = "/hop/registerPackage";
-
-  private static final long serialVersionUID = -7582587179862317791L;
+  @Serial private static final long serialVersionUID = -7582587179862317791L;
 
   public static final String PARAMETER_LOAD = "load";
   public static final String PARAMETER_TYPE = "type";

@@ -17,15 +17,18 @@
 
 package org.apache.hop.avro.transforms.avroinput;
 
-import java.io.InputStream;
 import org.apache.avro.file.DataFileStream;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.io.CountingInputStream;
 import org.apache.hop.core.row.RowDataUtil;
 import org.apache.hop.core.vfs.HopVfs;
+import org.apache.hop.lineage.LineageFileIoEmitter;
+import org.apache.hop.lineage.model.FileIoOperation;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransform;
@@ -92,9 +95,10 @@ public class AvroFileInput extends BaseTransform<AvroFileInputMeta, AvroFileInpu
     // Read Avro rows of data from the file...
     //
     try {
-      try (InputStream inputStream = HopVfs.getInputStream(filename, variables)) {
-        GenericDatumReader<GenericRecord> datumReader = new GenericDatumReader<>();
-        DataFileStream<GenericRecord> fileStream = new DataFileStream<>(inputStream, datumReader);
+      try (CountingInputStream countingStream =
+              new CountingInputStream(HopVfs.getInputStream(filename, variables));
+          DataFileStream<GenericRecord> fileStream =
+              new DataFileStream<>(countingStream, new GenericDatumReader<>())) {
         while (fileStream.hasNext() && !isStopped()) {
           GenericRecord genericRecord = fileStream.next();
           incrementLinesInput();
@@ -110,6 +114,17 @@ public class AvroFileInput extends BaseTransform<AvroFileInputMeta, AvroFileInpu
           //
           if (data.rowsLimit > 0 && getLinesInput() >= data.rowsLimit) {
             break;
+          }
+        }
+        long bytesRead = countingStream.getCount();
+        dataVolumeIn = (dataVolumeIn != null ? dataVolumeIn : 0L) + bytesRead;
+        if (bytesRead > 0) {
+          try {
+            FileObject src = HopVfs.getFileObject(filename, variables);
+            LineageFileIoEmitter.emitTransformFileIo(
+                this, FileIoOperation.READ, src, null, bytesRead, true, null);
+          } catch (Exception ignored) {
+            // optional lineage
           }
         }
       }

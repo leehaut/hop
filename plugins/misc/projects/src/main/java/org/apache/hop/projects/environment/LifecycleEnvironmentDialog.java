@@ -17,7 +17,7 @@
 
 package org.apache.hop.projects.environment;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.config.DescribedVariablesConfigFile;
@@ -28,6 +28,7 @@ import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.projects.config.ProjectsConfig;
 import org.apache.hop.projects.config.ProjectsConfigSingleton;
 import org.apache.hop.projects.project.ProjectConfig;
+import org.apache.hop.ui.core.ConstUi;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.dialog.BaseDialog;
 import org.apache.hop.ui.core.dialog.ErrorDialog;
@@ -94,7 +95,13 @@ public class LifecycleEnvironmentDialog extends Dialog {
     Shell parent = getParent();
 
     shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.APPLICATION_MODAL | SWT.RESIZE);
-    shell.setImage(GuiResource.getInstance().getImageHopUi());
+    shell.setImage(
+        GuiResource.getInstance()
+            .getImage(
+                "environment.svg",
+                PKG.getClassLoader(),
+                ConstUi.SMALL_ICON_SIZE,
+                ConstUi.SMALL_ICON_SIZE));
     PropsUi.setLook(shell);
 
     int margin = PropsUi.getMargin() + 2;
@@ -241,6 +248,8 @@ public class LifecycleEnvironmentDialog extends Dialog {
 
     getData();
 
+    wName.setFocus();
+
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return returnValue;
@@ -318,13 +327,19 @@ public class LifecycleEnvironmentDialog extends Dialog {
         if (projectConfig != null) {
           String environmentName = Const.NVL(wName.getText(), projectName);
           filename =
-              projectConfig.getProjectHome() + "/" + ".." + "/" + environmentName + "-config.json";
+              projectConfig.getProjectHome()
+                  + Const.FILE_SEPARATOR
+                  + ".."
+                  + Const.FILE_SEPARATOR
+                  + environmentName
+                  + "-config.json";
         }
       }
       FileObject fileObject = HopVfs.getFileObject(filename);
 
       String configFile =
           BaseDialog.presentFileDialog(
+              true, // save dialog
               shell,
               null,
               variables,

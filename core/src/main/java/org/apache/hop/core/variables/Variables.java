@@ -23,10 +23,11 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.config.HopConfig;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.exception.HopValueException;
 import org.apache.hop.core.logging.LogChannel;
 import org.apache.hop.core.row.IRowMeta;
@@ -63,8 +64,8 @@ public class Variables implements IVariables {
       // If variables is not null and this variable is not already
       // the same object as the argument.
       String[] variableNames = variables.getVariableNames();
-      for (int idx = 0; idx < variableNames.length; idx++) {
-        properties.put(variableNames[idx], variables.getVariable(variableNames[idx]));
+      for (String variableName : variableNames) {
+        properties.put(variableName, variables.getVariable(variableName));
       }
     }
   }
@@ -274,7 +275,7 @@ public class Variables implements IVariables {
         // Where do we continue?
         startIndex = before.length() + resolvedArgument.length();
       } catch (HopException e) {
-        throw new RuntimeException(
+        throw new HopRuntimeException(
             "Error resolving variable '" + input + "' with variable resolver metadata", e);
       }
     }

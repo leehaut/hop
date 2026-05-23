@@ -191,12 +191,7 @@ public class ActionMysqlBulkLoad extends ActionBase {
           }
 
           if (connection != null) {
-            DatabaseMeta databaseMeta = null;
-            try {
-              databaseMeta = DatabaseMeta.loadDatabase(getMetadataProvider(), connection);
-            } catch (Exception e) {
-              logError("Unable to load database :" + connection, e);
-            }
+            DatabaseMeta databaseMeta = parentWorkflowMeta.findDatabase(connection, getVariables());
             // User has specified a connection, We can continue ...
             try (Database db = new Database(this, this, databaseMeta)) {
               db.connect();
@@ -414,11 +409,11 @@ public class ActionMysqlBulkLoad extends ActionBase {
     String returnString = "";
     String[] split = listcolumns.split(",");
 
-    for (int i = 0; i < split.length; i++) {
+    for (String s : split) {
       if (returnString.equals("")) {
-        returnString = "`" + Const.trim(split[i]) + "`";
+        returnString = "`" + Const.trim(s) + "`";
       } else {
-        returnString = returnString + ", `" + Const.trim(split[i]) + "`";
+        returnString = returnString + ", `" + Const.trim(s) + "`";
       }
     }
 

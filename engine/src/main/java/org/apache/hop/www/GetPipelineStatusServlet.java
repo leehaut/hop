@@ -20,15 +20,16 @@ package org.apache.hop.www;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.io.Serial;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.annotations.HopServerServlet;
 import org.apache.hop.core.exception.HopException;
@@ -51,8 +52,7 @@ import org.owasp.encoder.Encode;
 public class GetPipelineStatusServlet extends BaseHttpServlet implements IHopServerPlugin {
 
   private static final Class<?> PKG = GetPipelineStatusServlet.class;
-
-  private static final long serialVersionUID = 3634806745372015720L;
+  @Serial private static final long serialVersionUID = 3634806745372015720L;
 
   public static final String CONTEXT_PATH = "/hop/pipelineStatus";
   private static final String CONST_HREF = "<a target=\"_blank\" href=\"";
@@ -67,7 +67,7 @@ public class GetPipelineStatusServlet extends BaseHttpServlet implements IHopSer
   public static final String SEND_RESULT = "sendResult";
 
   private static final byte[] XML_HEADER =
-      XmlHandler.getXmlHeader(Const.XML_ENCODING).getBytes(StandardCharsets.UTF_8);
+      XmlHandler.getXmlHeader(Const.UTF_8).getBytes(StandardCharsets.UTF_8);
 
   public GetPipelineStatusServlet() {}
 
@@ -101,17 +101,7 @@ public class GetPipelineStatusServlet extends BaseHttpServlet implements IHopSer
 
     response.setStatus(HttpServletResponse.SC_OK);
 
-    if (useXml) {
-      response.setContentType("text/xml");
-      response.setCharacterEncoding(Const.XML_ENCODING);
-    }
-    if (useJson) {
-      response.setContentType("application/json");
-      response.setCharacterEncoding(Const.XML_ENCODING);
-    } else {
-      response.setCharacterEncoding("UTF-8");
-      response.setContentType("text/html;charset=UTF-8");
-    }
+    setResponseFormat(response, useXml, useJson);
 
     // ID is optional...
     //
@@ -197,11 +187,20 @@ public class GetPipelineStatusServlet extends BaseHttpServlet implements IHopSer
           }
           out.flush();
           response.flushBuffer();
-        } catch (HopException e) {
-          throw new ServletException("Unable to get the pipeline status in XML or JSON format", e);
+        } catch (HopException | IOException e) {
+          writeXmlOrJsonApiError(
+              response,
+              null,
+              useXml,
+              useJson,
+              "Unable to get the pipeline status in XML or JSON format",
+              e);
         }
       } else {
-        PrintWriter out = response.getWriter();
+        PrintWriter out = getSafeWriter(response);
+        if (out == null) {
+          return;
+        }
 
         int lastLineNr = HopLogStore.getLastBufferLineNr();
         int tableBorder = 0;
@@ -568,8 +567,10 @@ public class GetPipelineStatusServlet extends BaseHttpServlet implements IHopSer
           out.println("  pipelinelog.scrollTop=pipelinelog.scrollHeight; ");
           out.println("</script> ");
         } catch (Exception ex) {
+          logError("Error rendering pipeline status HTML page", ex);
           out.println("<pre>");
-          out.println(Encode.forHtml(Const.getStackTracker(ex)));
+          out.println(
+              Encode.forHtml("Unable to display pipeline status. See server log for details."));
           out.println("</pre>");
         }
 
@@ -578,7 +579,10 @@ public class GetPipelineStatusServlet extends BaseHttpServlet implements IHopSer
         out.println("</HTML>");
       }
     } else {
-      PrintWriter out = response.getWriter();
+      PrintWriter out = getSafeWriter(response);
+      if (out == null) {
+        return;
+      }
       if (useXml) {
         out.println(
             new WebResult(

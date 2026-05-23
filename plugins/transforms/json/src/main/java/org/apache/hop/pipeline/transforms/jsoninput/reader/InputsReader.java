@@ -57,7 +57,7 @@ public class InputsReader implements Iterable<InputStream> {
   public Iterator<InputStream> iterator() {
     if (!meta.isInFields() || meta.getIsAFile()) {
       Iterator<FileObject> files;
-      if (meta.inputFiles.acceptingFilenames) {
+      if (meta.getFileInput().isAcceptingFilenames()) {
         // paths from input
         files = new FileNamesIterator(transform, errorHandler, getFieldIterator());
       } else {
@@ -72,7 +72,7 @@ public class InputsReader implements Iterable<InputStream> {
       return new URLContentIterator(errorHandler, getFieldIterator());
     } else {
       // direct content
-      return new ChainedIterator<InputStream, String>(getFieldIterator(), errorHandler) {
+      return new ChainedIterator<>(getFieldIterator(), errorHandler) {
         @Override
         protected InputStream tryNext() throws IOException {
           String next = inner.next();
@@ -147,7 +147,7 @@ public class InputsReader implements Iterable<InputStream> {
 
     @Override
     public InputStream tryNext() {
-      if (hasNext()) {
+      while (hasNext()) {
         if (data.file != null) {
           try {
             data.file.close();
@@ -161,8 +161,14 @@ public class InputsReader implements Iterable<InputStream> {
           if (transform.onNewFile(data.file)) {
             return HopVfs.getInputStream(data.file);
           }
+          if (data instanceof JsonInputData jsonData && jsonData.skipEmptyFile) {
+            jsonData.skipEmptyFile = false;
+            continue;
+          }
+          return null;
         } catch (FileSystemException e) {
           handler.fileOpenError(data.file, e);
+          return null;
         }
       }
       return null;

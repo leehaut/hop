@@ -18,11 +18,14 @@ package org.apache.hop.pipeline.transforms.userdefinedjavaclass;
 
 import java.util.List;
 import java.util.Map;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hop.core.BlockingRowSet;
 import org.apache.hop.core.IRowSet;
 import org.apache.hop.core.ResultFile;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopRowException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.exception.HopTransformException;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.i18n.BaseMessages;
@@ -36,10 +39,12 @@ import org.apache.hop.pipeline.transform.ITransform;
 import org.apache.hop.pipeline.transform.ITransformData;
 import org.apache.hop.pipeline.transform.TransformMeta;
 
+@Getter
+@Setter
 public class UserDefinedJavaClass
     extends BaseTransform<UserDefinedJavaClassMeta, UserDefinedJavaClassData> {
   private static final Class<?> PKG = UserDefinedJavaClassMeta.class;
-  private TransformClassBase child;
+  private final TransformClassBase child;
   public static final String HOP_DEFAULT_CLASS_CACHE_SIZE = "HOP_DEFAULT_CLASS_CACHE_SIZE";
 
   public UserDefinedJavaClass(
@@ -55,17 +60,17 @@ public class UserDefinedJavaClass
       try {
         meta.cookClasses();
       } catch (HopException e) {
-        throw new RuntimeException(e);
+        throw new HopRuntimeException(e);
       }
     }
 
     child = meta.newChildInstance(this, meta, data);
 
-    if (!meta.cookErrors.isEmpty()) {
-      for (Exception e : meta.cookErrors) {
+    if (!meta.getCookErrors().isEmpty()) {
+      for (Exception e : meta.getCookErrors()) {
         logErrorImpl("Error initializing UserDefinedJavaClass:", e);
       }
-      setErrorsImpl(meta.cookErrors.size());
+      setErrorsImpl(meta.getCookErrors().size());
       stopAllImpl();
     }
   }
@@ -538,7 +543,7 @@ public class UserDefinedJavaClass
     return super.getTransformName();
   }
 
-  public IPipelineEngine getPipelineImpl() {
+  public IPipelineEngine<PipelineMeta> getPipelineImpl() {
     return super.getPipeline();
   }
 
@@ -674,11 +679,11 @@ public class UserDefinedJavaClass
 
   @Override
   public boolean init() {
-    if (!meta.cookErrors.isEmpty()) {
+    if (!meta.getCookErrors().isEmpty()) {
       return false;
     }
 
-    if (meta.cookedTransformClass == null) {
+    if (meta.getCookedTransformClass() == null) {
       logError("No UDFC marked as Pipeline class");
       return false;
     }

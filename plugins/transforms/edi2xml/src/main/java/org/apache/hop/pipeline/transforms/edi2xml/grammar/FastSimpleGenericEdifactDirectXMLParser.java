@@ -39,7 +39,7 @@ import org.antlr.runtime.TokenStream;
 import org.antlr.stringtemplate.StringTemplate;
 import org.antlr.stringtemplate.StringTemplateGroup;
 import org.antlr.stringtemplate.language.AngleBracketTemplateLexer;
-import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.commons.text.StringEscapeUtils;
 
 @SuppressWarnings("java:S1104")
 public class FastSimpleGenericEdifactDirectXMLParser extends Parser {
@@ -111,7 +111,7 @@ public class FastSimpleGenericEdifactDirectXMLParser extends Parser {
     }
 
     public STAttrMap put(String attrName, int value) {
-      super.put(attrName, Integer.valueOf(value));
+      super.put(attrName, value);
       return this;
     }
   }
@@ -150,7 +150,7 @@ public class FastSimpleGenericEdifactDirectXMLParser extends Parser {
     }
 
     // enocde XML entities
-    return StringEscapeUtils.escapeXml(txt);
+    return StringEscapeUtils.escapeXml10(txt);
   }
 
   // assume about 8k for an edifact message
@@ -208,6 +208,8 @@ public class FastSimpleGenericEdifactDirectXMLParser extends Parser {
           pushFollow(FOLLOW_una_in_edifact64);
           una();
           state._fsp--;
+          break;
+        default:
           break;
       }
       buf = new StringBuilder(8192);
@@ -532,6 +534,8 @@ public class FastSimpleGenericEdifactDirectXMLParser extends Parser {
           break;
         case 2:
           break;
+        default:
+          break;
       }
       retval.stop = input.LT(-1);
 
@@ -712,6 +716,8 @@ public class FastSimpleGenericEdifactDirectXMLParser extends Parser {
           state._fsp--;
           break;
         case 2:
+          break;
+        default:
           break;
       }
       retval.stop = input.LT(-1);

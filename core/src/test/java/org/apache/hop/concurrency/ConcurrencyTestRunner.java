@@ -31,7 +31,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.junit.Assert;
+import org.junit.jupiter.api.Assertions;
 
 /**
  * This class is aimed to be a general runner for concurrency tests. You need to follow a convention
@@ -156,10 +156,8 @@ class ConcurrencyTestRunner<M, B> {
   }
 
   private boolean checkTimeout(long start) throws TimeoutException {
-    if (this.timeout > 0) {
-      if (System.currentTimeMillis() - start > timeout) {
-        throw new TimeoutException("Execution time limit is exceeded: " + timeout + " ms.");
-      }
+    if (this.timeout > 0 && (System.currentTimeMillis() - start > timeout)) {
+      throw new TimeoutException("Execution time limit is exceeded: " + timeout + " ms.");
     }
     return true;
   }
@@ -198,7 +196,7 @@ class ConcurrencyTestRunner<M, B> {
         String stacktrace = Throwables.getStackTraceAsString(throwable);
         message.append('\n').append(stacktrace);
       }
-      Assert.fail(message.toString());
+      Assertions.fail(message.toString());
     }
   }
 

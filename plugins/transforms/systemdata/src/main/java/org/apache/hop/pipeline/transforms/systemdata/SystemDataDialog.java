@@ -17,6 +17,7 @@
 
 package org.apache.hop.pipeline.transforms.systemdata;
 
+import org.apache.hop.core.Const;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.i18n.BaseMessages;
@@ -35,22 +36,16 @@ import org.apache.hop.ui.core.widget.TableView;
 import org.apache.hop.ui.pipeline.dialog.PipelinePreviewProgressDialog;
 import org.apache.hop.ui.pipeline.transform.BaseTransformDialog;
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
-import org.eclipse.swt.layout.FormLayout;
-import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 public class SystemDataDialog extends BaseTransformDialog {
   private static final Class<?> PKG = SystemDataMeta.class;
-
-  private Text wTransformName;
 
   private TableView wFields;
 
@@ -64,97 +59,48 @@ public class SystemDataDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "SystemDataDialog.DialogTitle"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).preview(e -> preview()).cancel(e -> cancel()).build();
 
-    ModifyListener lsMod = e -> input.setChanged();
     changed = input.hasChanged();
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "SystemDataDialog.DialogTitle"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
 
     // See if the transform receives input.
     //
     boolean isReceivingInput = !pipelineMeta.findPreviousTransforms(transformMeta).isEmpty();
 
-    // Some buttons
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wPreview = new Button(shell, SWT.PUSH);
-    wPreview.setText(BaseMessages.getString(PKG, "SystemDataDialog.Button.PreviewRows"));
     wPreview.setEnabled(!isReceivingInput);
-    wPreview.addListener(SWT.Selection, e -> preview());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wPreview, wCancel}, margin, null);
-
-    // TransformName line
-    Label wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "System.TransformName.Label"));
-    wlTransformName.setToolTipText(BaseMessages.getString(PKG, "System.TransformName.Tooltip"));
-    PropsUi.setLook(wlTransformName);
-    FormData fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    FormData fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
 
     Label wlFields = new Label(shell, SWT.NONE);
     wlFields.setText(BaseMessages.getString(PKG, "SystemDataDialog.Fields.Label"));
     PropsUi.setLook(wlFields);
     FormData fdlFields = new FormData();
     fdlFields.left = new FormAttachment(0, 0);
-    fdlFields.top = new FormAttachment(wTransformName, margin);
+    fdlFields.top = new FormAttachment(wSpacer, margin);
     wlFields.setLayoutData(fdlFields);
 
     final int FieldsCols = 2;
-    final int FieldsRows = input.getFieldName().length;
+    final int FieldsRows = 1;
 
-    final String[] functionDesc = new String[SystemDataTypes.values().length - 1];
-    for (int i = 1; i < SystemDataTypes.values().length; i++) {
-      functionDesc[i - 1] = SystemDataTypes.values()[i].getDescription();
-    }
-
-    ColumnInfo[] colinf = new ColumnInfo[FieldsCols];
-    colinf[0] =
+    ColumnInfo[] viewColumns = new ColumnInfo[FieldsCols];
+    viewColumns[0] =
         new ColumnInfo(
             BaseMessages.getString(PKG, "SystemDataDialog.NameColumn.Column"),
             ColumnInfo.COLUMN_TYPE_TEXT,
             false);
-    colinf[1] =
+    viewColumns[1] =
         new ColumnInfo(
             BaseMessages.getString(PKG, "SystemDataDialog.TypeColumn.Column"),
             ColumnInfo.COLUMN_TYPE_TEXT,
             false);
-    colinf[1].setSelectionAdapter(
+    viewColumns[1].setSelectionAdapter(
         new SelectionAdapter() {
           @Override
           public void widgetSelected(SelectionEvent e) {
             EnterSelectionDialog esd =
                 new EnterSelectionDialog(
                     shell,
-                    functionDesc,
+                    SystemDataType.getDescriptions(),
                     BaseMessages.getString(PKG, "SystemDataDialog.SelectInfoType.DialogTitle"),
                     BaseMessages.getString(PKG, "SystemDataDialog.SelectInfoType.DialogMessage"));
             String string = esd.open();
@@ -171,21 +117,21 @@ public class SystemDataDialog extends BaseTransformDialog {
             variables,
             shell,
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
-            colinf,
+            viewColumns,
             FieldsRows,
-            lsMod,
+            null,
             props);
 
     FormData fdFields = new FormData();
     fdFields.left = new FormAttachment(0, 0);
     fdFields.top = new FormAttachment(wlFields, margin);
     fdFields.right = new FormAttachment(100, 0);
-    fdFields.bottom = new FormAttachment(wOk, -2 * margin);
+    fdFields.bottom = new FormAttachment(wOk, -margin);
     wFields.setLayoutData(fdFields);
 
     getData();
     input.setChanged(changed);
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -193,26 +139,12 @@ public class SystemDataDialog extends BaseTransformDialog {
 
   /** Copy information from the meta-data input to the dialog fields. */
   public void getData() {
-    wTransformName.setText(transformName);
-
-    for (int i = 0; i < input.getFieldName().length; i++) {
-      TableItem item = wFields.table.getItem(i);
-      String name = input.getFieldName()[i];
-      String type = input.getFieldType()[i].getDescription();
-
-      if (name != null) {
-        item.setText(1, name);
-      }
-      if (type != null) {
-        item.setText(2, type);
-      }
+    for (SystemDataMeta.SystemInfoField field : input.getFields()) {
+      TableItem item = new TableItem(wFields.table, SWT.NONE);
+      item.setText(1, Const.NVL(field.getFieldName(), ""));
+      item.setText(2, Const.NVL(field.getFieldType().getDescription(), ""));
     }
-
-    wFields.setRowNums();
-    wFields.optWidth(true);
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
+    wFields.optimizeTableView();
   }
 
   private void cancel() {
@@ -239,15 +171,15 @@ public class SystemDataDialog extends BaseTransformDialog {
   }
 
   private void getInfo(SystemDataMeta in) {
-
     transformName = wTransformName.getText(); // return value
-    int count = wFields.nrNonEmpty();
-    in.allocate(count);
-
-    for (int i = 0; i < count; i++) {
-      TableItem item = wFields.getNonEmpty(i);
-      in.getFieldName()[i] = item.getText(1);
-      in.getFieldType()[i] = SystemDataTypes.getTypeFromString(item.getText(2));
+    in.getFields().clear();
+    for (TableItem item : wFields.getNonEmptyItems()) {
+      String name = item.getText(1);
+      String typeDescription = item.getText(2);
+      SystemDataMeta.SystemInfoField field = new SystemDataMeta.SystemInfoField();
+      field.setFieldName(name);
+      field.setFieldType(SystemDataType.lookupDescription(typeDescription));
+      in.getFields().add(field);
     }
   }
 

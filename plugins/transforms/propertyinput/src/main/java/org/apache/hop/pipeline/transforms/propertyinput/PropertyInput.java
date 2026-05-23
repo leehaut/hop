@@ -22,12 +22,13 @@ import java.nio.charset.Charset;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.ResultFile;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.fileinput.FileInputList;
+import org.apache.hop.core.io.CountingInputStream;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.row.RowDataUtil;
@@ -35,6 +36,8 @@ import org.apache.hop.core.row.RowMeta;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.vfs.HopVfs;
 import org.apache.hop.i18n.BaseMessages;
+import org.apache.hop.lineage.LineageFileIoEmitter;
+import org.apache.hop.lineage.model.FileIoOperation;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransform;
@@ -328,6 +331,22 @@ public class PropertyInput extends BaseTransform<PropertyInputMeta, PropertyInpu
     return outputRow;
   }
 
+  private void emitPropertyFileReadLineage(FileObject file) {
+    if (file == null) {
+      return;
+    }
+    Long size = null;
+    try {
+      if (file.getType().hasContent()) {
+        size = file.getContent().getSize();
+      }
+    } catch (Exception ignored) {
+      // optional for lineage
+    }
+    LineageFileIoEmitter.emitTransformFileIo(
+        this, FileIoOperation.READ, file, null, size, true, null);
+  }
+
   private boolean openNextFile() {
     InputStream inputStream = null;
     try {
@@ -446,6 +465,8 @@ public class PropertyInput extends BaseTransform<PropertyInputMeta, PropertyInpu
             BaseMessages.getString(PKG, "PropertyInput.Log.OpeningFile", data.file.toString()));
       }
 
+      emitPropertyFileReadLineage(data.file);
+
       if (meta.isAddResult()) {
         // Add this to the result file names...
         ResultFile resultFile =
@@ -459,6 +480,8 @@ public class PropertyInput extends BaseTransform<PropertyInputMeta, PropertyInpu
       }
 
       inputStream = data.file.getContent().getInputStream();
+      CountingInputStream countingStream = new CountingInputStream(inputStream);
+      inputStream = countingStream;
       if (data.propFiles) {
         // load properties file
         data.properties = new Properties();
@@ -516,6 +539,9 @@ public class PropertyInput extends BaseTransform<PropertyInputMeta, PropertyInpu
       setErrors(1);
       return false;
     } finally {
+      if (inputStream instanceof CountingInputStream cis) {
+        dataVolumeIn = (dataVolumeIn != null ? dataVolumeIn : 0L) + cis.getCount();
+      }
       BaseTransform.closeQuietly(inputStream);
     }
     return true;

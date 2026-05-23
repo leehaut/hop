@@ -17,11 +17,12 @@
 
 package org.apache.hop.core.util;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
 import javax.annotation.Nullable;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 
 /**
  * @param <T> type of value
@@ -35,7 +36,7 @@ public class KeyValue<T> implements Serializable {
   public static final String VALID_KEY_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789_-";
 
   /** Serial version UID. */
-  private static final long serialVersionUID = -6847244072467344205L;
+  @Serial private static final long serialVersionUID = -6847244072467344205L;
 
   private final String key;
 

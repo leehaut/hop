@@ -77,7 +77,9 @@ The table below lists the supported calculations in the `Calculator` transform:
 |A + B|ADD|A plus B.
 |A - B|SUBTRACT|A minus B.
 |A * B|MULTIPLY|A multiplied by B.
-|A / B|DIVIDE|A divided by B.
+|A / B|DIVIDE|A divided by B. +
+ +
+Beware: If A is an Integer and B a Number, it will automatically convert B to an Integer as well. This can lead to division by zero errors if B is less than 1.0 as it will be converted to 0
 |A * A|SQUARE|The square of A.
 |SQRT( A )|SQUARE_ROOT|The square root of A.
 |100 * A / B|PERCENT_1|Percentage of A in B.
@@ -195,6 +197,8 @@ TIP: Only integer values for B are supported. If you need non-integer calculatio
 |Base64 Decode|BASE64_DECODE|Decode a Base64 encoded string. Supports both padded or non-padded input.
 |First day of month (A) date|FIRST_DAY_OF_MONTH|Set the day of field (A) to 1.
 |Last day of month (A) date|LAST_DAY_OF_MONTH|Set the day of field (A) to the last day of the given month.
+|Encode a URL|URL_ENCODE|Encode a URL to have browser/webservice save url calls.
+|Decode a URL|URL_DECODE|Decode a URL.
 |===
 
 == Metadata Injection support

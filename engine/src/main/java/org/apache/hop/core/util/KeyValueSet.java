@@ -17,6 +17,7 @@
 
 package org.apache.hop.core.util;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -26,14 +27,14 @@ import java.util.TreeMap;
 import org.apache.commons.collections4.Closure;
 import org.apache.commons.collections4.Predicate;
 import org.apache.commons.collections4.functors.TruePredicate;
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.builder.ToStringBuilder;
-import org.apache.commons.lang.builder.ToStringStyle;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.builder.ToStringBuilder;
+import org.apache.commons.lang3.builder.ToStringStyle;
 
 public class KeyValueSet implements Iterable<KeyValue<?>>, Serializable {
 
   /** Serial version UID. */
-  private static final long serialVersionUID = 925133158112717153L;
+  @Serial private static final long serialVersionUID = 925133158112717153L;
 
   private final Map<String, KeyValue<?>> entries = new TreeMap<>();
 

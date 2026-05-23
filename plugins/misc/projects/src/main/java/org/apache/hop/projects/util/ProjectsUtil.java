@@ -18,13 +18,13 @@
 package org.apache.hop.projects.util;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.FileSystemException;
 import org.apache.hop.core.Const;
+import org.apache.hop.core.DbCache;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.extension.ExtensionPointHandler;
 import org.apache.hop.core.logging.ILogChannel;
@@ -78,6 +78,15 @@ public class ProjectsUtil {
     ProjectConfig projectConfig = config.findProjectConfig(projectName);
     if (projectConfig == null) {
       throw new HopException("Error enabling project " + projectName + ": it is not configured.");
+    }
+
+    // Clear the database cache when switching?
+    if (config.isClearingDbCacheWhenSwitching()) {
+      if (log.isDetailed()) {
+        log.logDetailed(
+            "Clearing the database cache when switching between projects or environments.");
+      }
+      DbCache.clearAll();
     }
 
     // Variable system variables but also apply them to variables
@@ -157,10 +166,8 @@ public class ProjectsUtil {
     }
 
     FileObject parent = file.getParent();
-    if (parent != null && isInSubDirectory(parent, directory)) {
-      return true;
-    }
-    return false;
+
+    return parent != null && isInSubDirectory(parent, directory);
   }
 
   public static void validateFileInProject(
@@ -228,7 +235,7 @@ public class ProjectsUtil {
     ProjectConfig currentProjectConfig = config.findProjectConfig(projectName);
 
     if (currentProjectConfig == null) {
-      parentProjectReferences = Collections.EMPTY_LIST;
+      parentProjectReferences = List.of();
     } else {
       for (String prj : prjs) {
         if (!prj.equals(projectName)) {
@@ -259,7 +266,7 @@ public class ProjectsUtil {
     ProjectConfig currentProjectConfig = config.findProjectConfig(currentName);
 
     if (currentProjectConfig == null) {
-      parentProjectReferences = Collections.EMPTY_LIST;
+      parentProjectReferences = List.of();
     } else {
       for (String prj : prjs) {
         if (!prj.equals(currentName)) {

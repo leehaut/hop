@@ -40,14 +40,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import org.apache.commons.lang.StringUtils;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.commons.vfs2.FileName;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.BlockingBatchingRowSet;
 import org.apache.hop.core.BlockingRowSet;
 import org.apache.hop.core.Const;
+import org.apache.hop.core.HopVersionProvider;
 import org.apache.hop.core.IExecutor;
 import org.apache.hop.core.IExtensionData;
 import org.apache.hop.core.IRowSet;
@@ -59,6 +59,7 @@ import org.apache.hop.core.database.Database;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopFileException;
 import org.apache.hop.core.exception.HopPipelineException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.exception.HopTransformException;
 import org.apache.hop.core.exception.HopValueException;
 import org.apache.hop.core.extension.ExtensionPointHandler;
@@ -142,6 +143,9 @@ public abstract class Pipeline
   public static final String METRIC_NAME_BUFFER_OUT = "buffer_out";
   public static final String METRIC_NAME_FLUSH_BUFFER = "flush_buffer";
   public static final String METRIC_NAME_INIT = "init";
+  public static final String METRIC_NAME_DATA_VOLUME = "data_volume";
+  public static final String METRIC_NAME_DATA_VOLUME_IN = "data_volume_in";
+  public static final String METRIC_NAME_DATA_VOLUME_OUT = "data_volume_out";
 
   /** The package name, used for internationalization of messages. */
   private static final Class<?> PKG = Pipeline.class;
@@ -179,26 +183,20 @@ public abstract class Pipeline
   /** The parent logging object interface (this could be a pipeline or a workflow). */
   private ILoggingObject parent;
 
-  /** Indicates that we want to do a topological sort of the transforms in a GUI. */
-  private boolean sortingTransformsTopologically;
+  @Getter @Setter private boolean sortingTransformsTopologically;
 
   /** Indicates that we are running in preview mode... */
   private boolean preview;
 
-  /** Keeps track of when this pipeline started preparation */
-  private Date executionStartDate;
+  @Setter private Date executionStartDate;
 
-  /** Keeps track of when this pipeline ended preparation */
-  private Date executionEndDate;
+  @Setter private Date executionEndDate;
 
-  /** The variable bindings for the pipeline. */
-  private IVariables variables = new Variables();
+  @Getter private IVariables variables = new Variables();
 
-  /** A list of all the row sets. */
-  public List<IRowSet> rowsets;
+  @Getter public List<IRowSet> rowsets;
 
-  /** A list of all the transforms. */
-  private List<TransformMetaDataCombi> transforms;
+  @Getter private List<TransformMetaDataCombi> transforms;
 
   /** Constant indicating a dispatch type of 1-to-1. */
   public static final int TYPE_DISP_1_1 = 1;
@@ -252,8 +250,7 @@ public abstract class Pipeline
   public static final String CONFIGURATION_IN_EXPORT_FILENAME =
       "__pipeline_execution_configuration__.xml";
 
-  /** Whether safe mode is enabled. */
-  private boolean safeModeEnabled;
+  @Setter private boolean safeModeEnabled;
 
   /** Int value for storage pipeline statuses */
   private final AtomicInteger status;
@@ -261,7 +258,7 @@ public abstract class Pipeline
   /** Boolean to check if pipeline is already stopped */
   private final AtomicBoolean isAlreadyStopped = new AtomicBoolean(false);
 
-  /** Plugins can use this to add additional data samplers to the pipeline. */
+  @Getter @Setter
   protected List<IExecutionDataSampler<? extends IExecutionDataSamplerStore>> dataSamplers;
 
   /**
@@ -291,8 +288,7 @@ public abstract class Pipeline
   /** Whether the pipeline is ready to start. */
   private boolean readyToStart;
 
-  /** Transform performance snapshots. */
-  private Map<String, List<PerformanceSnapShot>> transformPerformanceSnapShots;
+  @Getter @Setter private Map<String, List<PerformanceSnapShot>> transformPerformanceSnapShots;
 
   /** The transform performance snapshot timer. */
   private Timer transformPerformanceSnapShotTimer;
@@ -325,11 +321,9 @@ public abstract class Pipeline
   /** The last transform performance snapshot sequence number added. */
   private int lastTransformPerformanceSnapshotSeqNrAdded;
 
-  /** The active sub-pipelines. */
-  private Map<String, IPipelineEngine> activeSubPipelines;
+  @Setter @Getter private Map<String, IPipelineEngine> activeSubPipelines;
 
-  /** The active subjobs */
-  private Map<String, IWorkflowEngine<WorkflowMeta>> activeSubWorkflows;
+  @Getter @Setter private Map<String, IWorkflowEngine<WorkflowMeta>> activeSubWorkflows;
 
   /** The transform performance snapshot size limit. */
   private int transformPerformanceSnapshotSizeLimit;
@@ -345,26 +339,20 @@ public abstract class Pipeline
 
   private Result previousResult;
 
-  protected List<RowMetaAndData> resultRows;
+  @Getter @Setter protected List<RowMetaAndData> resultRows;
 
-  protected List<ResultFile> resultFiles;
+  @Getter @Setter protected List<ResultFile> resultFiles;
 
   /** The command line arguments for the pipeline. */
   protected String[] arguments;
 
-  private HttpServletResponse servletResponse;
-
-  private HttpServletRequest servletRequest;
-
   private final Map<String, Object> extensionDataMap;
 
-  protected int rowSetSize;
+  @Getter @Setter protected int rowSetSize;
 
-  /** Whether the feedback is shown. */
-  protected boolean feedbackShown;
+  @Setter protected boolean feedbackShown;
 
-  /** The feedback size. */
-  protected int feedbackSize;
+  @Setter protected int feedbackSize;
 
   /** Instantiates a new pipeline. */
   public Pipeline() {
@@ -590,11 +578,9 @@ public abstract class Pipeline
               PKG, "Pipeline.Log.ExecutionStartedForPipeline", pipelineMeta.getName()));
     }
 
-    if (isSafeModeEnabled()) {
-      if (log.isDetailed()) {
-        log.logDetailed(
-            BaseMessages.getString(PKG, "Pipeline.Log.SafeModeIsEnabled", pipelineMeta.getName()));
-      }
+    if (isSafeModeEnabled() && log.isDetailed()) {
+      log.logDetailed(
+          BaseMessages.getString(PKG, "Pipeline.Log.SafeModeIsEnabled", pipelineMeta.getName()));
     }
 
     // setInternalHopVariables(this); --> Let's not do this, when running
@@ -640,18 +626,17 @@ public abstract class Pipeline
 
         // How many times do we start the source transform?
         int thisCopies = thisTransform.getCopies(this);
-
         if (thisCopies < 0) {
-          // This can only happen if a variable is used that didn't resolve to a positive integer
-          // value
-          //
-          throw new HopException(
-              BaseMessages.getString(
-                  PKG, "Pipeline.Log.TransformCopiesNotCorrectlyDefined", thisTransform.getName()));
+          thisCopies =
+              1; // use 1 for rowset math; transform will be marked failed during allocation
         }
 
         // How many times do we start the target transform?
         int nextCopies = nextTransform.getCopies(this);
+        if (nextCopies < 0) {
+          nextCopies =
+              1; // use 1 for rowset math; transform will be marked failed during allocation
+        }
 
         // Are we re-partitioning?
         boolean repartitioning;
@@ -707,7 +692,7 @@ public abstract class Pipeline
                 Boolean batchingRowSet =
                     ValueMetaBase.convertStringToBoolean(
                         System.getProperty(Const.HOP_BATCHING_ROWSET));
-                if (batchingRowSet != null && batchingRowSet.booleanValue()) {
+                if (batchingRowSet != null && batchingRowSet) {
                   rowSet = new BlockingBatchingRowSet(rowSetSize);
                 } else {
                   rowSet = new BlockingRowSet(rowSetSize);
@@ -803,6 +788,43 @@ public abstract class Pipeline
       // How many copies are launched of this transform?
       int nrCopies = transformMeta.getCopies(this);
 
+      if (nrCopies <= 0) {
+        // Variable didn't resolve or resolved to 0 - follow same pattern as transform init
+        // failure: add one combi with errors=1 and STATUS_STOPPED so pipeline ends cleanly
+        String copiesStr =
+            transformMeta.getCopiesString() != null ? transformMeta.getCopiesString() : "?";
+        log.logError(
+            BaseMessages.getString(
+                PKG,
+                "Pipeline.Log.TransformCopiesNotCorrectlyDefined",
+                copiesStr,
+                transformMeta.getName()));
+
+        TransformMetaDataCombi combi = new TransformMetaDataCombi();
+        combi.transformName = transformMeta.getName();
+        combi.copy = 0;
+        combi.transformMeta = transformMeta;
+        combi.meta = transformMeta.getTransform();
+        ITransformData data = combi.meta.createTransformData();
+        combi.data = data;
+        ITransform transform =
+            combi.meta.createTransform(transformMeta, data, 0, pipelineMeta, this);
+        transform.initializeFrom(this);
+        transform.setMetadataProvider(metadataProvider);
+        combi.transform = transform;
+
+        transform.setErrors(1);
+        combi.data.setStatus(ComponentExecutionStatus.STATUS_STOPPED);
+
+        if (combi.transform instanceof ILoggingObject) {
+          ILogChannel logChannel = combi.transform.getLogChannel();
+          logChannel.setLogLevel(logLevel);
+          logChannel.setGatheringMetrics(log.isGatheringMetrics());
+        }
+        transforms.add(combi);
+        continue;
+      }
+
       if (log.isDebug()) {
         log.logDebug(
             BaseMessages.getString(
@@ -889,6 +911,9 @@ public abstract class Pipeline
     // Metadata wise we need to do the same trick in PipelineMeta
     //
     for (TransformMetaDataCombi combi : transforms) {
+      if (combi.data.getStatus() == ComponentExecutionStatus.STATUS_STOPPED) {
+        continue; // pre-failed (e.g. invalid copies), init was skipped
+      }
       if (combi.transformMeta.isDoingErrorHandling()) {
         combi.transform.identifyErrorOutput();
       }
@@ -1221,14 +1246,13 @@ public abstract class Pipeline
     pipelineWaitUntilFinishedBlockingQueue = new ArrayBlockingQueue<>(10);
 
     // Do all sorts of nifty things at the end of the pipeline execution
-    ///
     IExecutionFinishedListener<IPipelineEngine<PipelineMeta>> executionListener =
         pipeline -> {
           try {
             ExtensionPointHandler.callExtensionPoint(
                 log, this, HopExtensionPoint.PipelineFinish.id, pipeline);
           } catch (HopException e) {
-            throw new RuntimeException("Error calling extension point at end of pipeline", e);
+            throw new HopRuntimeException("Error calling extension point at end of pipeline", e);
           }
 
           // First of all, stop the performance snapshot timer if there is is
@@ -1274,7 +1298,7 @@ public abstract class Pipeline
                   ExtensionPointHandler.callExtensionPoint(
                       log, this, HopExtensionPoint.TransformFinished.id, combi);
                 } catch (HopException e) {
-                  throw new RuntimeException(
+                  throw new HopRuntimeException(
                       "Unexpected error in calling extension point upon transform finish", e);
                 }
               });
@@ -1492,7 +1516,7 @@ public abstract class Pipeline
         }
       }
     } catch (InterruptedException e) {
-      throw new RuntimeException("Waiting for pipeline to be finished interrupted!", e);
+      throw new HopRuntimeException("Waiting for pipeline to be finished interrupted!", e);
     }
   }
 
@@ -1848,22 +1872,6 @@ public abstract class Pipeline
   }
 
   /**
-   * Gets sortingTransformsTopologically
-   *
-   * @return value of sortingTransformsTopologically
-   */
-  public boolean isSortingTransformsTopologically() {
-    return sortingTransformsTopologically;
-  }
-
-  /**
-   * @param sortingTransformsTopologically The sortingTransformsTopologically to set
-   */
-  public void setSortingTransformsTopologically(boolean sortingTransformsTopologically) {
-    this.sortingTransformsTopologically = sortingTransformsTopologically;
-  }
-
-  /**
    * Gets the meta-data for the pipeline.
    *
    * @return Returns the pipeline meta-data
@@ -1881,24 +1889,6 @@ public abstract class Pipeline
   @Override
   public void setPipelineMeta(PipelineMeta pipelineMeta) {
     this.pipelineMeta = pipelineMeta;
-  }
-
-  /**
-   * Gets the rowsets for the pipeline.
-   *
-   * @return a list of rowsets
-   */
-  public List<IRowSet> getRowsets() {
-    return rowsets;
-  }
-
-  /**
-   * Gets a list of transforms in the pipeline.
-   *
-   * @return a list of the transforms in the pipeline
-   */
-  public List<TransformMetaDataCombi> getTransforms() {
-    return transforms;
   }
 
   protected void setTransforms(List<TransformMetaDataCombi> transforms) {
@@ -1979,15 +1969,6 @@ public abstract class Pipeline
   }
 
   /**
-   * Turn on safe mode during running: the pipeline will run slower but with more checking enabled.
-   *
-   * @param safeModeEnabled true for safe mode
-   */
-  public void setSafeModeEnabled(boolean safeModeEnabled) {
-    this.safeModeEnabled = safeModeEnabled;
-  }
-
-  /**
    * Checks whether safe mode is enabled.
    *
    * @return Returns true if the safe mode is enabled: the pipeline will run slower but with more
@@ -2018,17 +1999,13 @@ public abstract class Pipeline
     }
 
     // We are going to add an extra IRowSet to this iTransform.
-    IRowSet rowSet;
-    switch (pipelineMeta.getPipelineType()) {
-      case Normal:
-        rowSet = new BlockingRowSet(rowSetSize);
-        break;
-      case SingleThreaded:
-        rowSet = new QueueRowSet();
-        break;
-      default:
-        throw new HopException("Unhandled pipeline type: " + pipelineMeta.getPipelineType());
-    }
+    IRowSet rowSet =
+        switch (pipelineMeta.getPipelineType()) {
+          case Normal -> new BlockingRowSet(rowSetSize);
+          case SingleThreaded -> new QueueRowSet();
+          default ->
+              throw new HopException("Unhandled pipeline type: " + pipelineMeta.getPipelineType());
+        };
 
     // Add this rowset to the list of active rowsets for the selected transform
     transform.addRowSetToInputRowSets(rowSet);
@@ -2248,6 +2225,9 @@ public abstract class Pipeline
     // but the other around is not possible.
 
     setInternalEntryCurrentDirectory(hasFilename);
+
+    HopVersionProvider versionProvider = new HopVersionProvider();
+    setVariable(Const.HOP_VERSION, versionProvider.getVersion()[0]);
   }
 
   private void setInternalLoggingVariables() {
@@ -2486,26 +2466,6 @@ public abstract class Pipeline
   @Deprecated(since = "2.10")
   public void setPreview(boolean preview) {
     this.preview = preview;
-  }
-
-  /**
-   * Gets a named list (map) of transform performance snapshots.
-   *
-   * @return a named list (map) of transform performance snapshots
-   */
-  public Map<String, List<PerformanceSnapShot>> getTransformPerformanceSnapShots() {
-    return transformPerformanceSnapShots;
-  }
-
-  /**
-   * Sets the named list (map) of transform performance snapshots.
-   *
-   * @param transformPerformanceSnapShots a named list (map) of transform performance snapshots to
-   *     set
-   */
-  public void setTransformPerformanceSnapShots(
-      Map<String, List<PerformanceSnapShot>> transformPerformanceSnapShots) {
-    this.transformPerformanceSnapShots = transformPerformanceSnapShots;
   }
 
   @Override
@@ -2882,15 +2842,6 @@ public abstract class Pipeline
   }
 
   /**
-   * Gets the active sub-workflows.
-   *
-   * @return a map (by name) of the active sub-workflows
-   */
-  public Map<String, IWorkflowEngine<WorkflowMeta>> getActiveSubWorkflows() {
-    return activeSubWorkflows;
-  }
-
-  /**
    * Gets the container object ID.
    *
    * @return the HopServer object ID
@@ -2987,22 +2938,6 @@ public abstract class Pipeline
     }
   }
 
-  public List<ResultFile> getResultFiles() {
-    return resultFiles;
-  }
-
-  public void setResultFiles(List<ResultFile> resultFiles) {
-    this.resultFiles = resultFiles;
-  }
-
-  public List<RowMetaAndData> getResultRows() {
-    return resultRows;
-  }
-
-  public void setResultRows(List<RowMetaAndData> resultRows) {
-    this.resultRows = resultRows;
-  }
-
   @Override
   public Result getPreviousResult() {
     return previousResult;
@@ -3041,42 +2976,6 @@ public abstract class Pipeline
     if (pipelineMeta != null) {
       pipelineMeta.setMetadataProvider(metadataProvider);
     }
-  }
-
-  /**
-   * Sets encoding of HttpServletResponse according to System encoding.Check if system encoding is
-   * null or an empty and set it to HttpServletResponse when not and writes error to log if null.
-   * Throw IllegalArgumentException if input parameter is null.
-   *
-   * @param response the HttpServletResponse to set encoding, mayn't be null
-   */
-  public void setServletReponse(HttpServletResponse response) {
-    if (response == null) {
-      throw new IllegalArgumentException("HttpServletResponse cannot be null ");
-    }
-    String encoding = System.getProperty(Const.HOP_DEFAULT_SERVLET_ENCODING, null);
-    // true if encoding is null or an empty (also for the next kin of strings: " ")
-    if (!StringUtils.isBlank(encoding)) {
-      try {
-        response.setCharacterEncoding(encoding.trim());
-        response.setContentType("text/html; charset=" + encoding);
-      } catch (Exception ex) {
-        LogChannel.GENERAL.logError("Unable to encode data with encoding : '" + encoding + "'", ex);
-      }
-    }
-    this.servletResponse = response;
-  }
-
-  public HttpServletResponse getServletResponse() {
-    return servletResponse;
-  }
-
-  public void setServletRequest(HttpServletRequest request) {
-    this.servletRequest = request;
-  }
-
-  public HttpServletRequest getServletRequest() {
-    return servletRequest;
   }
 
   public synchronized void doTopologySortOfTransforms() {
@@ -3228,13 +3127,6 @@ public abstract class Pipeline
   }
 
   /**
-   * @param executionStartDate The executionStartDate to set
-   */
-  public void setExecutionStartDate(Date executionStartDate) {
-    this.executionStartDate = executionStartDate;
-  }
-
-  /**
    * Gets executionEndDate
    *
    * @return value of executionEndDate
@@ -3242,13 +3134,6 @@ public abstract class Pipeline
   @Override
   public Date getExecutionEndDate() {
     return executionEndDate;
-  }
-
-  /**
-   * @param executionEndDate The executionEndDate to set
-   */
-  public void setExecutionEndDate(Date executionEndDate) {
-    this.executionEndDate = executionEndDate;
   }
 
   @Override
@@ -3313,6 +3198,27 @@ public abstract class Pipeline
           "The number of times a buffer flush occurred on a ",
           "100",
           true);
+  public static final IEngineMetric METRIC_DATA_VOLUME =
+      new EngineMetric(
+          METRIC_NAME_DATA_VOLUME,
+          "Data volume",
+          "Estimated bytes from rows on getRow (data between transforms, when HOP_METRIC_DATA_VOLUME is enabled)",
+          "110",
+          true);
+  public static final IEngineMetric METRIC_DATA_VOLUME_IN =
+      new EngineMetric(
+          METRIC_NAME_DATA_VOLUME_IN,
+          "Data volume in",
+          "Bytes read from InputStream (input transforms only)",
+          "111",
+          true);
+  public static final IEngineMetric METRIC_DATA_VOLUME_OUT =
+      new EngineMetric(
+          METRIC_NAME_DATA_VOLUME_OUT,
+          "Data volume out",
+          "Bytes written to OutputStream (output transforms only)",
+          "112",
+          true);
 
   @Override
   public EngineMetrics getEngineMetrics() {
@@ -3355,6 +3261,12 @@ public abstract class Pipeline
             metrics.setComponentMetric(
                 combi.transform, METRIC_REJECTED, combi.transform.getLinesRejected());
             metrics.setComponentMetric(combi.transform, METRIC_ERROR, combi.transform.getErrors());
+            metrics.setComponentMetric(
+                combi.transform, METRIC_DATA_VOLUME, combi.transform.getDataVolume());
+            metrics.setComponentMetric(
+                combi.transform, METRIC_DATA_VOLUME_IN, combi.transform.getDataVolumeIn());
+            metrics.setComponentMetric(
+                combi.transform, METRIC_DATA_VOLUME_OUT, combi.transform.getDataVolumeOut());
 
             long inputBufferSize = 0;
             for (IRowSet rowSet : transform.getInputRowSets()) {
@@ -3526,22 +3438,6 @@ public abstract class Pipeline
   }
 
   /**
-   * Gets rowSetSize
-   *
-   * @return value of rowSetSize
-   */
-  public int getRowSetSize() {
-    return rowSetSize;
-  }
-
-  /**
-   * @param rowSetSize The rowSetSize to set
-   */
-  public void setRowSetSize(int rowSetSize) {
-    this.rowSetSize = rowSetSize;
-  }
-
-  /**
    * Gets feedbackShown
    *
    * @return value of feedbackShown
@@ -3552,13 +3448,6 @@ public abstract class Pipeline
   }
 
   /**
-   * @param feedbackShown The feedbackShown to set
-   */
-  public void setFeedbackShown(boolean feedbackShown) {
-    this.feedbackShown = feedbackShown;
-  }
-
-  /**
    * Gets feedbackSize
    *
    * @return value of feedbackSize
@@ -3566,13 +3455,6 @@ public abstract class Pipeline
   @Override
   public int getFeedbackSize() {
     return feedbackSize;
-  }
-
-  /**
-   * @param feedbackSize The feedbackSize to set
-   */
-  public void setFeedbackSize(int feedbackSize) {
-    this.feedbackSize = feedbackSize;
   }
 
   /**
@@ -3634,61 +3516,10 @@ public abstract class Pipeline
   }
 
   /**
-   * Gets activeSubPipelines
-   *
-   * @return value of activeSubPipelines
-   */
-  public Map<String, IPipelineEngine> getActiveSubPipelines() {
-    return activeSubPipelines;
-  }
-
-  /**
-   * @param activeSubPipelines The activeSubPipelines to set
-   */
-  public void setActiveSubPipelines(Map<String, IPipelineEngine> activeSubPipelines) {
-    this.activeSubPipelines = activeSubPipelines;
-  }
-
-  /**
-   * @param activeSubWorkflows The activeSubWorkflows to set
-   */
-  public void setActiveSubWorkflows(Map<String, IWorkflowEngine<WorkflowMeta>> activeSubWorkflows) {
-    this.activeSubWorkflows = activeSubWorkflows;
-  }
-
-  /**
-   * Gets variables
-   *
-   * @return value of variables
-   */
-  public IVariables getVariables() {
-    return variables;
-  }
-
-  /**
    * @param variables The variables to set
    */
   public void setVariables(IVariables variables) {
     this.variables = variables;
-  }
-
-  /**
-   * Gets dataSamplers
-   *
-   * @return value of dataSamplers
-   */
-  public List<IExecutionDataSampler<? extends IExecutionDataSamplerStore>> getDataSamplers() {
-    return dataSamplers;
-  }
-
-  /**
-   * Sets dataSamplers
-   *
-   * @param dataSamplers value of dataSamplers
-   */
-  public void setDataSamplers(
-      List<IExecutionDataSampler<? extends IExecutionDataSamplerStore>> dataSamplers) {
-    this.dataSamplers = dataSamplers;
   }
 
   @Override

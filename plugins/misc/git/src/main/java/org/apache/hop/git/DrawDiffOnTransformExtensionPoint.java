@@ -25,6 +25,7 @@ import static org.apache.hop.git.HopDiff.CHANGED;
 import static org.apache.hop.git.HopDiff.REMOVED;
 
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.extension.ExtensionPoint;
 import org.apache.hop.core.extension.IExtensionPoint;
 import org.apache.hop.core.gui.DPoint;
@@ -47,10 +48,9 @@ public class DrawDiffOnTransformExtensionPoint implements IExtensionPoint {
   @Override
   public void callExtensionPoint(ILogChannel log, IVariables variables, Object object)
       throws HopException {
-    if (!(object instanceof PipelinePainter)) {
+    if (!(object instanceof PipelinePainter painter)) {
       return;
     }
-    PipelinePainter painter = (PipelinePainter) object;
     DPoint offset = painter.getOffset();
     IGc gc = painter.getGc();
     PipelineMeta pipelineMeta = painter.getPipelineMeta();
@@ -64,14 +64,13 @@ public class DrawDiffOnTransformExtensionPoint implements IExtensionPoint {
                   String status = transform.getAttribute(ATTR_GIT, ATTR_STATUS);
                   Point n = transform.getLocation();
                   String location;
-                  if (status.equals(REMOVED)) {
-                    location = "removed.svg";
-                  } else if (status.equals(CHANGED)) {
-                    location = "changed.svg";
-                  } else if (status.equals(ADDED)) {
-                    location = "added.svg";
-                  } else { // Unchanged
-                    return;
+                  switch (status) {
+                    case REMOVED -> location = "removed.svg";
+                    case CHANGED -> location = "changed.svg";
+                    case ADDED -> location = "added.svg";
+                    default -> {
+                      return;
+                    }
                   }
                   int iconSize = ConstUi.ICON_SIZE;
                   try {
@@ -91,7 +90,7 @@ public class DrawDiffOnTransformExtensionPoint implements IExtensionPoint {
                         gc.getMagnification(),
                         0);
                   } catch (Exception e) {
-                    throw new RuntimeException(e);
+                    throw new HopRuntimeException(e);
                   }
                 } else {
                   transform.getAttributesMap().remove(ATTR_GIT);

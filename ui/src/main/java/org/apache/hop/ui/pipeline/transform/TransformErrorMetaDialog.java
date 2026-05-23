@@ -164,8 +164,8 @@ public class TransformErrorMetaDialog extends Dialog {
     fdTargetTransform.left = new FormAttachment(middle, 0); // To the right of the label
     fdTargetTransform.right = new FormAttachment(95, 0);
     wTargetTransform.setLayoutData(fdTargetTransform);
-    for (int i = 0; i < targetTransforms.size(); i++) {
-      wTargetTransform.add(targetTransforms.get(i).getName());
+    for (TransformMeta targetTransform : targetTransforms) {
+      wTargetTransform.add(targetTransform.getName());
     }
 
     // is the error handling enabled?
@@ -192,7 +192,7 @@ public class TransformErrorMetaDialog extends Dialog {
     wlNrErrors.setText(
         BaseMessages.getString(PKG, "BaseTransformDialog.ErrorHandling.NrErrField.Label"));
     FormData fdlNrErrors = new FormData();
-    fdlNrErrors.top = new FormAttachment(wEnabled, margin * 2);
+    fdlNrErrors.top = new FormAttachment(wEnabled, margin);
     fdlNrErrors.left = new FormAttachment(0, 0); // First one in the left top corner
     fdlNrErrors.right = new FormAttachment(middle, -margin);
     wlNrErrors.setLayoutData(fdlNrErrors);
@@ -201,7 +201,7 @@ public class TransformErrorMetaDialog extends Dialog {
     PropsUi.setLook(wNrErrors);
     wNrErrors.addModifyListener(lsMod);
     FormData fdNrErrors = new FormData();
-    fdNrErrors.top = new FormAttachment(wEnabled, margin * 2);
+    fdNrErrors.top = new FormAttachment(wEnabled, margin);
     fdNrErrors.left = new FormAttachment(middle, 0); // To the right of the label
     fdNrErrors.right = new FormAttachment(95, 0);
     wNrErrors.setLayoutData(fdNrErrors);
@@ -359,10 +359,10 @@ public class TransformErrorMetaDialog extends Dialog {
             ? transformErrorMeta.getTargetTransform().getName()
             : "");
     wEnabled.setSelection(transformErrorMeta.isEnabled());
-    wNrErrors.setText(Const.NVL(transformErrorMeta.getNrErrorsValuename(), ""));
-    wErrDesc.setText(Const.NVL(transformErrorMeta.getErrorDescriptionsValuename(), ""));
-    wErrFields.setText(Const.NVL(transformErrorMeta.getErrorFieldsValuename(), ""));
-    wErrCodes.setText(Const.NVL(transformErrorMeta.getErrorCodesValuename(), ""));
+    wNrErrors.setText(Const.NVL(transformErrorMeta.getNrErrorsValueName(), ""));
+    wErrDesc.setText(Const.NVL(transformErrorMeta.getErrorDescriptionsValueName(), ""));
+    wErrFields.setText(Const.NVL(transformErrorMeta.getErrorFieldsValueName(), ""));
+    wErrCodes.setText(Const.NVL(transformErrorMeta.getErrorCodesValueName(), ""));
     wMaxErrors.setText(
         transformErrorMeta.getMaxErrors() != null ? transformErrorMeta.getMaxErrors() : "");
     wMaxPct.setText(
@@ -386,12 +386,12 @@ public class TransformErrorMetaDialog extends Dialog {
     getInfo();
     originalTransformErrorMeta.setTargetTransform(transformErrorMeta.getTargetTransform());
     originalTransformErrorMeta.setEnabled(transformErrorMeta.isEnabled());
-    originalTransformErrorMeta.setNrErrorsValuename(transformErrorMeta.getNrErrorsValuename());
-    originalTransformErrorMeta.setErrorDescriptionsValuename(
-        transformErrorMeta.getErrorDescriptionsValuename());
-    originalTransformErrorMeta.setErrorFieldsValuename(
-        transformErrorMeta.getErrorFieldsValuename());
-    originalTransformErrorMeta.setErrorCodesValuename(transformErrorMeta.getErrorCodesValuename());
+    originalTransformErrorMeta.setNrErrorsValueName(transformErrorMeta.getNrErrorsValueName());
+    originalTransformErrorMeta.setErrorDescriptionsValueName(
+        transformErrorMeta.getErrorDescriptionsValueName());
+    originalTransformErrorMeta.setErrorFieldsValueName(
+        transformErrorMeta.getErrorFieldsValueName());
+    originalTransformErrorMeta.setErrorCodesValueName(transformErrorMeta.getErrorCodesValueName());
     originalTransformErrorMeta.setMaxErrors(transformErrorMeta.getMaxErrors());
     originalTransformErrorMeta.setMaxPercentErrors(transformErrorMeta.getMaxPercentErrors());
     originalTransformErrorMeta.setMinPercentRows(transformErrorMeta.getMinPercentRows());
@@ -408,10 +408,10 @@ public class TransformErrorMetaDialog extends Dialog {
     transformErrorMeta.setTargetTransform(
         TransformMeta.findTransform(targetTransforms, wTargetTransform.getText()));
     transformErrorMeta.setEnabled(wEnabled.getSelection());
-    transformErrorMeta.setNrErrorsValuename(wNrErrors.getText());
-    transformErrorMeta.setErrorDescriptionsValuename(wErrDesc.getText());
-    transformErrorMeta.setErrorFieldsValuename(wErrFields.getText());
-    transformErrorMeta.setErrorCodesValuename(wErrCodes.getText());
+    transformErrorMeta.setNrErrorsValueName(wNrErrors.getText());
+    transformErrorMeta.setErrorDescriptionsValueName(wErrDesc.getText());
+    transformErrorMeta.setErrorFieldsValueName(wErrFields.getText());
+    transformErrorMeta.setErrorCodesValueName(wErrCodes.getText());
     transformErrorMeta.setMaxErrors(wMaxErrors.getText());
     transformErrorMeta.setMaxPercentErrors(Const.replace(wMaxPct.getText(), "%", ""));
     transformErrorMeta.setMinPercentRows(wMinPctRows.getText());

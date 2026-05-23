@@ -311,7 +311,7 @@ public class HistoryResult {
     cmd.append("   , p=shortestpath((top)-[:EXECUTES*]-(err)) ").append(Const.CR);
     cmd.append("WHERE top.registrationDate IS NOT NULL ").append(Const.CR);
     cmd.append("  AND err.errors > 0 ").append(Const.CR);
-    cmd.append("  AND size((err)-[:EXECUTES]->())=0 ").append(Const.CR);
+    cmd.append("  AND err.id <> '").append(getId()).append("'").append(Const.CR);
     cmd.append("RETURN p ").append(Const.CR);
     cmd.append("ORDER BY size(RELATIONSHIPS(p)) DESC ").append(Const.CR);
     cmd.append("LIMIT 5").append(Const.CR);
@@ -344,16 +344,14 @@ public class HistoryResult {
     List<HistoryResult> shortestPath = getShortestPaths().get(pathIndex);
 
     for (HistoryResult result : shortestPath) {
-      String metaLabel = null;
-      if (result.getType().equals("PIPELINE")) {
-        metaLabel = "Pipeline";
-      } else if (result.getType().equals("WORKFLOW")) {
-        metaLabel = "Workflow";
-      } else if (result.getType().equals("ACTION")) {
-        metaLabel = "Action";
-      } else if (result.getType().equals("TRANSFORM")) {
-        metaLabel = "Transform";
-      }
+      String metaLabel =
+          switch (result.getType()) {
+            case "PIPELINE" -> "Pipeline";
+            case "WORKFLOW" -> "Workflow";
+            case "ACTION" -> "Action";
+            case "TRANSFORM" -> "Transform";
+            default -> null;
+          };
       if (metaLabel != null) {
         cmd.append(
                 "MATCH (:Execution { type : \""

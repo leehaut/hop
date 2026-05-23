@@ -33,10 +33,12 @@ import org.apache.batik.transcoder.TranscoderInput;
 import org.apache.batik.transcoder.TranscoderOutput;
 import org.apache.batik.transcoder.image.PNGTranscoder;
 import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.gui.plugin.GuiRegistry;
 import org.apache.hop.core.gui.plugin.toolbar.GuiToolbarItem;
+import org.apache.hop.core.logging.LogChannel;
 import org.apache.hop.core.plugins.IPlugin;
 import org.apache.hop.core.plugins.PluginRegistry;
 import org.apache.hop.core.svg.SvgCache;
@@ -44,7 +46,6 @@ import org.apache.hop.core.svg.SvgCacheEntry;
 import org.apache.hop.core.svg.SvgFile;
 import org.apache.hop.core.xml.XmlHandler;
 import org.apache.hop.metadata.plugin.MetadataPluginType;
-import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.hopgui.perspective.HopPerspectivePluginType;
 import org.eclipse.rap.rwt.application.Application;
 import org.eclipse.rap.rwt.application.ApplicationConfiguration;
@@ -53,7 +54,6 @@ import org.eclipse.rap.rwt.service.ResourceLoader;
 
 public class HopWeb implements ApplicationConfiguration {
 
-  public static final String HOP_WEB_THEME = "HOP_WEB_THEME";
   public static final String CONST_LIGHT = "light";
 
   @Override
@@ -75,6 +75,22 @@ public class HopWeb implements ApplicationConfiguration {
         }
       }
 
+      // Register alternate images for toolbar toggles (e.g. show/hide, show-all/show-selected,
+      // show-results/hide-results) so setToolbarItemImage() can switch icons in RWT without
+      // "Resource does not exist"
+      ClassLoader uiClassLoader = HopWeb.class.getClassLoader();
+      for (String path :
+          new String[] {
+            "ui/images/show.svg",
+            "ui/images/hide.svg",
+            "ui/images/show-all.svg",
+            "ui/images/show-selected.svg",
+            "ui/images/show-results.svg",
+            "ui/images/hide-results.svg"
+          }) {
+        addResource(application, path, uiClassLoader);
+      }
+
       // Find metadata, perspective plugins
       //
       List<IPlugin> plugins = PluginRegistry.getInstance().getPlugins(MetadataPluginType.class);
@@ -87,14 +103,14 @@ public class HopWeb implements ApplicationConfiguration {
         addResource(application, plugin.getImageFile(), classLoader);
       }
     } catch (Exception e) {
-      e.printStackTrace();
+      LogChannel.UI.logError("General exception", e);
     }
 
     application.addResource(
         "ui/images/logo_icon.png",
         new ResourceLoader() {
           @Override
-          public InputStream getResourceAsStream(String resourceName) throws IOException {
+          public InputStream getResourceAsStream(String resourceName) {
             // Convert svg to png without Display
             PNGTranscoder t = new PNGTranscoder();
             InputStream inputStream =
@@ -105,53 +121,87 @@ public class HopWeb implements ApplicationConfiguration {
             try {
               t.transcode(input, output);
             } catch (TranscoderException e) {
-              e.printStackTrace();
+              LogChannel.UI.logError("Transcoder exception", e);
             }
             return new ByteArrayInputStream(outputStream.toByteArray());
           }
         });
-    Stream.of("org/apache/hop/ui/hopgui/clipboard.js")
+    Stream.of(
+            "org/apache/hop/ui/hopgui/clipboard.js",
+            "org/apache/hop/ui/hopgui/canvas-zoom.js",
+            "org/apache/hop/ui/hopgui/monaco-editor.js",
+            "org/apache/hop/ui/hopgui/mac-command-keys.js")
         .forEach(
             str ->
                 application.addResource(
                     "js/" + FilenameUtils.getName(str),
                     new ResourceLoader() {
                       @Override
-                      public InputStream getResourceAsStream(String resourceName)
-                          throws IOException {
+                      public InputStream getResourceAsStream(String resourceName) {
                         return this.getClass().getClassLoader().getResourceAsStream(str);
                       }
                     }));
+
+    registerMonacoResources(application);
 
     // Only 2 choices for now
     //
     application.addStyleSheet("dark", "org/apache/hop/ui/hopgui/dark-mode.css");
     application.addStyleSheet(CONST_LIGHT, "org/apache/hop/ui/hopgui/light-mode.css");
 
-    String themeId = System.getProperty(HOP_WEB_THEME, CONST_LIGHT);
-    if ("dark".equalsIgnoreCase(themeId)) {
-      themeId = "dark";
-      PropsUi.getInstance().setDarkMode(true);
-      System.out.println("Hop web: enabled dark mode rendering");
-    } else {
-      themeId = CONST_LIGHT;
-      PropsUi.getInstance().setDarkMode(false);
-    }
-    System.out.println("Hop web: selected theme is: " + themeId);
+    Map<String, String> propertiesLight = new HashMap<>();
+    propertiesLight.put(WebClient.PAGE_TITLE, "Apache Hop Web");
+    propertiesLight.put(WebClient.FAVICON, "ui/images/logo_icon.png");
+    propertiesLight.put(WebClient.THEME_ID, CONST_LIGHT);
+    propertiesLight.put(WebClient.HEAD_HTML, readTextFromResource("head.html"));
 
-    Map<String, String> properties = new HashMap<>();
-    properties.put(WebClient.PAGE_TITLE, "Apache Hop Web");
-    properties.put(WebClient.FAVICON, "ui/images/logo_icon.png");
-    properties.put(WebClient.THEME_ID, themeId);
-    properties.put(WebClient.HEAD_HTML, readTextFromResource("head.html", "UTF-8"));
-    application.addEntryPoint("/ui", HopWebEntryPoint.class, properties);
+    Map<String, String> propertiesDark = new HashMap<>();
+    propertiesDark.put(WebClient.PAGE_TITLE, "Apache Hop Web");
+    propertiesDark.put(WebClient.FAVICON, "ui/images/logo_icon.png");
+    propertiesDark.put(WebClient.THEME_ID, "dark");
+    propertiesDark.put(WebClient.HEAD_HTML, readTextFromResource("head.html"));
+
+    application.addEntryPoint("/ui", HopWebEntryPoint.class, propertiesLight);
+    application.addEntryPoint("/ui-dark", HopWebEntryPoint.class, propertiesDark);
     application.setOperationMode(Application.OperationMode.SWT_COMPATIBILITY);
 
     // Print some important system settings...
     //
-    System.out.println("HOP_CONFIG_FOLDER: " + Const.HOP_CONFIG_FOLDER);
-    System.out.println("HOP_AUDIT_FOLDER: " + Const.HOP_AUDIT_FOLDER);
-    System.out.println("HOP_GUI_ZOOM_FACTOR: " + System.getProperty("HOP_GUI_ZOOM_FACTOR"));
+    LogChannel.UI.logBasic("HOP_CONFIG_FOLDER: " + Const.HOP_CONFIG_FOLDER);
+    LogChannel.UI.logBasic("HOP_AUDIT_FOLDER: " + Const.HOP_AUDIT_FOLDER);
+    LogChannel.UI.logBasic("HOP_GUI_ZOOM_FACTOR: " + System.getProperty("HOP_GUI_ZOOM_FACTOR"));
+  }
+
+  /**
+   * Registers all bundled Monaco Editor files as RAP application resources so the editor works in
+   * offline environments without needing a CDN.
+   */
+  private void registerMonacoResources(Application application) {
+    String manifestPath = "org/apache/hop/ui/hopgui/monaco/monaco-files.list";
+    ClassLoader cl = HopWeb.class.getClassLoader();
+    try (InputStream is = cl.getResourceAsStream(manifestPath);
+        BufferedReader reader =
+            new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        String trimmed = line.trim();
+        if (trimmed.isEmpty()) {
+          continue;
+        }
+        final String classpathResource = "org/apache/hop/ui/hopgui/monaco/" + trimmed;
+        String resourceName = "monaco/" + trimmed;
+        application.addResource(
+            resourceName,
+            new ResourceLoader() {
+              @Override
+              public InputStream getResourceAsStream(String name) {
+                return HopWeb.class.getClassLoader().getResourceAsStream(classpathResource);
+              }
+            });
+      }
+    } catch (Exception e) {
+      LogChannel.UI.logError("Failed to register Monaco editor resources", e);
+    }
   }
 
   private void addResource(
@@ -173,22 +223,24 @@ public class HopWeb implements ApplicationConfiguration {
             String svgXml = XmlHandler.getXmlString(cacheEntry.getSvgDocument(), false, false);
             return new ByteArrayInputStream(svgXml.getBytes(StandardCharsets.UTF_8));
           } catch (Exception e) {
-            throw new RuntimeException("Error loading SVG resource filename: " + imageFilename, e);
+            throw new HopRuntimeException(
+                "Error loading SVG resource filename: " + imageFilename, e);
           }
         };
     application.addResource(imageFilename, loader);
   }
 
-  private static String readTextFromResource(String resourceName, String charset) {
+  private static String readTextFromResource(String resourceName) {
     String result;
     try {
       ClassLoader classLoader = HopWeb.class.getClassLoader();
       InputStream inputStream = classLoader.getResourceAsStream(resourceName);
-      if (inputStream == null) {
-        throw new RuntimeException("Resource not found: " + resourceName);
-      }
-      try {
-        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, charset));
+      try (inputStream) {
+        if (inputStream == null) {
+          throw new HopRuntimeException("Resource not found: " + resourceName);
+        }
+        BufferedReader reader =
+            new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
         StringBuilder stringBuilder = new StringBuilder();
         String line = reader.readLine();
         while (line != null) {
@@ -197,11 +249,9 @@ public class HopWeb implements ApplicationConfiguration {
           line = reader.readLine();
         }
         result = stringBuilder.toString();
-      } finally {
-        inputStream.close();
       }
     } catch (IOException e) {
-      throw new RuntimeException("Failed to read text from resource: " + resourceName);
+      throw new HopRuntimeException("Failed to read text from resource: " + resourceName);
     }
     return result;
   }

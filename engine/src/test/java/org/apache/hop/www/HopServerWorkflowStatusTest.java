@@ -17,8 +17,8 @@
 
 package org.apache.hop.www;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -29,32 +29,33 @@ import java.util.Map;
 import java.util.UUID;
 import org.apache.hop.core.HopEnvironment;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.xml.XmlHandler;
-import org.apache.hop.junit.rules.RestoreHopEngineEnvironment;
+import org.apache.hop.junit.rules.RestoreHopEngineEnvironmentExtension;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.transforms.loadsave.validator.IFieldLoadSaveValidator;
 import org.apache.hop.server.HttpUtil;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.w3c.dom.Node;
 
-public class HopServerWorkflowStatusTest {
-  @ClassRule public static RestoreHopEngineEnvironment env = new RestoreHopEngineEnvironment();
+@ExtendWith(RestoreHopEngineEnvironmentExtension.class)
+class HopServerWorkflowStatusTest {
 
-  @BeforeClass
-  public static void setUpBeforeClass() throws HopException {
+  @BeforeAll
+  static void setUpBeforeClass() throws HopException {
     HopEnvironment.init();
   }
 
   @Test
-  public void testStaticFinal() {
+  void testStaticFinal() {
     assertEquals("workflow-status", HopServerWorkflowStatus.XML_TAG);
   }
 
   @Test
-  public void testNoDate() throws HopException {
+  void testNoDate() throws HopException {
     String workflowName = "testNullDate";
     String id = UUID.randomUUID().toString();
     String status = Pipeline.STRING_FINISHED;
@@ -64,20 +65,20 @@ public class HopServerWorkflowStatusTest {
         XmlHandler.getSubNode(XmlHandler.loadXmlString(resultXML), HopServerWorkflowStatus.XML_TAG);
 
     assertEquals(
-        "The XML document should match after rebuilding from XML",
         resultXML,
-        HopServerWorkflowStatus.fromXml(resultXML).getXml());
+        HopServerWorkflowStatus.fromXml(resultXML).getXml(),
+        "The XML document should match after rebuilding from XML");
     assertEquals(
-        "There should be one \"log_date\" node in the XML",
         1,
-        XmlHandler.countNodes(newJobStatus, "log_date"));
+        XmlHandler.countNodes(newJobStatus, "log_date"),
+        "There should be one \"log_date\" node in the XML");
     assertFalse(
-        "The \"log_date\" node should have a null value",
-        Utils.isEmpty(XmlHandler.getTagValue(newJobStatus, "log_date")));
+        Utils.isEmpty(XmlHandler.getTagValue(newJobStatus, "log_date")),
+        "The \"log_date\" node should have a null value");
   }
 
   @Test
-  public void testWithDate() throws HopException {
+  void testWithDate() throws HopException {
     String workflowName = "testWithDate";
     String id = UUID.randomUUID().toString();
     String status = Pipeline.STRING_FINISHED;
@@ -89,22 +90,22 @@ public class HopServerWorkflowStatusTest {
         XmlHandler.getSubNode(XmlHandler.loadXmlString(resultXML), HopServerWorkflowStatus.XML_TAG);
 
     assertEquals(
-        "The XML document should match after rebuilding from XML",
         resultXML,
-        HopServerWorkflowStatus.fromXml(resultXML).getXml());
+        HopServerWorkflowStatus.fromXml(resultXML).getXml(),
+        "The XML document should match after rebuilding from XML");
     assertEquals(
-        "There should be one \"log_date\" node in the XML",
         1,
-        XmlHandler.countNodes(newJobStatus, "log_date"));
+        XmlHandler.countNodes(newJobStatus, "log_date"),
+        "There should be one \"log_date\" node in the XML");
     assertEquals(
-        "The \"log_date\" node should match the original value",
         XmlHandler.date2string(logDate),
-        XmlHandler.getTagValue(newJobStatus, "log_date"));
+        XmlHandler.getTagValue(newJobStatus, "log_date"),
+        "The \"log_date\" node should match the original value");
   }
 
   @Test
-  public void testSerialization() throws HopException {
-    // TODO Add Result
+  void testSerialization() throws HopException {
+    //  Add Result
     List<String> attributes =
         Arrays.asList(
             "WorkflowName",
@@ -133,7 +134,7 @@ public class HopServerWorkflowStatusTest {
       try {
         return HttpUtil.encodeBase64ZippedString(UUID.randomUUID().toString());
       } catch (IOException e) {
-        throw new RuntimeException(e);
+        throw new HopRuntimeException(e);
       }
     }
 
@@ -142,7 +143,7 @@ public class HopServerWorkflowStatusTest {
       try {
         return HttpUtil.decodeBase64ZippedString(testObject).equals(actual);
       } catch (IOException e) {
-        throw new RuntimeException(e);
+        throw new HopRuntimeException(e);
       }
     }
   }

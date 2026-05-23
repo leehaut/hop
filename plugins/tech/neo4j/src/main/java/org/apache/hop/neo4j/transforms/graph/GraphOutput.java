@@ -28,7 +28,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopValueException;
@@ -36,6 +36,7 @@ import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.row.RowDataUtil;
 import org.apache.hop.core.util.Utils;
+import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.metadata.api.IHopMetadataSerializer;
 import org.apache.hop.neo4j.core.GraphUsage;
 import org.apache.hop.neo4j.core.data.GraphData;
@@ -99,7 +100,6 @@ public class GraphOutput extends BaseNeoTransform<GraphOutputMeta, GraphOutputDa
         try {
           data.driver = data.neoConnection.getDriver(getLogChannel(), this);
           data.session = data.neoConnection.getSession(getLogChannel(), data.driver, this);
-          data.version4 = data.neoConnection.isVersion4();
         } catch (Exception e) {
           logError(
               "Unable to get or create Neo4j database driver for database '"
@@ -422,13 +422,9 @@ public class GraphOutput extends BaseNeoTransform<GraphOutputMeta, GraphOutputDa
         data.nodeMappingIndexes.add(index);
       }
 
-      if (!meta.isReturningGraph()) {
-
-        // See if we need to create indexes...
-        //
-        if (meta.isCreatingIndexes()) {
-          createNodePropertyIndexes(meta, data);
-        }
+      // See if we need to create indexes...
+      if (!meta.isReturningGraph() && meta.isCreatingIndexes()) {
+        createNodePropertyIndexes(meta, data);
       }
 
       data.relationshipsCache = new HashMap<>();
@@ -605,9 +601,29 @@ public class GraphOutput extends BaseNeoTransform<GraphOutputMeta, GraphOutputDa
       final Map<String, Object> props = Collections.singletonMap("props", unwindList);
 
       // Execute this unwind cypher statement...
+      // In Neo4j 5.x, Result must be consumed within the callback
       //
-      Result result = data.session.writeTransaction(tx -> tx.run(unwindCypher, props));
-      errors = processSummary(result);
+      boolean statementErrors =
+          data.session.executeWrite(
+              tx -> {
+                Result result = tx.run(unwindCypher, props);
+                // Consume the result and check for errors
+                ResultSummary summary = result.consume();
+                boolean hasErrors = false;
+                for (Notification notification : summary.notifications()) {
+                  logError(notification.title() + " (" + notification.severity() + ")");
+                  logError(
+                      notification.code()
+                          + " : "
+                          + notification.description()
+                          + ", position "
+                          + notification.position());
+                  hasErrors = true;
+                }
+                return hasErrors;
+              });
+
+      errors = statementErrors;
 
       if (errors) {
         // The error is already logged, simply break out of the loop...
@@ -801,17 +817,17 @@ public class GraphOutput extends BaseNeoTransform<GraphOutputMeta, GraphOutputDa
           String targetNodeName = "node" + nodeIndexMap.get(targetNode);
           String relationshipAlias = "rel" + relationshipIndex;
 
-          cypher.append(
-              "MERGE("
-                  + sourceNodeName
-                  + ")-["
-                  + relationshipAlias
-                  + ":"
-                  + relationship.getLabel()
-                  + "]->("
-                  + targetNodeName
-                  + ") ");
-          cypher.append(Const.CR);
+          cypher
+              .append("MERGE(")
+              .append(sourceNodeName)
+              .append(")-[")
+              .append(relationshipAlias)
+              .append(":")
+              .append(relationship.getLabel())
+              .append("]->(")
+              .append(targetNodeName)
+              .append(")")
+              .append(Const.CR);
 
           // Also add the optional property updates...
           //
@@ -847,8 +863,7 @@ public class GraphOutput extends BaseNeoTransform<GraphOutputMeta, GraphOutputDa
               Object sourceFieldValue = row[propFieldIndex];
               boolean isNull = sourceFieldMeta.isNull(sourceFieldValue);
 
-              cypher.append(relationshipAlias + "." + relProp.getName());
-              cypher.append(" = ");
+              cypher.append(relationshipAlias).append(".").append(relProp.getName()).append(" = ");
               if (isNull) {
                 cypher.append("NULL");
               } else {
@@ -895,22 +910,20 @@ public class GraphOutput extends BaseNeoTransform<GraphOutputMeta, GraphOutputDa
     //
     Set<SelectedNode> ignored = new HashSet<>();
     for (NodeAndPropertyData nodeProperty : nodeProperties) {
-      if (nodeProperty.property.isPrimary()) {
+      if (nodeProperty.property.isPrimary()
+          && nodeProperty.sourceValueMeta.isNull(nodeProperty.sourceValueData)) {
         // Null value?
-        //
-        if (nodeProperty.sourceValueMeta.isNull(nodeProperty.sourceValueData)) {
-          if (isDebug()) {
-            logDebug(
-                "Detected primary null property for node "
-                    + nodeProperty.node
-                    + " property "
-                    + nodeProperty.property
-                    + " value : "
-                    + nodeProperty.sourceValueMeta.getString(nodeProperty.sourceValueData));
-          }
-
-          ignored.add(nodeProperty.node);
+        if (isDebug()) {
+          logDebug(
+              "Detected primary null property for node "
+                  + nodeProperty.node
+                  + " property "
+                  + nodeProperty.property
+                  + " value : "
+                  + nodeProperty.sourceValueMeta.getString(nodeProperty.sourceValueData));
         }
+
+        ignored.add(nodeProperty.node);
       }
     }
 
@@ -1544,23 +1557,22 @@ public class GraphOutput extends BaseNeoTransform<GraphOutputMeta, GraphOutputDa
       throws HopValueException {
     Set<SelectedNode> ignored = new HashSet<>();
     for (NodeAndPropertyData nodeProperty : nodeProperties) {
-      if (nodeProperty.property.isPrimary()) {
+      if (nodeProperty.property.isPrimary()
+          && nodeProperty.sourceValueMeta.isNull(nodeProperty.sourceValueData)) {
         // Null value?
         //
-        if (nodeProperty.sourceValueMeta.isNull(nodeProperty.sourceValueData)) {
-          if (isDebug()) {
-            logDebug(
-                "Detected primary null property for node "
-                    + nodeProperty.node
-                    + " property "
-                    + nodeProperty.property
-                    + " value : "
-                    + nodeProperty.sourceValueMeta.getString(nodeProperty.sourceValueData));
-          }
+        if (isDebug()) {
+          logDebug(
+              "Detected primary null property for node "
+                  + nodeProperty.node
+                  + " property "
+                  + nodeProperty.property
+                  + " value : "
+                  + nodeProperty.sourceValueMeta.getString(nodeProperty.sourceValueData));
+        }
 
-          if (!ignored.contains(nodeProperty.node)) {
-            ignored.add(nodeProperty.node);
-          }
+        if (!ignored.contains(nodeProperty.node)) {
+          ignored.add(nodeProperty.node);
         }
       }
     }
@@ -1636,15 +1648,12 @@ public class GraphOutput extends BaseNeoTransform<GraphOutputMeta, GraphOutputDa
     StringBuffer id = new StringBuffer();
 
     for (NodeAndPropertyData napd : nodeProperties) {
-      if (napd.node.equals(node)) {
-        if (napd.property.isPrimary()) {
-
-          String propertyString = napd.sourceValueMeta.getString(napd.sourceValueData);
-          if (!id.isEmpty()) {
-            id.append("-");
-          }
-          id.append(propertyString);
+      if (napd.node.equals(node) && napd.property.isPrimary()) {
+        String propertyString = napd.sourceValueMeta.getString(napd.sourceValueData);
+        if (!id.isEmpty()) {
+          id.append("-");
         }
+        id.append(propertyString);
       }
     }
     return id.toString();
@@ -1660,5 +1669,65 @@ public class GraphOutput extends BaseNeoTransform<GraphOutputMeta, GraphOutputDa
       graphPropertyValue = "`" + graphPropertyValue + "`";
       graphProperty.setName(graphPropertyValue);
     }
+  }
+
+  /**
+   * Generate preview Cypher template based on meta configuration (without executing it)
+   *
+   * @param meta The Graph Output meta configuration
+   * @param variables Variables for resolving values
+   * @return The generated Cypher template statement
+   */
+  public static String generatePreviewCypher(GraphOutputMeta meta, IVariables variables) {
+    StringBuilder cypher = new StringBuilder();
+    cypher.append("-- Generated Cypher template (per-row processing)").append(Const.CR);
+    cypher
+        .append("-- Note: Actual Cypher is generated dynamically based on input row data")
+        .append(Const.CR);
+    cypher
+        .append("-- and field mappings to the Graph Model. This shows the general pattern.")
+        .append(Const.CR);
+    cypher.append(Const.CR);
+
+    if (meta.isOutOfOrderAllowed()) {
+      cypher.append("-- When 'out of order allowed' is enabled:").append(Const.CR);
+      cypher.append("UNWIND $props AS pr").append(Const.CR);
+      cypher.append(Const.CR);
+    }
+
+    cypher.append("-- Pattern: For each row, the transform will:").append(Const.CR);
+    cypher.append("-- 1. MERGE nodes based on primary properties").append(Const.CR);
+    cypher.append("--    Example: MERGE (node0:Label { primaryProp: $param1 })").append(Const.CR);
+    cypher.append("-- 2. SET non-primary properties on matched nodes").append(Const.CR);
+    cypher.append("--    Example: SET node0.property = $param2").append(Const.CR);
+    cypher.append("-- 3. MERGE relationships between nodes").append(Const.CR);
+    cypher
+        .append("--    Example: MERGE (node0)-[rel1:RELATIONSHIP_TYPE]->(node1)")
+        .append(Const.CR);
+    cypher.append("-- 4. SET relationship properties if configured").append(Const.CR);
+    cypher.append("--    Example: SET rel1.property = $param3").append(Const.CR);
+    cypher.append(Const.CR);
+
+    if (StringUtils.isNotEmpty(meta.getModel())) {
+      cypher.append("-- Graph Model: ").append(meta.getModel()).append(Const.CR);
+      cypher.append("-- The actual Cypher will be generated based on:").append(Const.CR);
+      cypher.append("--   - Nodes and relationships defined in the model").append(Const.CR);
+      cypher.append("--   - Field mappings configured in the dialog").append(Const.CR);
+      cypher.append("--   - Values present in each input row").append(Const.CR);
+    } else {
+      cypher.append("-- No Graph Model configured").append(Const.CR);
+    }
+
+    cypher.append(Const.CR);
+    cypher.append("-- Example Cypher structure:").append(Const.CR);
+    cypher.append("MERGE (node0:NodeLabel { id: $param1 })").append(Const.CR);
+    cypher.append("SET node0.name = $param2").append(Const.CR);
+    cypher.append("MERGE (node1:OtherLabel { id: $param3 })").append(Const.CR);
+    cypher.append("SET node1.name = $param4").append(Const.CR);
+    cypher.append("MERGE (node0)-[rel1:RELATES_TO]->(node1)").append(Const.CR);
+    cypher.append("SET rel1.weight = $param5").append(Const.CR);
+    cypher.append(";").append(Const.CR);
+
+    return cypher.toString();
   }
 }

@@ -17,15 +17,16 @@
 
 package org.apache.hop.core.util;
 
+import java.io.Serial;
 import java.util.prefs.Preferences;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.xml.XmlHandler;
 import org.w3c.dom.Node;
 
 public class StringPluginProperty extends KeyValue<String> implements IPluginProperty {
 
   /** Serial version UID. */
-  private static final long serialVersionUID = -2990345692552430357L;
+  @Serial private static final long serialVersionUID = -2990345692552430357L;
 
   /**
    * Constructor. Value is null.

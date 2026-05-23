@@ -297,7 +297,9 @@ public class ActionWorkflow extends ActionBase implements Cloneable, IAction {
 
       // Explain what we are loading...
       //
-      logDetailed("Loading workflow from XML file : [" + resolve(filename) + "]");
+      if (isDetailed()) {
+        logDetailed("Loading workflow from XML file : [" + resolve(filename) + "]");
+      }
 
       WorkflowMeta workflowMeta = getWorkflowMeta(getMetadataProvider(), this);
 
@@ -341,8 +343,7 @@ public class ActionWorkflow extends ActionBase implements Cloneable, IAction {
         //
         if (paramsFromPrevious) {
           String[] parentParameters = parentWorkflow.listParameters();
-          for (int idx = 0; idx < parentParameters.length; idx++) {
-            String par = parentParameters[idx];
+          for (String par : parentParameters) {
             String def = parentWorkflow.getParameterDefault(par);
             String val = parentWorkflow.getParameterValue(par);
             String des = parentWorkflow.getParameterDescription(par);
@@ -461,23 +462,23 @@ public class ActionWorkflow extends ActionBase implements Cloneable, IAction {
         //
         workflow.clearParameterValues();
         String[] parameterNames = workflow.listParameters();
-        for (int idx = 0; idx < parameterNames.length; idx++) {
+        for (String parameterName : parameterNames) {
           // Grab the parameter value set in the action
           //
-          String thisValue = namedParam.getParameterValue(parameterNames[idx]);
+          String thisValue = namedParam.getParameterValue(parameterName);
           if (!Utils.isEmpty(thisValue)) {
             // Set the value as specified by the user in the action
             //
-            workflow.setParameterValue(parameterNames[idx], thisValue);
+            workflow.setParameterValue(parameterName, thisValue);
           } else {
             // See if the parameter had a value set in the parent workflow...
             // This value should pass down to the sub-workflow if that's what we
             // opted to do.
             //
             if (parameterDefinition.isPassingAllParameters()) {
-              String parentValue = parentWorkflow.getParameterValue(parameterNames[idx]);
+              String parentValue = parentWorkflow.getParameterValue(parameterName);
               if (!Utils.isEmpty(parentValue)) {
-                workflow.setParameterValue(parameterNames[idx], parentValue);
+                workflow.setParameterValue(parameterName, parentValue);
               }
             }
           }
@@ -551,35 +552,29 @@ public class ActionWorkflow extends ActionBase implements Cloneable, IAction {
       result.setNrErrors(1L);
     }
 
-    if (setLogfile) {
-      if (logChannelFileWriter != null) {
-        logChannelFileWriter.stopLogging();
+    if (setLogfile && logChannelFileWriter != null) {
+      logChannelFileWriter.stopLogging();
 
-        ResultFile resultFile =
-            new ResultFile(
-                ResultFile.FILE_TYPE_LOG,
-                logChannelFileWriter.getLogFile(),
-                parentWorkflow.getWorkflowName(),
-                getName());
-        result.getResultFiles().put(resultFile.getFile().toString(), resultFile);
+      ResultFile resultFile =
+          new ResultFile(
+              ResultFile.FILE_TYPE_LOG,
+              logChannelFileWriter.getLogFile(),
+              parentWorkflow.getWorkflowName(),
+              getName());
+      result.getResultFiles().put(resultFile.getFile().toString(), resultFile);
 
-        // See if anything went wrong during file writing...
-        //
-        if (logChannelFileWriter.getException() != null) {
-          logError("Unable to open log file [" + getLogFilename() + "] : ");
-          logError(Const.getStackTracker(logChannelFileWriter.getException()));
-          result.setNrErrors(1);
-          result.setResult(false);
-          return result;
-        }
+      // See if anything went wrong during file writing...
+      //
+      if (logChannelFileWriter.getException() != null) {
+        logError("Unable to open log file [" + getLogFilename() + "] : ");
+        logError(Const.getStackTracker(logChannelFileWriter.getException()));
+        result.setNrErrors(1);
+        result.setResult(false);
+        return result;
       }
     }
 
-    if (result.getNrErrors() > 0) {
-      result.setResult(false);
-    } else {
-      result.setResult(true);
-    }
+    result.setResult(result.getNrErrors() <= 0);
 
     return result;
   }
@@ -959,5 +954,10 @@ public class ActionWorkflow extends ActionBase implements Cloneable, IAction {
 
   public void setSetAppendLogfile(boolean setAppendLogfile) {
     this.setAppendLogfile = setAppendLogfile;
+  }
+
+  @Override
+  public boolean supportsDrillDown() {
+    return true;
   }
 }

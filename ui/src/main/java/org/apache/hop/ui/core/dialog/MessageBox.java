@@ -19,8 +19,11 @@ package org.apache.hop.ui.core.dialog;
 
 import java.util.ArrayList;
 import java.util.List;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hop.core.Const;
 import org.apache.hop.i18n.BaseMessages;
+import org.apache.hop.ui.core.FormDataBuilder;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.gui.GuiResource;
 import org.apache.hop.ui.core.gui.WindowProperty;
@@ -30,7 +33,10 @@ import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
+import org.eclipse.swt.layout.GridData;
+import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
+import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Dialog;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
@@ -38,6 +44,8 @@ import org.eclipse.swt.widgets.Shell;
 /**
  * A replacement of the system message box dialog to make sure the correct font and colors are used.
  */
+@Getter
+@Setter
 public class MessageBox extends Dialog {
   private static final Class<?> PKG = MessageBox.class;
 
@@ -50,6 +58,9 @@ public class MessageBox extends Dialog {
   private int returnValue;
 
   private Shell shell;
+
+  private int minimumWidth = -1;
+  private int minimumHeight = -1;
 
   public MessageBox(Shell parent) {
     this(parent, SWT.ICON_INFORMATION | SWT.APPLICATION_MODAL);
@@ -64,7 +75,9 @@ public class MessageBox extends Dialog {
 
   public int open() {
     Shell parent = getParent();
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN | style);
+
+    int shellStyle = style & (SWT.APPLICATION_MODAL | SWT.SYSTEM_MODAL | SWT.PRIMARY_MODAL);
+    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN | shellStyle);
     PropsUi.setLook(shell);
     shell.setImage(GuiResource.getInstance().getImageHop());
     shell.setText(Const.NVL(text, ""));
@@ -78,50 +91,29 @@ public class MessageBox extends Dialog {
 
     int margin = PropsUi.getMargin();
 
-    // Optional to the right
-    //
-    Image iconImage = null;
-    if ((style & SWT.ICON_INFORMATION) != 0) {
-      iconImage = shell.getDisplay().getSystemImage(SWT.ICON_INFORMATION);
-    } else if ((style & SWT.ICON_ERROR) != 0) {
-      iconImage = shell.getDisplay().getSystemImage(SWT.ICON_ERROR);
-    } else if ((style & SWT.ICON_QUESTION) != 0) {
-      iconImage = shell.getDisplay().getSystemImage(SWT.ICON_QUESTION);
-    } else if ((style & SWT.ICON_WARNING) != 0) {
-      iconImage = shell.getDisplay().getSystemImage(SWT.ICON_WARNING);
-    } else if ((style & SWT.ICON_CANCEL) != 0) {
-      iconImage = shell.getDisplay().getSystemImage(SWT.ICON_CANCEL);
-    } else if ((style & SWT.ICON_SEARCH) != 0) {
-      iconImage = shell.getDisplay().getSystemImage(SWT.ICON_SEARCH);
-    } else if ((style & SWT.ICON_WORKING) != 0) {
-      iconImage = shell.getDisplay().getSystemImage(SWT.ICON_WORKING);
-    }
-
-    Label wImage = null;
-    if (iconImage != null) {
-      wImage = new Label(shell, SWT.NONE);
-      wImage.setImage(iconImage);
-
-      FormData fdImage = new FormData();
-      fdImage.right = new FormAttachment(100, -margin);
-      fdImage.top = new FormAttachment(100, margin);
-      wImage.setLayoutData(fdImage);
-    }
+    Composite composite = new Composite(shell, SWT.NONE);
+    PropsUi.setLook(composite);
+    composite.setLayout(new GridLayout());
+    GridLayout gridLayout = new GridLayout();
+    gridLayout.numColumns = 2;
+    gridLayout.horizontalSpacing = 15;
+    composite.setLayout(gridLayout);
 
     // The message...
     //
-    Label wMessage = new Label(shell, SWT.LEFT | SWT.WRAP);
+    Label wMessage = new Label(composite, SWT.LEFT | SWT.WRAP);
     PropsUi.setLook(wMessage);
     wMessage.setText(message);
-    FormData fdMessage = new FormData();
-    fdMessage.left = new FormAttachment(0, 0);
-    if (wImage != null) {
-      fdMessage.right = new FormAttachment(wImage, -margin);
-    } else {
-      fdMessage.right = new FormAttachment(100, 0);
+    wMessage.setLayoutData(new GridData(GridData.FILL_BOTH));
+
+    // Optional image to the right
+    //
+    Image iconImage = getIconImage(style);
+    if (iconImage != null) {
+      Label wImage = new Label(composite, SWT.NONE);
+      wImage.setImage(iconImage);
+      wImage.setLayoutData(new GridData());
     }
-    fdMessage.top = new FormAttachment(0, 0);
-    wMessage.setLayoutData(fdMessage);
 
     // Buttons at the bottom
     //
@@ -130,6 +122,7 @@ public class MessageBox extends Dialog {
       Button wYes = new Button(shell, SWT.PUSH);
       wYes.setText(BaseMessages.getString(PKG, "System.Button.Yes"));
       wYes.addListener(SWT.Selection, e -> yes());
+      shell.setDefaultButton(wYes);
       buttons.add(wYes);
     }
     if ((style & SWT.NO) != 0) {
@@ -148,17 +141,53 @@ public class MessageBox extends Dialog {
       Button wOk = new Button(shell, SWT.PUSH);
       wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
       wOk.addListener(SWT.Selection, e -> ok());
+      shell.setDefaultButton(wOk);
       buttons.add(0, wOk);
     }
 
+    // Set the composite to fill from top to bottom with margin
+    composite.setLayoutData(
+        new FormDataBuilder().top().left().right(100, 0).bottom(100, -50).result());
+
     BaseTransformDialog.positionBottomButtons(
-        shell, buttons.toArray(new Button[0]), margin, wMessage);
+        shell, buttons.toArray(new Button[0]), margin, composite);
+
+    // Reposition buttons to be attached to the bottom of the shell instead of the composite
+    // This ensures they stay at the bottom when the shell is resized
+    if (!buttons.isEmpty()) {
+      for (Button button : buttons) {
+        FormData fd = (FormData) button.getLayoutData();
+        // Keep horizontal positioning but attach to bottom of shell
+        fd.top = null;
+        fd.bottom = new FormAttachment(100, -margin);
+      }
+      // Update composite to fill space above buttons
+      composite.setLayoutData(
+          new FormDataBuilder()
+              .top()
+              .left()
+              .right(100, 0)
+              .bottom(buttons.get(0), -margin)
+              .result());
+    }
 
     shell.addListener(SWT.Close, e -> cancel());
 
     BaseTransformDialog.setSize(shell);
 
-    shell.pack();
+    // If minimum size is set, use it directly instead of packing
+    if (minimumWidth > 0 || minimumHeight > 0) {
+      shell.layout();
+      shell.pack();
+      int width = Math.max(shell.getSize().x, minimumWidth > 0 ? minimumWidth : 0);
+      int height = Math.max(shell.getSize().y, minimumHeight > 0 ? minimumHeight : 0);
+      shell.setSize(width, height);
+      shell.setMinimumSize(
+          minimumWidth > 0 ? minimumWidth : 0, minimumHeight > 0 ? minimumHeight : 0);
+    } else {
+      shell.pack();
+    }
+
     shell.open();
     while (!shell.isDisposed()) {
       if (!shell.getDisplay().readAndDispatch()) {
@@ -167,6 +196,25 @@ public class MessageBox extends Dialog {
     }
 
     return returnValue;
+  }
+
+  private Image getIconImage(int style) {
+    if ((style & SWT.ICON_INFORMATION) != 0) {
+      return shell.getDisplay().getSystemImage(SWT.ICON_INFORMATION);
+    } else if ((style & SWT.ICON_ERROR) != 0) {
+      return shell.getDisplay().getSystemImage(SWT.ICON_ERROR);
+    } else if ((style & SWT.ICON_QUESTION) != 0) {
+      return shell.getDisplay().getSystemImage(SWT.ICON_QUESTION);
+    } else if ((style & SWT.ICON_WARNING) != 0) {
+      return shell.getDisplay().getSystemImage(SWT.ICON_WARNING);
+    } else if ((style & SWT.ICON_CANCEL) != 0) {
+      return shell.getDisplay().getSystemImage(SWT.ICON_CANCEL);
+    } else if ((style & SWT.ICON_SEARCH) != 0) {
+      return shell.getDisplay().getSystemImage(SWT.ICON_SEARCH);
+    } else if ((style & SWT.ICON_WORKING) != 0) {
+      return shell.getDisplay().getSystemImage(SWT.ICON_WORKING);
+    }
+    return null;
   }
 
   public void dispose() {
@@ -225,38 +273,13 @@ public class MessageBox extends Dialog {
   }
 
   /**
-   * Gets message
+   * Sets the minimum size for the dialog
    *
-   * @return value of message
+   * @param width minimum width in pixels
+   * @param height minimum height in pixels
    */
-  public String getMessage() {
-    return message;
-  }
-
-  /**
-   * Sets message
-   *
-   * @param message value of message
-   */
-  public void setMessage(String message) {
-    this.message = message;
-  }
-
-  /**
-   * Gets returnValue
-   *
-   * @return value of returnValue
-   */
-  public int getReturnValue() {
-    return returnValue;
-  }
-
-  /**
-   * Sets returnValue
-   *
-   * @param returnValue value of returnValue
-   */
-  public void setReturnValue(int returnValue) {
-    this.returnValue = returnValue;
+  public void setMinimumSize(int width, int height) {
+    this.minimumWidth = width;
+    this.minimumHeight = height;
   }
 }

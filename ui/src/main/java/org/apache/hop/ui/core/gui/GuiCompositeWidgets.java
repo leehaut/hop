@@ -25,9 +25,11 @@ import java.util.List;
 import java.util.Map;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
+import org.apache.hop.core.config.plugin.ConfigPlugin;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.gui.plugin.GuiElementType;
 import org.apache.hop.core.gui.plugin.GuiElements;
 import org.apache.hop.core.gui.plugin.GuiRegistry;
@@ -42,11 +44,15 @@ import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.dialog.BaseDialog;
 import org.apache.hop.ui.core.widget.ComboVar;
 import org.apache.hop.ui.core.widget.MetaSelectionLine;
+import org.apache.hop.ui.core.widget.PasswordTextVar;
 import org.apache.hop.ui.core.widget.TextVar;
 import org.apache.hop.ui.hopgui.HopGui;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.custom.ScrolledComposite;
+import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
+import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
@@ -59,6 +65,7 @@ import org.eclipse.swt.widgets.Text;
 /** This class contains the widgets for the GUI elements of a GUI Plugin */
 public class GuiCompositeWidgets {
   public static final String CONST_PARENT_ID = ", parent ID: ";
+  public static final String NONE_DATABASE_META = "NoneDatabaseMeta";
 
   @Setter @Getter private IVariables variables;
 
@@ -113,7 +120,7 @@ public class GuiCompositeWidgets {
     // Do not log error for NoneDatabaseMeta
     if (guiElements == null) {
       // Do not log for NoneDatabaseMeta
-      if (!key.contains("NoneDatabaseMeta")) {
+      if (!key.contains(NONE_DATABASE_META)) {
         LogChannel.UI.logError(
             "Create widgets: no GUI elements found for parent: "
                 + key
@@ -125,7 +132,8 @@ public class GuiCompositeWidgets {
 
     // Loop over the GUI elements, create and remember the widgets...
     //
-    addCompositeWidgets(sourceData, parent, guiElements, lastControl);
+    boolean useNewLayout = isConfigPlugin(sourceData.getClass());
+    addCompositeWidgets(sourceData, parent, guiElements, lastControl, useNewLayout);
 
     if (compositeWidgetsListener != null) {
       compositeWidgetsListener.widgetsCreated(this);
@@ -136,8 +144,22 @@ public class GuiCompositeWidgets {
     parent.layout(true, true);
   }
 
+  /**
+   * Check if a class has the @ConfigPlugin annotation
+   *
+   * @param clazz The class to check
+   * @return true if the class has @ConfigPlugin annotation
+   */
+  private boolean isConfigPlugin(Class<?> clazz) {
+    return clazz.isAnnotationPresent(ConfigPlugin.class);
+  }
+
   private Control addCompositeWidgets(
-      Object sourceObject, Composite parent, GuiElements guiElements, Control lastControl) {
+      Object sourceObject,
+      Composite parent,
+      GuiElements guiElements,
+      Control lastControl,
+      boolean useNewLayout) {
 
     if (guiElements.isIgnored()) {
       return lastControl;
@@ -159,14 +181,19 @@ public class GuiCompositeWidgets {
 
       GuiElementType elementType = guiElements.getType();
 
-      // Add the label on the left-hand side...
-      // For metadata, the label is handled in the meta selection line widget below
+      // Add the label
+      // For metadata, button, and link, the label is handled in the widget itself
+      // For checkbox in new layout, the label is handled in the widget itself
       //
       if (StringUtils.isNotEmpty(guiElements.getLabel())
           && elementType != GuiElementType.METADATA
           && elementType != GuiElementType.BUTTON
-          && elementType != GuiElementType.LINK) {
-        label = new Label(parent, SWT.RIGHT | SWT.SINGLE);
+          && elementType != GuiElementType.LINK
+          && !(useNewLayout && elementType == GuiElementType.CHECKBOX)) {
+        // Use new layout (label above) for ConfigPlugin classes, old layout (label on left) for
+        // others
+        int labelStyle = useNewLayout ? SWT.LEFT : (SWT.RIGHT | SWT.SINGLE);
+        label = new Label(parent, labelStyle);
         PropsUi.setLook(label);
         label.setText(Const.NVL(guiElements.getLabel(), ""));
         if (StringUtils.isNotEmpty(guiElements.getToolTip())) {
@@ -174,12 +201,18 @@ public class GuiCompositeWidgets {
         }
         FormData fdLabel = new FormData();
         fdLabel.left = new FormAttachment(0, 0);
+        if (useNewLayout) {
+          // New layout: label spans full width
+          fdLabel.right = new FormAttachment(100, 0);
+        } else {
+          // Old layout: label on left side (up to middle percentage)
+          fdLabel.right = new FormAttachment(props.getMiddlePct(), -PropsUi.getMargin());
+        }
         if (lastControl == null) {
           fdLabel.top = new FormAttachment(0, PropsUi.getMargin());
         } else {
           fdLabel.top = new FormAttachment(lastControl, PropsUi.getMargin() + extraVerticalMargin);
         }
-        fdLabel.right = new FormAttachment(props.getMiddlePct(), -PropsUi.getMargin());
         label.setLayoutData(fdLabel);
         labelsMap.put(guiElements.getId(), label);
       }
@@ -188,22 +221,27 @@ public class GuiCompositeWidgets {
       //
       switch (elementType) {
         case TEXT, FILENAME, FOLDER:
-          control = getTextControl(parent, guiElements, props, lastControl, label);
+          control = getTextControl(parent, guiElements, props, lastControl, label, useNewLayout);
           break;
         case CHECKBOX:
-          control = getCheckboxControl(parent, guiElements, props, lastControl, label);
+          control =
+              getCheckboxControl(parent, guiElements, props, lastControl, label, useNewLayout);
           break;
         case COMBO:
-          control = getComboControl(sourceObject, parent, guiElements, props, lastControl, label);
+          control =
+              getComboControl(
+                  sourceObject, parent, guiElements, props, lastControl, label, useNewLayout);
           break;
         case METADATA:
-          control = getMetadataControl(parent, guiElements, props, lastControl);
+          control = getMetadataControl(parent, guiElements, props, lastControl, useNewLayout);
           break;
         case BUTTON:
-          control = getButtonControl(sourceObject, parent, guiElements, props, lastControl);
+          control =
+              getButtonControl(sourceObject, parent, guiElements, props, lastControl, useNewLayout);
           break;
         case LINK:
-          control = getLinkControl(parent, guiElements, props, lastControl);
+          control = getLinkControl(parent, guiElements, props, lastControl, useNewLayout);
+          break;
         default:
           break;
       }
@@ -224,7 +262,8 @@ public class GuiCompositeWidgets {
     Collections.sort(children);
 
     for (GuiElements child : guiElements.getChildren()) {
-      previousControl = addCompositeWidgets(sourceObject, parent, child, previousControl);
+      previousControl =
+          addCompositeWidgets(sourceObject, parent, child, previousControl, useNewLayout);
       nrItems++;
     }
 
@@ -237,7 +276,8 @@ public class GuiCompositeWidgets {
       GuiElements guiElements,
       PropsUi props,
       Control lastControl,
-      Label label) {
+      Label label,
+      boolean useNewLayout) {
     Control control;
     String[] comboItems = getEnumValues(guiElements.getFieldClass());
     if (comboItems == null) {
@@ -263,13 +303,18 @@ public class GuiCompositeWidgets {
 
     addModifyListener(control, guiElements.getId());
 
-    layoutControlBetweenLabelAndRightControl(props, lastControl, label, control, null);
+    layoutControlBetweenLabelAndRightControl(
+        props, lastControl, label, control, null, useNewLayout);
 
     return control;
   }
 
   private Control getMetadataControl(
-      Composite parent, GuiElements guiElements, PropsUi props, Control lastControl) {
+      Composite parent,
+      GuiElements guiElements,
+      PropsUi props,
+      Control lastControl,
+      boolean useNewLayout) {
 
     MetaSelectionLine<? extends IHopMetadata> metaSelectionLine =
         new MetaSelectionLine<>(
@@ -294,7 +339,7 @@ public class GuiCompositeWidgets {
 
     addModifyListener(metaSelectionLine.getComboWidget(), guiElements.getId());
 
-    layoutControlBelowLast(props, lastControl, metaSelectionLine);
+    layoutControlBelowLast(props, lastControl, metaSelectionLine, useNewLayout);
 
     return metaSelectionLine;
   }
@@ -304,7 +349,8 @@ public class GuiCompositeWidgets {
       Composite parent,
       GuiElements guiElements,
       PropsUi props,
-      Control lastControl) {
+      Control lastControl,
+      boolean useNewLayout) {
 
     Button button = new Button(parent, SWT.PUSH);
     PropsUi.setLook(button);
@@ -348,13 +394,17 @@ public class GuiCompositeWidgets {
           }
         });
 
-    layoutControlBetweenLabelAndRightControl(props, lastControl, null, button, null);
+    layoutControlBetweenLabelAndRightControl(props, lastControl, null, button, null, useNewLayout);
 
     return button;
   }
 
   private Link getLinkControl(
-      Composite parent, GuiElements guiElements, PropsUi props, Control lastControl) {
+      Composite parent,
+      GuiElements guiElements,
+      PropsUi props,
+      Control lastControl,
+      boolean useNewLayout) {
 
     Link link = new Link(parent, SWT.NONE);
     PropsUi.setLook(link);
@@ -395,7 +445,7 @@ public class GuiCompositeWidgets {
           }
         });
 
-    layoutControlBelowLast(props, lastControl, link);
+    layoutControlBelowLast(props, lastControl, link, useNewLayout);
 
     return link;
   }
@@ -430,21 +480,50 @@ public class GuiCompositeWidgets {
   }
 
   private Control getCheckboxControl(
-      Composite parent, GuiElements guiElements, PropsUi props, Control lastControl, Label label) {
+      Composite parent,
+      GuiElements guiElements,
+      PropsUi props,
+      Control lastControl,
+      Label label,
+      boolean useNewLayout) {
     Control control;
     Button button = new Button(parent, SWT.CHECK | SWT.LEFT);
     PropsUi.setLook(button);
+    if (useNewLayout) {
+      // New layout: label text on the checkbox itself
+      button.setText(Const.NVL(guiElements.getLabel(), ""));
+      if (StringUtils.isNotEmpty(guiElements.getToolTip())) {
+        button.setToolTipText(guiElements.getToolTip());
+      }
+    } else {
+      // Old layout: checkbox has no text (label is separate)
+      if (StringUtils.isNotEmpty(guiElements.getToolTip())) {
+        button.setToolTipText(guiElements.getToolTip());
+      }
+    }
     widgetsMap.put(guiElements.getId(), button);
     addModifyListener(button, guiElements.getId());
     control = button;
 
-    layoutControlBetweenLabelAndRightControl(props, lastControl, label, control, null);
+    if (useNewLayout) {
+      // New layout: checkboxes are laid out below the last control, full width
+      layoutControlBelowLast(props, lastControl, control, useNewLayout);
+    } else {
+      // Old layout: checkbox next to label
+      layoutControlBetweenLabelAndRightControl(
+          props, lastControl, label, control, null, useNewLayout, true);
+    }
 
     return control;
   }
 
   private Control getTextControl(
-      Composite parent, GuiElements guiElements, PropsUi props, Control lastControl, Label label) {
+      Composite parent,
+      GuiElements guiElements,
+      PropsUi props,
+      Control lastControl,
+      Label label,
+      boolean useNewLayout) {
     Control control;
     Control actionControl = null; // The control to add an action to
     Text text;
@@ -453,13 +532,13 @@ public class GuiCompositeWidgets {
       case FILENAME:
         Button wbBrowse = new Button(parent, SWT.PUSH);
         wbBrowse.setText(BaseMessages.getString("System.Button.Browse"));
-        layoutControlOnRight(props, lastControl, wbBrowse, label);
+        layoutControlOnRight(lastControl, wbBrowse, label, useNewLayout);
         actionControl = wbBrowse;
         break;
       case FOLDER:
         wbBrowse = new Button(parent, SWT.PUSH);
         wbBrowse.setText(BaseMessages.getString("System.Button.Browse"));
-        layoutControlOnRight(props, lastControl, wbBrowse, label);
+        layoutControlOnRight(lastControl, wbBrowse, label, useNewLayout);
         actionControl = wbBrowse;
         break;
       default:
@@ -469,14 +548,24 @@ public class GuiCompositeWidgets {
     if (guiElements.isVariablesEnabled()) {
       int style = SWT.BORDER | SWT.SINGLE | SWT.LEFT;
       if (guiElements.isPassword()) {
-        style |= SWT.PASSWORD;
+        String toolTip =
+            StringUtils.isNotEmpty(guiElements.getToolTip()) ? guiElements.getToolTip() : null;
+        // PasswordTextVar never mirrors the field value in the tooltip (TextVar may on some
+        // platforms when echo char is reported as '\\0' for PASSWORD fields).
+        PasswordTextVar textVar = new PasswordTextVar(variables, parent, style, toolTip);
+        PropsUi.setLook(textVar);
+        widgetsMap.put(guiElements.getId(), textVar);
+        addModifyListener(textVar.getTextWidget(), guiElements.getId());
+        control = textVar;
+        text = textVar.getTextWidget();
+      } else {
+        TextVar textVar = new TextVar(variables, parent, style);
+        PropsUi.setLook(textVar);
+        widgetsMap.put(guiElements.getId(), textVar);
+        addModifyListener(textVar.getTextWidget(), guiElements.getId());
+        control = textVar;
+        text = textVar.getTextWidget();
       }
-      TextVar textVar = new TextVar(variables, parent, style);
-      PropsUi.setLook(textVar);
-      widgetsMap.put(guiElements.getId(), textVar);
-      addModifyListener(textVar.getTextWidget(), guiElements.getId());
-      control = textVar;
-      text = textVar.getTextWidget();
     } else {
       int style = SWT.BORDER | SWT.SINGLE | SWT.LEFT;
       if (guiElements.isPassword()) {
@@ -489,7 +578,8 @@ public class GuiCompositeWidgets {
       control = text;
     }
 
-    layoutControlBetweenLabelAndRightControl(props, lastControl, label, control, actionControl);
+    layoutControlBetweenLabelAndRightControl(
+        props, lastControl, label, control, actionControl, useNewLayout);
 
     // Add an action based on the sub-type:
     switch (guiElements.getType()) {
@@ -539,15 +629,15 @@ public class GuiCompositeWidgets {
   public ITypeFilename instantiateTypeFilename(GuiElements guiElements) {
     Class<? extends ITypeFilename> typeFilenameClass = guiElements.getTypeFilename();
     if (typeFilenameClass == null) {
-      throw new RuntimeException(
+      throw new HopRuntimeException(
           "Please specify a ITypeFilename class to use for widget " + guiElements.getId());
     }
     // Instantiate the class...
     //
     try {
-      return typeFilenameClass.newInstance();
+      return typeFilenameClass.getConstructor().newInstance();
     } catch (Exception e) {
-      throw new RuntimeException(
+      throw new HopRuntimeException(
           "Error instantiating class "
               + typeFilenameClass.getName()
               + " for GUI elements "
@@ -559,11 +649,21 @@ public class GuiCompositeWidgets {
   }
 
   private void layoutControlOnRight(
-      PropsUi props, Control lastControl, Control control, Label label) {
+      Control lastControl, Control control, Label label, boolean useNewLayout) {
     FormData fdControl = new FormData();
     fdControl.right = new FormAttachment(100, 0);
     if (label != null) {
-      fdControl.top = new FormAttachment(label, 0, SWT.CENTER);
+      if (useNewLayout) {
+        // New layout: control goes on the right, aligned with the row below the label
+        fdControl.top = new FormAttachment(label, PropsUi.getMargin() / 2);
+      } else {
+        // Old layout: control aligned with lastControl to maintain proper vertical spacing
+        if (lastControl != null) {
+          fdControl.top = new FormAttachment(lastControl, PropsUi.getMargin());
+        } else {
+          fdControl.top = new FormAttachment(0, PropsUi.getMargin());
+        }
+      }
     } else {
       if (lastControl != null) {
         fdControl.top = new FormAttachment(lastControl, PropsUi.getMargin());
@@ -575,22 +675,71 @@ public class GuiCompositeWidgets {
   }
 
   private void layoutControlBetweenLabelAndRightControl(
-      PropsUi props, Control lastControl, Label label, Control control, Control rightControl) {
+      PropsUi props,
+      Control lastControl,
+      Label label,
+      Control control,
+      Control rightControl,
+      boolean useNewLayout) {
+    layoutControlBetweenLabelAndRightControl(
+        props, lastControl, label, control, rightControl, useNewLayout, false);
+  }
+
+  private void layoutControlBetweenLabelAndRightControl(
+      PropsUi props,
+      Control lastControl,
+      Label label,
+      Control control,
+      Control rightControl,
+      boolean useNewLayout,
+      boolean checkBox) {
     FormData fdControl = new FormData();
     if (label != null) {
-      fdControl.left = new FormAttachment(props.getMiddlePct(), 0);
-      if (rightControl == null) {
-        fdControl.right = new FormAttachment(100, 0);
+      if (useNewLayout) {
+        // New layout: control goes below the label, full width (or next to right control)
+        fdControl.left = new FormAttachment(0, 0);
+        if (rightControl == null) {
+          fdControl.right = new FormAttachment(100, 0);
+        } else {
+          fdControl.right = new FormAttachment(rightControl, -PropsUi.getMargin());
+        }
+        fdControl.top = new FormAttachment(label, PropsUi.getMargin() / 2);
       } else {
-        fdControl.right = new FormAttachment(rightControl, -5);
+        // Old layout: control on right side, next to label
+        fdControl.left = new FormAttachment(props.getMiddlePct(), 0);
+        if (rightControl == null) {
+          fdControl.right = new FormAttachment(100, 0);
+        } else {
+          fdControl.right = new FormAttachment(rightControl, -5);
+        }
+        // Attach to lastControl to create proper vertical spacing between widgets
+        if (lastControl != null) {
+          if (checkBox) {
+            // Center on the label
+            fdControl.top = new FormAttachment(label, 0, SWT.CENTER);
+          } else {
+            fdControl.top = new FormAttachment(lastControl, PropsUi.getMargin());
+          }
+        } else {
+          fdControl.top = new FormAttachment(0, PropsUi.getMargin());
+        }
       }
-      fdControl.top = new FormAttachment(label, 0, SWT.CENTER);
     } else {
-      fdControl.left = new FormAttachment(props.getMiddlePct(), 0);
-      if (rightControl == null) {
-        fdControl.right = new FormAttachment(100, 0);
+      // No label
+      if (useNewLayout) {
+        fdControl.left = new FormAttachment(0, 0);
+        if (rightControl == null) {
+          fdControl.right = new FormAttachment(100, 0);
+        } else {
+          fdControl.right = new FormAttachment(rightControl, -PropsUi.getMargin());
+        }
       } else {
-        fdControl.right = new FormAttachment(rightControl, -5);
+        fdControl.left = new FormAttachment(props.getMiddlePct(), 0);
+        if (rightControl == null) {
+          fdControl.right = new FormAttachment(100, 0);
+        } else {
+          fdControl.right = new FormAttachment(rightControl, -5);
+        }
       }
       if (lastControl != null) {
         fdControl.top = new FormAttachment(lastControl, PropsUi.getMargin());
@@ -601,7 +750,8 @@ public class GuiCompositeWidgets {
     control.setLayoutData(fdControl);
   }
 
-  private void layoutControlBelowLast(PropsUi props, Control lastControl, Control control) {
+  private void layoutControlBelowLast(
+      PropsUi props, Control lastControl, Control control, boolean useNewLayout) {
     FormData fdControl = new FormData();
     fdControl.left = new FormAttachment(0, 0);
     fdControl.right = new FormAttachment(100, 0);
@@ -749,6 +899,15 @@ public class GuiCompositeWidgets {
             break;
           case METADATA:
             MetaSelectionLine line = (MetaSelectionLine) control;
+            try {
+              line.fillItems();
+            } catch (Exception e) {
+              LogChannel.UI.logError(
+                  "Unable to fill items for metadata widget '"
+                      + guiElements.getFieldName()
+                      + "': "
+                      + e.getMessage());
+            }
             line.setText(stringValue);
             break;
           case BUTTON, LINK:
@@ -787,7 +946,7 @@ public class GuiCompositeWidgets {
         registry.findGuiElements(sourceData.getClass().getName(), parentGuiElementId);
     if (guiElements == null) {
       // Do not log for NoneDatabaseMeta
-      if (!sourceData.getClass().getName().contains("NoneDatabaseMeta")) {
+      if (!sourceData.getClass().getName().contains(NONE_DATABASE_META)) {
         LogChannel.UI.logError(
             "getWidgetsContents: no GUI elements found for class: "
                 + sourceData.getClass().getName()
@@ -923,7 +1082,7 @@ public class GuiCompositeWidgets {
 
     if (guiElements == null) {
       // Do not log for NoneDatabaseMeta
-      if (!sourceData.getClass().getName().contains("NoneDatabaseMeta")) {
+      if (!sourceData.getClass().getName().contains(NONE_DATABASE_META)) {
         LogChannel.UI.logError(
             "enableWidgets: no GUI elements found for class: "
                 + sourceData.getClass().getName()
@@ -969,5 +1128,87 @@ public class GuiCompositeWidgets {
         enableWidget(sourceData, child, enabled);
       }
     }
+  }
+
+  public void setComboValues(String widgetId, String[] fieldNames) {
+    Control control = widgetsMap.get(widgetId);
+    if (control instanceof Combo combo) {
+      combo.setItems(fieldNames);
+    } else if (control instanceof ComboVar comboVar) {
+      comboVar.setItems(fieldNames);
+    }
+  }
+
+  /**
+   * This adds a scrolled composite on a new Composite that will contain all the widgets with the
+   * specified parent ID as its parent.
+   *
+   * @param parent The parent to add the scrolled composite to
+   * @param top The top control to layout with. Null means top of the parent.
+   * @param bottom The bottom control to layout with. Null means the bottom of the parent.
+   * @param guiParentId The GUI parent ID to use to look up the widgets to place on the composite.
+   * @param sourceData The source data to use to populate the data on the widgets.
+   */
+  public static GuiCompositeWidgets addScrolledComposite(
+      Composite parent,
+      IVariables variables,
+      Control top,
+      Control bottom,
+      String guiParentId,
+      Object sourceData) {
+    ScrolledComposite scrolledComposite =
+        new ScrolledComposite(parent, SWT.V_SCROLL | SWT.H_SCROLL);
+    scrolledComposite.setMinSize(SWT.DEFAULT, SWT.DEFAULT);
+
+    // The composite grabs the whole scrolled composite size
+    //
+    Composite composite = new Composite(scrolledComposite, SWT.NONE);
+    FormLayout compositeLayout = new FormLayout();
+
+    // Leave some room at the bottom and right for the scroll bars if they show up.
+    //
+    compositeLayout.marginRight = 2 * PropsUi.getFormMargin();
+    compositeLayout.marginBottom = 2 * PropsUi.getFormMargin();
+    composite.setLayout(compositeLayout);
+    FormData fdComposite = new FormData();
+    fdComposite.left = new FormAttachment(0, 0);
+    fdComposite.top = new FormAttachment(0, 0);
+    fdComposite.right = new FormAttachment(100, 0);
+    fdComposite.bottom = new FormAttachment(100, 0);
+    composite.setLayoutData(fdComposite);
+
+    // We add all the widgets...
+    //
+    GuiCompositeWidgets widgets = new GuiCompositeWidgets(variables);
+    widgets.createCompositeWidgets(sourceData, null, composite, guiParentId, null);
+    widgets.setWidgetsContents(sourceData, composite, guiParentId);
+    scrolledComposite.setContent(composite);
+
+    // Layout the scrolled composite.
+    //
+    FormData fdScrolled = new FormData();
+    if (top != null) {
+      fdScrolled.top = new FormAttachment(top, PropsUi.getMargin());
+    } else {
+      fdScrolled.top = new FormAttachment(0, 0);
+    }
+    if (bottom != null) {
+      fdScrolled.bottom = new FormAttachment(bottom, -2 * PropsUi.getMargin());
+    } else {
+      fdScrolled.bottom = new FormAttachment(100, 0);
+    }
+    fdScrolled.left = new FormAttachment(0, 0);
+    fdScrolled.right = new FormAttachment(100, 0);
+    scrolledComposite.setLayoutData(fdScrolled);
+
+    composite.pack();
+    Rectangle bounds = composite.getBounds();
+    scrolledComposite.setContent(composite);
+    scrolledComposite.setExpandHorizontal(true);
+    scrolledComposite.setExpandVertical(true);
+    scrolledComposite.setMinWidth(bounds.width);
+    scrolledComposite.setMinHeight(bounds.height);
+
+    return widgets;
   }
 }

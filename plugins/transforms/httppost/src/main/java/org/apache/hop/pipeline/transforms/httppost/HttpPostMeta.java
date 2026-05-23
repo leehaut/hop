@@ -19,7 +19,10 @@ package org.apache.hop.pipeline.transforms.httppost;
 
 import java.util.ArrayList;
 import java.util.List;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hop.core.CheckResult;
+import org.apache.hop.core.Const;
 import org.apache.hop.core.ICheckResult;
 import org.apache.hop.core.annotations.Transform;
 import org.apache.hop.core.exception.HopTransformException;
@@ -36,6 +39,8 @@ import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransformMeta;
 import org.apache.hop.pipeline.transform.TransformMeta;
 
+@Setter
+@Getter
 @Transform(
     id = "HttpPost",
     image = "httppost.svg",
@@ -55,8 +60,6 @@ public class HttpPostMeta extends BaseTransformMeta<HttpPost, HttpPostData> {
 
   // the time to wait till a connection is closed (milliseconds)? -1 is no not close.
   public static final int DEFAULT_CLOSE_CONNECTIONS_TIME = -1;
-
-  public static final String DEFAULT_ENCODING = "UTF-8";
 
   @HopMetadataProperty(injectionKeyDescription = "HTTPPOST.Injection.socketTimeout")
   private String socketTimeout;
@@ -118,144 +121,6 @@ public class HttpPostMeta extends BaseTransformMeta<HttpPost, HttpPostData> {
     super(); // allocate BaseTransformMeta
   }
 
-  public String getEncoding() {
-    return encoding;
-  }
-
-  public void setEncoding(String encoding) {
-    this.encoding = encoding;
-  }
-
-  /**
-   * @return Returns the connectionTimeout.
-   */
-  public String getConnectionTimeout() {
-    return connectionTimeout;
-  }
-
-  /**
-   * @param connectionTimeout The connectionTimeout to set.
-   */
-  public void setConnectionTimeout(String connectionTimeout) {
-    this.connectionTimeout = connectionTimeout;
-  }
-
-  /**
-   * @return Returns the closeIdleConnectionsTime.
-   */
-  public String getCloseIdleConnectionsTime() {
-    return closeIdleConnectionsTime;
-  }
-
-  /**
-   * @param closeIdleConnectionsTime The connectionTimeout to set.
-   */
-  public void setCloseIdleConnectionsTime(String closeIdleConnectionsTime) {
-    this.closeIdleConnectionsTime = closeIdleConnectionsTime;
-  }
-
-  /**
-   * @return Returns the socketTimeout.
-   */
-  public String getSocketTimeout() {
-    return socketTimeout;
-  }
-
-  /**
-   * @param socketTimeout The socketTimeout to set.
-   */
-  public void setSocketTimeout(String socketTimeout) {
-    this.socketTimeout = socketTimeout;
-  }
-
-  /**
-   * @return Returns the procedure.
-   */
-  public String getUrl() {
-    return url;
-  }
-
-  /**
-   * @param procedure The procedure to set.
-   */
-  public void setUrl(String procedure) {
-    this.url = procedure;
-  }
-
-  /**
-   * @return Is the url coded in a field?
-   */
-  public boolean isUrlInField() {
-    return urlInField;
-  }
-
-  public boolean isPostAFile() {
-    return postAFile;
-  }
-
-  public void setPostAFile(boolean postafile) {
-    this.postAFile = postafile;
-  }
-
-  public boolean isMultipartupload() {
-    return multipartupload;
-  }
-
-  public void setMultipartupload(boolean multipartupload) {
-    this.multipartupload = multipartupload;
-  }
-
-  /**
-   * @param urlInField Is the url coded in a field?
-   */
-  public void setUrlInField(boolean urlInField) {
-    this.urlInField = urlInField;
-  }
-
-  /**
-   * @return The field name that contains the url.
-   */
-  public String getUrlField() {
-    return urlField;
-  }
-
-  /**
-   * @param urlField name of the field that contains the url
-   */
-  public void setUrlField(String urlField) {
-    this.urlField = urlField;
-  }
-
-  /**
-   * @param requestEntity the requestEntity to set
-   */
-  public void setRequestEntity(String requestEntity) {
-    this.requestEntity = requestEntity;
-  }
-
-  /**
-   * @return requestEntity
-   */
-  public String getRequestEntity() {
-    return requestEntity;
-  }
-
-  public List<HttpPostLookupField> getLookupFields() {
-    return lookupFields;
-  }
-
-  public void setLookupFields(List<HttpPostLookupField> lookupFields) {
-    this.lookupFields = lookupFields;
-  }
-
-  public List<HttpPostResultField> getResultFields() {
-    return resultFields;
-  }
-
-  public void setResultFields(List<HttpPostResultField> resultFields) {
-    this.resultFields = resultFields;
-  }
-
   @Override
   public Object clone() {
     HttpPostMeta retval = (HttpPostMeta) super.clone();
@@ -265,7 +130,7 @@ public class HttpPostMeta extends BaseTransformMeta<HttpPost, HttpPostData> {
 
   @Override
   public void setDefault() {
-    encoding = DEFAULT_ENCODING;
+    encoding = Const.UTF_8;
     postAFile = false;
     multipartupload = false;
     lookupFields.add(new HttpPostLookupField());
@@ -374,83 +239,5 @@ public class HttpPostMeta extends BaseTransformMeta<HttpPost, HttpPostData> {
   @Override
   public boolean supportsErrorHandling() {
     return true;
-  }
-
-  /**
-   * ISetter
-   *
-   * @param proxyHost
-   */
-  public void setProxyHost(String proxyHost) {
-    this.proxyHost = proxyHost;
-  }
-
-  /**
-   * IGetter
-   *
-   * @return
-   */
-  public String getProxyHost() {
-    return proxyHost;
-  }
-
-  /**
-   * ISetter
-   *
-   * @param proxyPort
-   */
-  public void setProxyPort(String proxyPort) {
-    this.proxyPort = proxyPort;
-  }
-
-  /**
-   * IGetter
-   *
-   * @return
-   */
-  public String getProxyPort() {
-    return this.proxyPort;
-  }
-
-  /**
-   * ISetter
-   *
-   * @param httpLogin
-   */
-  public void setHttpLogin(String httpLogin) {
-    this.httpLogin = httpLogin;
-  }
-
-  /**
-   * IGetter
-   *
-   * @return
-   */
-  public String getHttpLogin() {
-    return httpLogin;
-  }
-
-  /**
-   * ISetter
-   *
-   * @param httpPassword
-   */
-  public void setHttpPassword(String httpPassword) {
-    this.httpPassword = httpPassword;
-  }
-
-  /**
-   * @return
-   */
-  public String getHttpPassword() {
-    return httpPassword;
-  }
-
-  public boolean isIgnoreSsl() {
-    return ignoreSsl;
-  }
-
-  public void setIgnoreSsl(boolean ignoreSsl) {
-    this.ignoreSsl = ignoreSsl;
   }
 }

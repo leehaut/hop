@@ -516,12 +516,11 @@ public class KettleImport extends HopImportBase implements IHopImport {
           && KettleConst.repositoryTypes.contains(repositoryNode.getTextContent())) {
         for (int j = 0; j < node.getChildNodes().getLength(); j++) {
           Node childNode = node.getChildNodes().item(j);
-          if (childNode.getNodeName().equals("jobname")
-              || childNode.getNodeName().equals("transname")
-              || childNode.getNodeName().equals("trans_name")) {
-            if (!StringUtil.isEmpty(childNode.getTextContent())) {
-              nodeToProcess = processRepositoryNode(node);
-            }
+          if ((childNode.getNodeName().equals("jobname")
+                  || childNode.getNodeName().equals("transname")
+                  || childNode.getNodeName().equals("trans_name"))
+              && !StringUtil.isEmpty(childNode.getTextContent())) {
+            nodeToProcess = processRepositoryNode(node);
           }
         }
         nodeList = nodeToProcess.getChildNodes();
@@ -728,7 +727,8 @@ public class KettleImport extends HopImportBase implements IHopImport {
         // pipeline
         // filename.
         if (!StringUtils.isEmpty(transName) && !StringUtils.isEmpty(directoryPath)) {
-          filenameNode.setTextContent("${PROJECT_HOME}" + directoryPath + '/' + transName + ".hpl");
+          filenameNode.setTextContent(
+              Const.VAR_PROJECT_HOME + directoryPath + '/' + transName + ".hpl");
         }
 
         // add the default pipeline run configuration.
@@ -818,7 +818,7 @@ public class KettleImport extends HopImportBase implements IHopImport {
   private Node processRepositoryNode(Node repositoryNode) {
 
     String filename = "";
-    String directory = "${PROJECT_HOME}";
+    String directory = Const.VAR_PROJECT_HOME;
     String type = "";
     Node filenameNode = null;
 

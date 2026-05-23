@@ -22,6 +22,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.NotePadMeta;
 import org.apache.hop.core.exception.HopException;
@@ -55,6 +57,8 @@ import org.apache.hop.pipeline.transform.stream.IStream;
 import org.apache.hop.pipeline.transform.stream.IStream.StreamType;
 import org.apache.hop.pipeline.transform.stream.StreamIcon;
 
+@Getter
+@Setter
 public class PipelinePainter extends BasePainter<PipelineHopMeta, TransformMeta> {
 
   private static final Class<?> PKG = PipelinePainter.class;
@@ -77,6 +81,7 @@ public class PipelinePainter extends BasePainter<PipelineHopMeta, TransformMeta>
   private boolean slowTransformIndicatorEnabled;
   private Map<String, RowBuffer> outputRowsMap;
   private Map<String, Object> stateMap;
+  private boolean showingSelectedTransformMetrics = true;
 
   public static final String[] magnificationDescriptions =
       new String[] {"1000%", "800%", "600%", "400%", "200%", "150%", "100%", "75%", "50%", "25%"};
@@ -211,10 +216,54 @@ public class PipelinePainter extends BasePainter<PipelineHopMeta, TransformMeta>
     gc.dispose();
   }
 
+  @Override
+  protected void drawNavigationViewContent(
+      double graphX, double graphY, double scaleX, double scaleY) {
+    if (pipelineMeta == null || maximum == null) {
+      return;
+    }
+    // Minimum size in viewport pixels so transforms remain visible
+    int minSize = 2;
+    // Draw hops as lines first (behind transforms)
+    gc.setForeground(EColor.DARKGRAY);
+    gc.setLineWidth(1);
+    for (PipelineHopMeta hop : pipelineMeta.getPipelineHops()) {
+      if (hop.getFromTransform() == null || hop.getToTransform() == null) {
+        continue;
+      }
+      Point fromLoc = hop.getFromTransform().getLocation();
+      Point toLoc = hop.getToTransform().getLocation();
+      if (fromLoc == null || toLoc == null) {
+        continue;
+      }
+      int fromCenterX = (int) (graphX + (fromLoc.x + iconSize / 2) * scaleX);
+      int fromCenterY = (int) (graphY + (fromLoc.y + iconSize / 2) * scaleY);
+      int toCenterX = (int) (graphX + (toLoc.x + iconSize / 2) * scaleX);
+      int toCenterY = (int) (graphY + (toLoc.y + iconSize / 2) * scaleY);
+      gc.drawLine(fromCenterX, fromCenterY, toCenterX, toCenterY);
+    }
+    // Draw transforms as small rectangles
+    gc.setForeground(EColor.BLACK);
+    gc.setBackground(EColor.WHITE);
+    for (TransformMeta transform : pipelineMeta.getTransforms()) {
+      Point loc = transform.getLocation();
+      if (loc == null) {
+        continue;
+      }
+      int w = Math.max(minSize, (int) Math.ceil(iconSize * scaleX));
+      int h = Math.max(minSize, (int) Math.ceil(iconSize * scaleY));
+      int x = (int) (graphX + loc.x * scaleX);
+      int y = (int) (graphY + loc.y * scaleY);
+      gc.fillRectangle(x, y, w, h);
+      gc.drawRectangle(x, y, w, h);
+    }
+  }
+
   private void drawPipeline() throws HopException {
     if (gridSize > 1) {
       drawGrid();
     }
+    drawOriginBoundary();
 
     try {
       ExtensionPointHandler.callExtensionPoint(
@@ -319,19 +368,29 @@ public class PipelinePainter extends BasePainter<PipelineHopMeta, TransformMeta>
     }
 
     // Draw performance table for selected transform(s)
-    for (TransformMeta transformMeta : pipelineMeta.getTransforms()) {
-      drawTransformPerformanceTable(transformMeta);
+    if (showingSelectedTransformMetrics) {
+      for (TransformMeta transformMeta : pipelineMeta.getTransforms()) {
+        drawTransformPerformanceTable(transformMeta);
+      }
     }
 
-    // Display an icon on the indicated location signaling to the user that the transform in
-    // question does not accept input
+    // Display a red cross on the indicated location signaling to the user that the transform in
+    // question does not accept input or is not a good candidate for a hop (duplicate hop or loop)
     //
     if (noInputTransform != null) {
       gc.setLineWidth(2);
       gc.setForeground(EColor.RED);
       Point n = noInputTransform.getLocation();
-      gc.drawLine(n.x - 5, n.y - 5, n.x + iconSize + 10, n.y + iconSize + 10);
-      gc.drawLine(n.x - 5, n.y + iconSize + 5, n.x + iconSize + 5, n.y - 5);
+      gc.drawLine(
+          round(offset.x + n.x - 1),
+          round(offset.y + n.y - 1),
+          round(offset.x + n.x + iconSize + 1),
+          round(offset.y + n.y + iconSize + 1));
+      gc.drawLine(
+          round(offset.x + n.x - 1),
+          round(offset.y + n.y + iconSize + 1),
+          round(offset.x + n.x + iconSize + 1),
+          round(offset.y + n.y - 1));
     }
 
     try {
@@ -369,8 +428,8 @@ public class PipelinePainter extends BasePainter<PipelineHopMeta, TransformMeta>
             Long inputRowsValue = component.getInputBufferSize();
             Long outputRowsValue = component.getOutputBufferSize();
             if (inputRowsValue != null && outputRowsValue != null) {
-              long inputRows = inputRowsValue.longValue();
-              long outputRows = outputRowsValue.longValue();
+              long inputRows = inputRowsValue;
+              long outputRows = outputRowsValue;
 
               // if the transform can't keep up with its input, mark it by drawing an animation
               boolean isSlow = inputRows * 0.85 > outputRows;
@@ -408,7 +467,6 @@ public class PipelinePainter extends BasePainter<PipelineHopMeta, TransformMeta>
   }
 
   private void drawTransformPerformanceTable(TransformMeta transformMeta) {
-
     if (transformMeta == null) {
       return;
     }
@@ -428,99 +486,96 @@ public class PipelinePainter extends BasePainter<PipelineHopMeta, TransformMeta>
       List<IEngineComponent> transforms = pipeline.getComponentCopies(transformMeta.getName());
 
       // draw mouse over performance indicator
-      if (pipeline.isRunning()) {
+      if (pipeline.isRunning() && transformMeta.isSelected()) {
 
-        if (transformMeta.isSelected()) {
+        // determine popup dimensions up front
+        int popupX = x;
+        int popupY = y;
 
-          // determine popup dimensions up front
-          int popupX = x;
-          int popupY = y;
+        int popupWidth = 0;
+        int popupHeight = 1;
 
-          int popupWidth = 0;
-          int popupHeight = 1;
+        gc.setFont(EFont.TINY);
+        Point p = gc.textExtent("0000000000");
+        int colWidth = p.x + MINI_ICON_MARGIN;
+        int rowHeight = p.y + MINI_ICON_MARGIN;
+        int titleWidth = 0;
 
-          gc.setFont(EFont.SMALL);
-          Point p = gc.textExtent("0000000000");
-          int colWidth = p.x + MINI_ICON_MARGIN;
-          int rowHeight = p.y + MINI_ICON_MARGIN;
-          int titleWidth = 0;
+        // calculate max title width to get the colum with
+        String[] titles = PipelinePainter.getPeekTitles();
 
-          // calculate max title width to get the colum with
-          String[] titles = PipelinePainter.getPeekTitles();
+        for (String title : titles) {
+          Point titleExtent = gc.textExtent(title);
+          titleWidth = Math.max(titleExtent.x + MINI_ICON_MARGIN, titleWidth);
+          popupHeight += titleExtent.y + MINI_ICON_MARGIN;
+        }
 
-          for (String title : titles) {
-            Point titleExtent = gc.textExtent(title);
-            titleWidth = Math.max(titleExtent.x + MINI_ICON_MARGIN, titleWidth);
-            popupHeight += titleExtent.y + MINI_ICON_MARGIN;
+        popupWidth = titleWidth + 2 * MINI_ICON_MARGIN;
+
+        // determine total popup width
+        popupWidth += transforms.size() * colWidth;
+
+        // determine popup position
+        popupX = popupX + (iconSize - popupWidth) / 2;
+        popupY = popupY - popupHeight - MINI_ICON_MARGIN;
+
+        // draw the frame
+        gc.setForeground(EColor.DARKGRAY);
+        gc.setBackground(EColor.LIGHTGRAY);
+        gc.setLineWidth(1);
+        gc.fillRoundRectangle(popupX, popupY, popupWidth, popupHeight, 7, 7);
+        // draw the title columns
+        gc.setBackground(EColor.LIGHTGRAY);
+        gc.drawRoundRectangle(popupX, popupY, popupWidth, popupHeight, 7, 7);
+
+        for (int i = 0, barY = popupY; i < titles.length; i++) {
+          // fill each line with a slightly different background color
+
+          if (i % 2 == 1) {
+            gc.setBackground(EColor.BACKGROUND);
+          } else {
+            gc.setBackground(EColor.LIGHTGRAY);
           }
+          gc.fillRoundRectangle(popupX + 1, barY + 1, popupWidth - 2, rowHeight, 7, 7);
+          barY += rowHeight;
+        }
 
-          popupWidth = titleWidth + 2 * MINI_ICON_MARGIN;
+        // draw the header column
+        int rowY = popupY + MINI_ICON_MARGIN;
+        int rowX = popupX + MINI_ICON_MARGIN;
 
-          // determine total popup width
-          popupWidth += transforms.size() * colWidth;
+        gc.setForeground(EColor.BLACK);
+        gc.setBackground(EColor.BACKGROUND);
 
-          // determine popup position
-          popupX = popupX + (iconSize - popupWidth) / 2;
-          popupY = popupY - popupHeight - MINI_ICON_MARGIN;
+        for (int i = 0; i < titles.length; i++) {
+          if (i % 2 == 1) {
+            gc.setBackground(EColor.BACKGROUND);
+          } else {
+            gc.setBackground(EColor.LIGHTGRAY);
+          }
+          gc.drawText(titles[i], rowX, rowY);
+          rowY += rowHeight;
+        }
 
-          // draw the frame
-          gc.setForeground(EColor.DARKGRAY);
-          gc.setBackground(EColor.LIGHTGRAY);
-          gc.setLineWidth(1);
-          gc.fillRoundRectangle(popupX, popupY, popupWidth, popupHeight, 7, 7);
-          // draw the title columns
-          gc.setBackground(EColor.LIGHTGRAY);
-          gc.drawRoundRectangle(popupX, popupY, popupWidth, popupHeight, 7, 7);
+        // draw the values for each copy of the transform
+        gc.setBackground(EColor.LIGHTGRAY);
+        rowX += titleWidth;
 
-          for (int i = 0, barY = popupY; i < titles.length; i++) {
-            // fill each line with a slightly different background color
+        for (IEngineComponent transform : transforms) {
 
+          rowX += colWidth;
+          rowY = popupY + MINI_ICON_MARGIN;
+
+          String[] fields = getPeekFields(transform);
+
+          for (int i = 0; i < fields.length; i++) {
             if (i % 2 == 1) {
               gc.setBackground(EColor.BACKGROUND);
             } else {
               gc.setBackground(EColor.LIGHTGRAY);
             }
-            gc.fillRoundRectangle(popupX + 1, barY + 1, popupWidth - 2, rowHeight, 7, 7);
-            barY += rowHeight;
-          }
-
-          // draw the header column
-          int rowY = popupY + MINI_ICON_MARGIN;
-          int rowX = popupX + MINI_ICON_MARGIN;
-
-          gc.setForeground(EColor.BLACK);
-          gc.setBackground(EColor.BACKGROUND);
-
-          for (int i = 0; i < titles.length; i++) {
-            if (i % 2 == 1) {
-              gc.setBackground(EColor.BACKGROUND);
-            } else {
-              gc.setBackground(EColor.LIGHTGRAY);
-            }
-            gc.drawText(titles[i], rowX, rowY);
+            drawTextRightAligned(fields[i], rowX, rowY);
             rowY += rowHeight;
-          }
-
-          // draw the values for each copy of the transform
-          gc.setBackground(EColor.LIGHTGRAY);
-          rowX += titleWidth;
-
-          for (IEngineComponent transform : transforms) {
-
-            rowX += colWidth;
-            rowY = popupY + MINI_ICON_MARGIN;
-
-            String[] fields = getPeekFields(transform);
-
-            for (int i = 0; i < fields.length; i++) {
-              if (i % 2 == 1) {
-                gc.setBackground(EColor.BACKGROUND);
-              } else {
-                gc.setBackground(EColor.LIGHTGRAY);
-              }
-              drawTextRightAligned(fields[i], rowX, rowY);
-              rowY += rowHeight;
-            }
           }
         }
       }

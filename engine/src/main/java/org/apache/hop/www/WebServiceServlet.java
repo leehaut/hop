@@ -19,17 +19,18 @@ package org.apache.hop.www;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Serial;
 import java.nio.charset.StandardCharsets;
 import java.util.Enumeration;
 import java.util.UUID;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.annotations.HopServerServlet;
 import org.apache.hop.core.exception.HopException;
@@ -58,8 +59,7 @@ import org.apache.hop.www.service.WebService;
 public class WebServiceServlet extends BaseHttpServlet implements IHopServerPlugin {
 
   private static final Class<?> PKG = WebServiceServlet.class;
-
-  private static final long serialVersionUID = 3634806745373343432L;
+  @Serial private static final long serialVersionUID = 3634806745373343432L;
 
   public static final String CONTEXT_PATH = "/hop/webService";
 
@@ -72,7 +72,15 @@ public class WebServiceServlet extends BaseHttpServlet implements IHopServerPlug
   @Override
   protected void doPost(HttpServletRequest request, HttpServletResponse response)
       throws ServletException, IOException {
-    this.doGet(request, response);
+    try {
+      doGet(request, response);
+    } catch (Exception e) {
+      logError("Error handling web service POST request", e);
+      sendSafeError(
+          response,
+          HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+          "Unable to process web service request.");
+    }
   }
 
   @Override
@@ -93,8 +101,11 @@ public class WebServiceServlet extends BaseHttpServlet implements IHopServerPlug
 
     String webServiceName = request.getParameter("service");
     if (StringUtils.isEmpty(webServiceName)) {
-      throw new ServletException(
+      sendSafeError(
+          response,
+          HttpServletResponse.SC_BAD_REQUEST,
           "Please specify a service parameter pointing to the name of the web service object");
+      return;
     }
 
     String runConfigurationName = request.getParameter("runConfig");
@@ -156,7 +167,7 @@ public class WebServiceServlet extends BaseHttpServlet implements IHopServerPlug
       } else {
         response.setContentType(contentType);
       }
-      response.setCharacterEncoding(Const.XML_ENCODING);
+      response.setCharacterEncoding(Const.UTF_8);
 
       String serverObjectId = UUID.randomUUID().toString();
       SimpleLoggingObject servletLoggingObject =
@@ -274,7 +285,11 @@ public class WebServiceServlet extends BaseHttpServlet implements IHopServerPlug
       pipeline.waitUntilFinished();
 
     } catch (Exception e) {
-      throw new ServletException("Error producing web service output", e);
+      logError("Error producing web service output", e);
+      sendSafeError(
+          response,
+          HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+          "Error producing web service output.");
     }
   }
 

@@ -24,12 +24,16 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.hop.core.IRowSet;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopFileException;
+import org.apache.hop.core.io.CountingInputStream;
+import org.apache.hop.core.io.CountingOutputStream;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.RowMeta;
 import org.apache.hop.i18n.BaseMessages;
@@ -76,7 +80,7 @@ public class JoinRows extends BaseTransform<JoinRowsMeta, JoinRowsData> {
 
       // ** INPUT SIDE **
       data.file = new File[rowSetsSize];
-      data.fileInputStream = new FileInputStream[rowSetsSize];
+      data.fileInputStream = new InputStream[rowSetsSize];
       data.dataInputStream = new DataInputStream[rowSetsSize];
       data.size = new int[rowSetsSize];
       data.fileRowMeta = new IRowMeta[rowSetsSize];
@@ -84,7 +88,7 @@ public class JoinRows extends BaseTransform<JoinRowsMeta, JoinRowsData> {
       data.rs = new IRowSet[rowSetsSize];
       data.cache = new List[rowSetsSize];
       data.position = new int[rowSetsSize];
-      data.fileOutputStream = new FileOutputStream[rowSetsSize];
+      data.fileOutputStream = new OutputStream[rowSetsSize];
       data.dataOutputStream = new DataOutputStream[rowSetsSize];
       data.restart = new boolean[rowSetsSize];
 
@@ -144,7 +148,8 @@ public class JoinRows extends BaseTransform<JoinRowsMeta, JoinRowsData> {
         // See if we need to open the file?
         if (data.dataInputStream[filenr] == null) {
           try {
-            data.fileInputStream[filenr] = new FileInputStream(data.file[filenr]);
+            data.fileInputStream[filenr] =
+                new CountingInputStream(new FileInputStream(data.file[filenr]));
             data.dataInputStream[filenr] = new DataInputStream(data.fileInputStream[filenr]);
           } catch (FileNotFoundException fnfe) {
             logError(
@@ -172,17 +177,7 @@ public class JoinRows extends BaseTransform<JoinRowsMeta, JoinRowsData> {
 
         try {
           rowData = data.fileRowMeta[filenr].readData(data.dataInputStream[filenr]);
-        } catch (HopFileException e) {
-          logError(
-              BaseMessages.getString(PKG, "JoinRows.Log.UnableToReadDataFromTempFile")
-                  + filenr
-                  + " ["
-                  + data.file[filenr]
-                  + "]");
-          setErrors(1);
-          stopAll();
-          return null;
-        } catch (SocketTimeoutException e) {
+        } catch (HopFileException | SocketTimeoutException e) {
           logError(
               BaseMessages.getString(PKG, "JoinRows.Log.UnableToReadDataFromTempFile")
                   + filenr
@@ -207,6 +202,9 @@ public class JoinRows extends BaseTransform<JoinRowsMeta, JoinRowsData> {
         // The file will then be re-opened if needed later on.
         if (data.position[filenr] >= data.size[filenr]) {
           try {
+            if (data.fileInputStream[filenr] instanceof CountingInputStream cis) {
+              dataVolumeIn = (dataVolumeIn != null ? dataVolumeIn : 0L) + cis.getCount();
+            }
             data.dataInputStream[filenr].close();
             data.fileInputStream[filenr].close();
 
@@ -363,7 +361,8 @@ public class JoinRows extends BaseTransform<JoinRowsMeta, JoinRowsData> {
     if (data.dataOutputStream[data.filenr] == null) {
       try {
         // Open the temp file
-        data.fileOutputStream[data.filenr] = new FileOutputStream(data.file[data.filenr]);
+        data.fileOutputStream[data.filenr] =
+            new CountingOutputStream(new FileOutputStream(data.file[data.filenr]));
 
         // Open the data output stream...
         data.dataOutputStream[data.filenr] =
@@ -432,6 +431,9 @@ public class JoinRows extends BaseTransform<JoinRowsMeta, JoinRowsData> {
       // Close outputstream.
       try {
         data.dataOutputStream[data.filenr].close();
+        if (data.fileOutputStream[data.filenr] instanceof CountingOutputStream cos) {
+          dataVolumeOut = (dataVolumeOut != null ? dataVolumeOut : 0L) + cos.getCount();
+        }
         data.fileOutputStream[data.filenr].close();
         data.dataOutputStream[data.filenr] = null;
         data.fileOutputStream[data.filenr] = null;

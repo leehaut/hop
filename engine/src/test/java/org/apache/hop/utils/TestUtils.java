@@ -17,7 +17,7 @@
 
 package org.apache.hop.utils;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.File;
 import java.io.IOException;
@@ -27,6 +27,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.FileSystemException;
 import org.apache.hop.core.exception.HopFileException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.core.variables.Variables;
 import org.apache.hop.core.vfs.HopVfs;
@@ -77,7 +78,7 @@ public class TestUtils {
       file.createFile();
       return file.getName().getURI();
     } catch (FileSystemException | HopFileException e) {
-      throw new RuntimeException(e);
+      throw new HopRuntimeException(e);
     }
   }
 
@@ -93,7 +94,7 @@ public class TestUtils {
     try {
       return HopVfs.getFileObject(vfsPath, variables);
     } catch (HopFileException e) {
-      throw new RuntimeException(e);
+      throw new HopRuntimeException(e);
     }
   }
 
@@ -106,7 +107,7 @@ public class TestUtils {
 
   public static void checkEqualsHashCodeConsistency(Object object1, Object object2) {
     if (object1.equals(object2)) {
-      assertEquals("inconsistent hashcode and equals", object1.hashCode(), object2.hashCode());
+      assertEquals(object1.hashCode(), object2.hashCode(), "inconsistent hashcode and equals");
     }
   }
 }

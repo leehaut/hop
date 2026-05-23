@@ -19,7 +19,10 @@ package org.apache.hop.core.row;
 
 import java.math.BigDecimal;
 import java.util.Date;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hop.core.Const;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.exception.HopValueException;
 import org.apache.hop.core.row.value.ValueMetaBase;
 import org.apache.hop.core.row.value.ValueMetaBigNumber;
@@ -34,6 +37,8 @@ import org.apache.hop.core.row.value.ValueMetaString;
 import org.apache.hop.core.xml.XmlHandler;
 import org.w3c.dom.Node;
 
+@Getter
+@Setter
 public class ValueMetaAndData {
   public static final String XML_TAG = "value";
 
@@ -43,8 +48,8 @@ public class ValueMetaAndData {
   public ValueMetaAndData() {}
 
   /**
-   * @param valueMeta
-   * @param valueData
+   * @param valueMeta IValueMeta
+   * @param valueData Object
    */
   public ValueMetaAndData(IValueMeta valueMeta, Object valueData) {
     this.valueMeta = valueMeta;
@@ -53,23 +58,18 @@ public class ValueMetaAndData {
 
   public ValueMetaAndData(String valueName, Object valueData) {
     this.valueData = valueData;
-    if (valueData instanceof String) {
-      this.valueMeta = new ValueMetaString(valueName);
-    } else if (valueData instanceof Double) {
-      this.valueMeta = new ValueMetaNumber(valueName);
-    } else if (valueData instanceof Long) {
-      this.valueMeta = new ValueMetaInteger(valueName);
-    } else if (valueData instanceof Date) {
-      this.valueMeta = new ValueMetaDate(valueName);
-    } else if (valueData instanceof BigDecimal) {
-      this.valueMeta = new ValueMetaBigNumber(valueName);
-    } else if (valueData instanceof Boolean) {
-      this.valueMeta = new ValueMetaBoolean(valueName);
-    } else if (valueData instanceof byte[]) {
-      this.valueMeta = new ValueMetaBinary(valueName);
-    } else {
-      this.valueMeta = new ValueMetaSerializable(valueName);
-    }
+
+    this.valueMeta =
+        switch (valueData) {
+          case String ignored -> new ValueMetaString(valueName);
+          case Double ignored -> new ValueMetaNumber(valueName);
+          case Long ignored -> new ValueMetaInteger(valueName);
+          case Date ignored -> new ValueMetaDate(valueName);
+          case BigDecimal ignored -> new ValueMetaBigNumber(valueName);
+          case Boolean ignored -> new ValueMetaBoolean(valueName);
+          case byte[] ignored -> new ValueMetaBinary(valueName);
+          default -> new ValueMetaSerializable(valueName);
+        };
   }
 
   public ValueMetaAndData(ValueMetaAndData v) {
@@ -77,7 +77,7 @@ public class ValueMetaAndData {
       this.valueMeta = v.valueMeta.clone();
       this.valueData = v.valueMeta.cloneValueData(v.getValueData());
     } catch (Exception e) {
-      throw new RuntimeException("Error creating copy of value and metadata", e);
+      throw new HopRuntimeException("Error creating copy of value and metadata", e);
     }
   }
 
@@ -87,7 +87,7 @@ public class ValueMetaAndData {
     try {
       vmad.valueData = valueMeta.cloneValueData(valueData);
     } catch (HopValueException e) {
-      throw new RuntimeException("Error cloning value data", e);
+      throw new HopRuntimeException("Error cloning value data", e);
     }
     vmad.valueMeta = valueMeta.clone();
 
@@ -201,33 +201,5 @@ public class ValueMetaAndData {
 
   public String toStringMeta() {
     return valueMeta.toStringMeta();
-  }
-
-  /**
-   * @return the valueData
-   */
-  public Object getValueData() {
-    return valueData;
-  }
-
-  /**
-   * @param valueData the valueData to set
-   */
-  public void setValueData(Object valueData) {
-    this.valueData = valueData;
-  }
-
-  /**
-   * @return the valueMeta
-   */
-  public IValueMeta getValueMeta() {
-    return valueMeta;
-  }
-
-  /**
-   * @param valueMeta the valueMeta to set
-   */
-  public void setValueMeta(IValueMeta valueMeta) {
-    this.valueMeta = valueMeta;
   }
 }

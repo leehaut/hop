@@ -19,7 +19,7 @@ package org.apache.hop.neo4j.actions.index;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.Result;
 import org.apache.hop.core.annotations.Action;
@@ -99,7 +99,14 @@ public class Neo4jIndex extends ActionBase implements IAction {
     return result;
   }
 
-  private void dropIndex(final IndexUpdate indexUpdate) throws HopException {
+  /**
+   * Generate preview Cypher for dropping an index (without executing it)
+   *
+   * @param indexUpdate The index update configuration
+   * @return The generated Cypher statement
+   * @throws HopException If configuration is invalid
+   */
+  public static String generateDropIndexCypher(IndexUpdate indexUpdate) throws HopException {
     String cypher = "DROP INDEX ";
 
     if (StringUtils.isNotEmpty(indexUpdate.getIndexName())) {
@@ -120,16 +127,23 @@ public class Neo4jIndex extends ActionBase implements IAction {
       }
     }
     cypher += " IF EXISTS";
+    return cypher;
+  }
+
+  private void dropIndex(final IndexUpdate indexUpdate) throws HopException {
+    String cypher = generateDropIndexCypher(indexUpdate);
 
     // Run this cypher statement...
     //
     final String _cypher = cypher;
     try (Driver driver = connection.getDriver(getLogChannel(), this)) {
       try (Session session = connection.getSession(getLogChannel(), driver, this)) {
-        session.writeTransaction(
+        session.executeWrite(
             tx -> {
               try {
-                logDetailed("Dropping index with cypher: " + _cypher);
+                if (isDetailed()) {
+                  logDetailed("Dropping index with cypher: " + _cypher);
+                }
                 org.neo4j.driver.Result result = tx.run(_cypher);
                 result.consume();
                 return true;
@@ -142,7 +156,13 @@ public class Neo4jIndex extends ActionBase implements IAction {
     }
   }
 
-  private void createIndex(IndexUpdate indexUpdate) throws HopException {
+  /**
+   * Generate preview Cypher for creating an index (without executing it)
+   *
+   * @param indexUpdate The index update configuration
+   * @return The generated Cypher statement
+   */
+  public static String generateCreateIndexCypher(IndexUpdate indexUpdate) {
     String cypher = "CREATE INDEX ";
 
     if (StringUtils.isNotEmpty(indexUpdate.getIndexName())) {
@@ -175,15 +195,23 @@ public class Neo4jIndex extends ActionBase implements IAction {
     }
     cypher += ")";
 
+    return cypher;
+  }
+
+  private void createIndex(IndexUpdate indexUpdate) throws HopException {
+    String cypher = generateCreateIndexCypher(indexUpdate);
+
     // Run this cypher statement...
     //
     final String _cypher = cypher;
     try (Driver driver = connection.getDriver(getLogChannel(), this)) {
       try (Session session = connection.getSession(getLogChannel(), driver, this)) {
-        session.writeTransaction(
+        session.executeWrite(
             tx -> {
               try {
-                logDetailed("Creating index with cypher: " + _cypher);
+                if (isDetailed()) {
+                  logDetailed("Creating index with cypher: " + _cypher);
+                }
                 org.neo4j.driver.Result result = tx.run(_cypher);
                 result.consume();
                 return true;

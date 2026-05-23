@@ -32,18 +32,21 @@ import org.apache.hop.ui.pipeline.transform.BaseTransformDialog;
 import org.apache.hop.ui.pipeline.transform.ComponentSelectionListener;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CCombo;
+import org.eclipse.swt.custom.ScrolledComposite;
 import org.eclipse.swt.events.FocusEvent;
 import org.eclipse.swt.events.FocusListener;
 import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.graphics.Cursor;
+import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
+import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.swt.widgets.Text;
 
 public class CreditCardValidatorDialog extends BaseTransformDialog {
   private static final Class<?> PKG = CreditCardValidatorMeta.class;
@@ -72,62 +75,46 @@ public class CreditCardValidatorDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "CreditCardValidatorDialog.Shell.Title"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
     ModifyListener lsMod = e -> input.setChanged();
-
     changed = input.hasChanged();
 
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
+    ScrolledComposite sc = new ScrolledComposite(shell, SWT.V_SCROLL | SWT.H_SCROLL);
+    PropsUi.setLook(sc);
+    FormData fdSc = new FormData();
+    fdSc.left = new FormAttachment(0, 0);
+    fdSc.top = new FormAttachment(wSpacer, 0);
+    fdSc.right = new FormAttachment(100, 0);
+    fdSc.bottom = new FormAttachment(wOk, margin);
+    sc.setLayoutData(fdSc);
+    sc.setLayout(new FillLayout());
 
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "CreditCardValidatorDialog.Shell.Title"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // TransformName line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(
-        BaseMessages.getString(PKG, "CreditCardValidatorDialog.TransformName.Label"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
+    Composite wContent = new Composite(sc, SWT.NONE);
+    PropsUi.setLook(wContent);
+    FormLayout contentLayout = new FormLayout();
+    contentLayout.marginWidth = PropsUi.getFormMargin();
+    contentLayout.marginHeight = PropsUi.getFormMargin();
+    wContent.setLayout(contentLayout);
 
     // filename field
-    Label wlFieldName = new Label(shell, SWT.RIGHT);
+    Label wlFieldName = new Label(wContent, SWT.RIGHT);
     wlFieldName.setText(BaseMessages.getString(PKG, "CreditCardValidatorDialog.FieldName.Label"));
     PropsUi.setLook(wlFieldName);
     FormData fdlFieldName = new FormData();
     fdlFieldName.left = new FormAttachment(0, 0);
     fdlFieldName.right = new FormAttachment(middle, -margin);
-    fdlFieldName.top = new FormAttachment(wTransformName, margin);
+    fdlFieldName.top = new FormAttachment(0, margin);
     wlFieldName.setLayoutData(fdlFieldName);
 
-    wFieldName = new CCombo(shell, SWT.BORDER | SWT.READ_ONLY);
+    wFieldName = new CCombo(wContent, SWT.BORDER | SWT.READ_ONLY);
     PropsUi.setLook(wFieldName);
     wFieldName.addModifyListener(lsMod);
     FormData fdFieldName = new FormData();
     fdFieldName.left = new FormAttachment(middle, 0);
-    fdFieldName.top = new FormAttachment(wTransformName, margin);
+    fdFieldName.top = new FormAttachment(0, margin);
     fdFieldName.right = new FormAttachment(100, 0);
     wFieldName.setLayoutData(fdFieldName);
     wFieldName.addFocusListener(
@@ -148,15 +135,15 @@ public class CreditCardValidatorDialog extends BaseTransformDialog {
         });
 
     // get only digits?
-    Label wlgetOnlyDigits = new Label(shell, SWT.RIGHT);
+    Label wlgetOnlyDigits = new Label(wContent, SWT.RIGHT);
     wlgetOnlyDigits.setText(BaseMessages.getString(PKG, "CreditCardValidator.getOnlyDigits.Label"));
     PropsUi.setLook(wlgetOnlyDigits);
     FormData fdlgetOnlyDigits = new FormData();
     fdlgetOnlyDigits.left = new FormAttachment(0, 0);
-    fdlgetOnlyDigits.top = new FormAttachment(wFieldName, margin);
+    fdlgetOnlyDigits.top = new FormAttachment(wlFieldName, margin);
     fdlgetOnlyDigits.right = new FormAttachment(middle, -margin);
     wlgetOnlyDigits.setLayoutData(fdlgetOnlyDigits);
-    wgetOnlyDigits = new Button(shell, SWT.CHECK);
+    wgetOnlyDigits = new Button(wContent, SWT.CHECK);
     PropsUi.setLook(wgetOnlyDigits);
     wgetOnlyDigits.setToolTipText(
         BaseMessages.getString(PKG, "CreditCardValidator.getOnlyDigits.Tooltip"));
@@ -170,7 +157,7 @@ public class CreditCardValidatorDialog extends BaseTransformDialog {
     // START OF Output Fields GROUP //
     // ///////////////////////////////
 
-    Group wOutputFields = new Group(shell, SWT.SHADOW_NONE);
+    Group wOutputFields = new Group(wContent, SWT.SHADOW_NONE);
     PropsUi.setLook(wOutputFields);
     wOutputFields.setText(
         BaseMessages.getString(PKG, "CreditCardValidatorDialog.OutputFields.Label"));
@@ -185,9 +172,9 @@ public class CreditCardValidatorDialog extends BaseTransformDialog {
     wlResult.setText(BaseMessages.getString(PKG, "CreditCardValidatorDialog.ResultField.Label"));
     PropsUi.setLook(wlResult);
     FormData fdlResult = new FormData();
-    fdlResult.left = new FormAttachment(0, -margin);
-    fdlResult.right = new FormAttachment(middle, -2 * margin);
-    fdlResult.top = new FormAttachment(wgetOnlyDigits, 2 * margin);
+    fdlResult.left = new FormAttachment(0, 0);
+    fdlResult.right = new FormAttachment(middle, -margin);
+    fdlResult.top = new FormAttachment(wgetOnlyDigits, margin);
     wlResult.setLayoutData(fdlResult);
 
     wResult = new TextVar(variables, wOutputFields, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
@@ -196,8 +183,8 @@ public class CreditCardValidatorDialog extends BaseTransformDialog {
     PropsUi.setLook(wResult);
     wResult.addModifyListener(lsMod);
     FormData fdResult = new FormData();
-    fdResult.left = new FormAttachment(middle, -margin);
-    fdResult.top = new FormAttachment(wgetOnlyDigits, 2 * margin);
+    fdResult.left = new FormAttachment(wlResult, margin);
+    fdResult.top = new FormAttachment(wgetOnlyDigits, margin);
     fdResult.right = new FormAttachment(100, 0);
     wResult.setLayoutData(fdResult);
 
@@ -206,8 +193,8 @@ public class CreditCardValidatorDialog extends BaseTransformDialog {
     wlCardType.setText(BaseMessages.getString(PKG, "CreditCardValidatorDialog.CardType.Label"));
     PropsUi.setLook(wlCardType);
     FormData fdlCardType = new FormData();
-    fdlCardType.left = new FormAttachment(0, -margin);
-    fdlCardType.right = new FormAttachment(middle, -2 * margin);
+    fdlCardType.left = new FormAttachment(0, 0);
+    fdlCardType.right = new FormAttachment(middle, -margin);
     fdlCardType.top = new FormAttachment(wResult, margin);
     wlCardType.setLayoutData(fdlCardType);
 
@@ -217,7 +204,7 @@ public class CreditCardValidatorDialog extends BaseTransformDialog {
     PropsUi.setLook(wFileType);
     wFileType.addModifyListener(lsMod);
     FormData fdCardType = new FormData();
-    fdCardType.left = new FormAttachment(middle, -margin);
+    fdCardType.left = new FormAttachment(wlCardType, margin);
     fdCardType.top = new FormAttachment(wResult, margin);
     fdCardType.right = new FormAttachment(100, 0);
     wFileType.setLayoutData(fdCardType);
@@ -228,8 +215,8 @@ public class CreditCardValidatorDialog extends BaseTransformDialog {
         BaseMessages.getString(PKG, "CreditCardValidatorDialog.NotValidMsg.Label"));
     PropsUi.setLook(wlNotValidMsg);
     FormData fdlNotValidMsg = new FormData();
-    fdlNotValidMsg.left = new FormAttachment(0, -margin);
-    fdlNotValidMsg.right = new FormAttachment(middle, -2 * margin);
+    fdlNotValidMsg.left = new FormAttachment(0, 0);
+    fdlNotValidMsg.right = new FormAttachment(middle, -margin);
     fdlNotValidMsg.top = new FormAttachment(wFileType, margin);
     wlNotValidMsg.setLayoutData(fdlNotValidMsg);
 
@@ -239,35 +226,27 @@ public class CreditCardValidatorDialog extends BaseTransformDialog {
     PropsUi.setLook(wNotValidMsg);
     wNotValidMsg.addModifyListener(lsMod);
     FormData fdNotValidMsg = new FormData();
-    fdNotValidMsg.left = new FormAttachment(middle, -margin);
+    fdNotValidMsg.left = new FormAttachment(wlNotValidMsg, margin);
     fdNotValidMsg.top = new FormAttachment(wFileType, margin);
     fdNotValidMsg.right = new FormAttachment(100, 0);
     wNotValidMsg.setLayoutData(fdNotValidMsg);
 
     FormData fdAdditionalFields = new FormData();
     fdAdditionalFields.left = new FormAttachment(0, margin);
-    fdAdditionalFields.top = new FormAttachment(wgetOnlyDigits, 2 * margin);
+    fdAdditionalFields.top = new FormAttachment(wgetOnlyDigits, margin);
     fdAdditionalFields.right = new FormAttachment(100, -margin);
     wOutputFields.setLayoutData(fdAdditionalFields);
 
-    // ///////////////////////////////
-    // END OF Additional Fields GROUP //
-    // ///////////////////////////////
-
-    // THE BUTTONS
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-
-    setButtonPositions(new Button[] {wOk, wCancel}, margin, wOutputFields);
-
-    // Add listeners
-    wOk.addListener(SWT.Selection, e -> ok());
-    wCancel.addListener(SWT.Selection, e -> cancel());
+    wContent.pack();
+    Rectangle bounds = wContent.getBounds();
+    sc.setContent(wContent);
+    sc.setExpandHorizontal(true);
+    sc.setExpandVertical(true);
+    sc.setMinWidth(bounds.width);
+    sc.setMinHeight(bounds.height);
 
     getData();
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -281,9 +260,6 @@ public class CreditCardValidatorDialog extends BaseTransformDialog {
     wResult.setText(Const.NVL(input.getResultFieldName(), ""));
     wFileType.setText(Const.NVL(input.getCardType(), ""));
     wNotValidMsg.setText(Const.NVL(input.getNotValidMessage(), ""));
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   private void cancel() {
@@ -301,7 +277,8 @@ public class CreditCardValidatorDialog extends BaseTransformDialog {
     input.setResultFieldName(wResult.getText());
     input.setCardType(wFileType.getText());
     input.setNotValidMessage(wNotValidMsg.getText());
-    transformName = wTransformName.getText(); // return value
+    // return value
+    transformName = wTransformName.getText();
 
     dispose();
   }

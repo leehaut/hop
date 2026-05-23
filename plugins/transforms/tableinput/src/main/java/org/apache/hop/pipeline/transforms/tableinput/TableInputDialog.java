@@ -17,6 +17,7 @@
 
 package org.apache.hop.pipeline.transforms.tableinput;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -25,10 +26,12 @@ import org.apache.hop.core.Props;
 import org.apache.hop.core.database.Database;
 import org.apache.hop.core.database.DatabaseMeta;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopFileException;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
+import org.apache.hop.core.vfs.HopVfs;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineMeta;
@@ -36,8 +39,8 @@ import org.apache.hop.pipeline.PipelinePreviewFactory;
 import org.apache.hop.pipeline.transform.TransformMeta;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.database.dialog.DatabaseExplorerDialog;
+import org.apache.hop.ui.core.database.dialog.PreviewTableSettingsDialog;
 import org.apache.hop.ui.core.dialog.BaseDialog;
-import org.apache.hop.ui.core.dialog.EnterNumberDialog;
 import org.apache.hop.ui.core.dialog.EnterTextDialog;
 import org.apache.hop.ui.core.dialog.MessageBox;
 import org.apache.hop.ui.core.dialog.PreviewRowsDialog;
@@ -55,25 +58,22 @@ import org.eclipse.swt.events.FocusAdapter;
 import org.eclipse.swt.events.FocusEvent;
 import org.eclipse.swt.events.KeyAdapter;
 import org.eclipse.swt.events.KeyEvent;
-import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.events.MouseAdapter;
 import org.eclipse.swt.events.MouseEvent;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
-import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.swt.widgets.Text;
 
 public class TableInputDialog extends BaseTransformDialog {
   private static final Class<?> PKG = TableInputMeta.class;
 
   private MetaSelectionLine<DatabaseMeta> wConnection;
 
-  private TextComposite wSql;
+  private TextComposite wSqlComposite;
 
   private CCombo wDataFrom;
 
@@ -88,6 +88,8 @@ public class TableInputDialog extends BaseTransformDialog {
 
   private Label wlPosition;
 
+  private TextVar wSqlFromFile;
+
   public TableInputDialog(
       Shell parent, IVariables variables, TableInputMeta transformMeta, PipelineMeta pipelineMeta) {
     super(parent, variables, transformMeta, pipelineMeta);
@@ -96,56 +98,63 @@ public class TableInputDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
-
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
-
-    ModifyListener lsMod = e -> input.setChanged();
+    createShell(BaseMessages.getString(PKG, "TableInput.Name"));
     changed = input.hasChanged();
 
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
+    buildButtonBar().ok(e -> ok()).preview(e -> preview()).cancel(e -> cancel()).build();
 
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "TableInputDialog.TableInput"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // TransformName line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "TableInputDialog.TransformName"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
-
-    wConnection = addConnectionLine(shell, wTransformName, input.getConnection(), lsMod);
+    wConnection = addConnectionLine(shell, wSpacer, input.getConnection(), lsMod);
     wConnection.addListener(SWT.Selection, e -> getSqlReservedWords());
 
-    // Some buttons
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wPreview = new Button(shell, SWT.PUSH);
-    wPreview.setText(BaseMessages.getString(PKG, "System.Button.Preview"));
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
+    // Load SQL from file
+    Label wlSqlFromFile = new Label(shell, SWT.RIGHT);
+    wlSqlFromFile.setText(BaseMessages.getString(PKG, "TableInputDialog.LoadSqlFromFile"));
+    PropsUi.setLook(wlSqlFromFile);
+    FormData fdlSqlFromFile = new FormData();
+    fdlSqlFromFile.left = new FormAttachment(0, 0);
+    fdlSqlFromFile.right = new FormAttachment(middle, -margin);
+    fdlSqlFromFile.top = new FormAttachment(wConnection, margin);
+    wlSqlFromFile.setLayoutData(fdlSqlFromFile);
+    Button wbSqlFromFile = new Button(shell, SWT.PUSH);
+    PropsUi.setLook(wbSqlFromFile);
+    wbSqlFromFile.setText(BaseMessages.getString(PKG, "TableInputDialog.Browse"));
+    FormData fdbSqlFromFile = new FormData();
+    fdbSqlFromFile.right = new FormAttachment(100, 0);
+    fdbSqlFromFile.top = new FormAttachment(wlSqlFromFile, 0, SWT.CENTER);
+    wbSqlFromFile.setLayoutData(fdbSqlFromFile);
 
-    setButtonPositions(new Button[] {wOk, wPreview, wCancel}, margin, null);
+    wSqlFromFile = new TextVar(variables, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
+    PropsUi.setLook(wSqlFromFile);
+    wSqlFromFile.addModifyListener(lsMod);
+    FormData fdSqlFromFile = new FormData();
+    fdSqlFromFile.left = new FormAttachment(middle, 0);
+    fdSqlFromFile.right = new FormAttachment(wbSqlFromFile, -margin);
+    fdSqlFromFile.top = new FormAttachment(wlSqlFromFile, 0, SWT.CENTER);
+    wSqlFromFile.setLayoutData(fdSqlFromFile);
+    wbSqlFromFile.addListener(
+        SWT.Selection,
+        e -> {
+          String path =
+              BaseDialog.presentFileDialog(
+                  shell,
+                  wSqlFromFile,
+                  variables,
+                  new String[] {"*.sql", "*"},
+                  new String[] {
+                    BaseMessages.getString(PKG, "TableInputDialog.SqlFiles"),
+                    BaseMessages.getString(PKG, "System.FileType.AllFiles")
+                  },
+                  false);
+          if (path != null) {
+            loadSqlFromFileAndSetReadOnly();
+          }
+        });
+    wSqlFromFile.addModifyListener(
+        e -> {
+          if (Utils.isEmpty(wSqlFromFile.getText())) {
+            wSqlComposite.setEditable(true);
+          }
+        });
 
     // Limit input ...
     Label wlLimit = new Label(shell, SWT.RIGHT);
@@ -154,7 +163,7 @@ public class TableInputDialog extends BaseTransformDialog {
     FormData fdlLimit = new FormData();
     fdlLimit.left = new FormAttachment(0, 0);
     fdlLimit.right = new FormAttachment(middle, -margin);
-    fdlLimit.bottom = new FormAttachment(wOk, -2 * margin);
+    fdlLimit.bottom = new FormAttachment(wOk, -margin);
     wlLimit.setLayoutData(fdlLimit);
     wLimit = new TextVar(variables, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wLimit);
@@ -246,7 +255,7 @@ public class TableInputDialog extends BaseTransformDialog {
     FormData fdlPosition = new FormData();
     fdlPosition.left = new FormAttachment(0, 0);
     fdlPosition.right = new FormAttachment(100, 0);
-    fdlPosition.bottom = new FormAttachment(wlVariables, -2 * margin);
+    fdlPosition.bottom = new FormAttachment(wlVariables, -margin);
     wlPosition.setLayoutData(fdlPosition);
 
     // Table line...
@@ -255,7 +264,7 @@ public class TableInputDialog extends BaseTransformDialog {
     PropsUi.setLook(wlSql);
     FormData fdlSql = new FormData();
     fdlSql.left = new FormAttachment(0, 0);
-    fdlSql.top = new FormAttachment(wConnection, margin * 2);
+    fdlSql.top = new FormAttachment(wbSqlFromFile, margin);
     wlSql.setLayoutData(fdlSql);
 
     Button wbTable = new Button(shell, SWT.PUSH | SWT.CENTER);
@@ -263,33 +272,34 @@ public class TableInputDialog extends BaseTransformDialog {
     wbTable.setText(BaseMessages.getString(PKG, "TableInputDialog.GetSQLAndSelectStatement"));
     FormData fdbTable = new FormData();
     fdbTable.right = new FormAttachment(100, 0);
-    fdbTable.top = new FormAttachment(wConnection, margin * 2);
+    fdbTable.top = new FormAttachment(wbSqlFromFile, margin);
     wbTable.setLayoutData(fdbTable);
 
     if (EnvironmentUtils.getInstance().isWeb()) {
-      wSql =
+      wSqlComposite =
           new StyledTextComp(
               variables, shell, SWT.MULTI | SWT.LEFT | SWT.BORDER | SWT.H_SCROLL | SWT.V_SCROLL);
     } else {
-      wSql =
+      wSqlComposite =
           new SQLStyledTextComp(
               variables, shell, SWT.MULTI | SWT.LEFT | SWT.BORDER | SWT.H_SCROLL | SWT.V_SCROLL);
     }
-    PropsUi.setLook(wSql, Props.WIDGET_STYLE_FIXED);
-    wSql.addModifyListener(lsMod);
+    PropsUi.setLook(wSqlComposite, Props.WIDGET_STYLE_FIXED);
+    wSqlComposite.addModifyListener(lsMod);
     FormData fdSql = new FormData();
     fdSql.left = new FormAttachment(0, 0);
     fdSql.top = new FormAttachment(wbTable, margin);
     fdSql.right = new FormAttachment(100, -margin);
     fdSql.bottom = new FormAttachment(wlPosition, -margin);
-    wSql.setLayoutData(fdSql);
-    wSql.addModifyListener(
+    fdSql.height = 200;
+    wSqlComposite.setLayoutData(fdSql);
+    wSqlComposite.addModifyListener(
         arg0 -> {
           setSqlToolTip();
           setPosition();
         });
 
-    wSql.addKeyListener(
+    wSqlComposite.addKeyListener(
         new KeyAdapter() {
           @Override
           public void keyPressed(KeyEvent e) {
@@ -301,7 +311,7 @@ public class TableInputDialog extends BaseTransformDialog {
             setPosition();
           }
         });
-    wSql.addFocusListener(
+    wSqlComposite.addFocusListener(
         new FocusAdapter() {
           @Override
           public void focusGained(FocusEvent e) {
@@ -313,7 +323,7 @@ public class TableInputDialog extends BaseTransformDialog {
             setPosition();
           }
         });
-    wSql.addMouseListener(
+    wSqlComposite.addMouseListener(
         new MouseAdapter() {
           @Override
           public void mouseDoubleClick(MouseEvent e) {
@@ -332,19 +342,17 @@ public class TableInputDialog extends BaseTransformDialog {
         });
 
     // Add listeners
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    wPreview.addListener(SWT.Selection, e -> preview());
-    wOk.addListener(SWT.Selection, e -> ok());
     wbTable.addListener(SWT.Selection, e -> getSql());
     wDataFrom.addListener(SWT.Selection, e -> setFlags());
     wDataFrom.addListener(SWT.FocusOut, e -> setFlags());
 
     final List<String> sqlKeywords = getSqlReservedWords();
 
-    wSql.addLineStyleListener(sqlKeywords);
+    wSqlComposite.addLineStyleListener(sqlKeywords);
     getData();
     input.setChanged(changed);
 
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -370,16 +378,38 @@ public class TableInputDialog extends BaseTransformDialog {
   }
 
   public void setPosition() {
-    int lineNumber = wSql.getLineNumber();
-    int columnNumber = wSql.getColumnNumber();
+    int lineNumber = wSqlComposite.getLineNumber();
+    int columnNumber = wSqlComposite.getColumnNumber();
     wlPosition.setText(
         BaseMessages.getString(
             PKG, "TableInputDialog.Position.Label", "" + lineNumber, "" + columnNumber));
   }
 
+  private void loadSqlFromFileAndSetReadOnly() {
+    String path = variables.resolve(wSqlFromFile.getText());
+    if (Utils.isEmpty(path)) {
+      wSqlComposite.setEditable(true);
+      return;
+    }
+    try {
+      String content = HopVfs.getTextFileContent(path, StandardCharsets.UTF_8);
+      wSqlComposite.setText(content);
+      wSqlComposite.setEditable(false);
+    } catch (HopFileException e) {
+      MessageBox mb = new MessageBox(shell, SWT.OK | SWT.ICON_WARNING);
+      mb.setText(BaseMessages.getString(PKG, "TableInputDialog.DialogCaptionError"));
+      mb.setMessage(
+          BaseMessages.getString(PKG, "TableInputDialog.CouldNotLoadSqlFromFile", path)
+              + Const.CR
+              + e.getMessage());
+      mb.open();
+      wSqlComposite.setEditable(true);
+    }
+  }
+
   protected void setSqlToolTip() {
     if (wVariables.getSelection()) {
-      wSql.setToolTipText(variables.resolve(wSql.getText()));
+      wSqlComposite.setToolTipText(variables.resolve(wSqlComposite.getText()));
     }
   }
 
@@ -387,10 +417,17 @@ public class TableInputDialog extends BaseTransformDialog {
   public void getData() {
 
     if (input.getSql() != null) {
-      wSql.setText(input.getSql());
+      wSqlComposite.setText(input.getSql());
     }
     if (input.getConnection() != null) {
       wConnection.setText(input.getConnection());
+    }
+
+    wSqlFromFile.setText(Const.NVL(input.getSqlFromFile(), ""));
+    if (!Utils.isEmpty(wSqlFromFile.getText())) {
+      loadSqlFromFileAndSetReadOnly();
+    } else {
+      wSqlComposite.setEditable(true);
     }
 
     wLimit.setText(Const.NVL(input.getRowLimit(), ""));
@@ -400,9 +437,6 @@ public class TableInputDialog extends BaseTransformDialog {
 
     setSqlToolTip();
     setFlags();
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   private void cancel() {
@@ -416,9 +450,10 @@ public class TableInputDialog extends BaseTransformDialog {
     meta.setConnection(wConnection.getText());
 
     meta.setSql(
-        preview && !Utils.isEmpty(wSql.getSelectionText())
-            ? wSql.getSelectionText()
-            : wSql.getText());
+        preview && !Utils.isEmpty(wSqlComposite.getSelectionText())
+            ? wSqlComposite.getSelectionText()
+            : wSqlComposite.getText());
+    meta.setSqlFromFile(wSqlFromFile.getText());
 
     meta.setRowLimit(wLimit.getText());
     meta.setExecuteEachInputRow(wEachRow.getSelection());
@@ -462,7 +497,7 @@ public class TableInputDialog extends BaseTransformDialog {
                 + databaseMeta.getQuotedSchemaTableCombination(
                     variables, std.getSchemaName(), std.getTableName())
                 + Const.CR;
-        wSql.setText(sql);
+        wSqlComposite.setText(sql);
 
         MessageBox yn = new MessageBox(shell, SWT.YES | SWT.NO | SWT.CANCEL | SWT.ICON_QUESTION);
         yn.setMessage(BaseMessages.getString(PKG, "TableInputDialog.IncludeFieldNamesInSQL"));
@@ -472,7 +507,7 @@ public class TableInputDialog extends BaseTransformDialog {
           case SWT.CANCEL:
             break;
           case SWT.NO:
-            wSql.setText(sql);
+            wSqlComposite.setText(sql);
             break;
           case SWT.YES:
             Database db = new Database(loggingObject, variables, databaseMeta);
@@ -495,7 +530,7 @@ public class TableInputDialog extends BaseTransformDialog {
                         + databaseMeta.getQuotedSchemaTableCombination(
                             variables, std.getSchemaName(), std.getTableName())
                         + Const.CR;
-                wSql.setText(sql);
+                wSqlComposite.setText(sql);
               } else {
                 MessageBox mb = new MessageBox(shell, SWT.OK | SWT.ICON_ERROR);
                 mb.setMessage(
@@ -557,54 +592,56 @@ public class TableInputDialog extends BaseTransformDialog {
     TableInputMeta oneMeta = new TableInputMeta();
     getInfo(oneMeta, true);
 
-    EnterNumberDialog numberDialog =
-        new EnterNumberDialog(
+    int defaultRows = props.getDefaultPreviewSize();
+    PreviewTableSettingsDialog settingsDialog =
+        new PreviewTableSettingsDialog(shell, Math.max(1, defaultRows), variables, true);
+    PreviewTableSettingsDialog.Settings settings = settingsDialog.open();
+    if (settings == null) {
+      return;
+    }
+    int previewRows = settings.rowLimit > 0 ? settings.rowLimit : Math.max(1, defaultRows);
+    oneMeta.setRowLimit(Integer.toString(previewRows));
+
+    IVariables previewVariables = settingsDialog.getPreviewExecutionVariables();
+
+    PipelineMeta previewMeta =
+        PipelinePreviewFactory.generatePreviewPipeline(
+            pipelineMeta.getMetadataProvider(), oneMeta, wTransformName.getText());
+
+    PipelinePreviewProgressDialog progressDialog =
+        new PipelinePreviewProgressDialog(
             shell,
-            props.getDefaultPreviewSize(),
-            BaseMessages.getString(PKG, "TableInputDialog.EnterPreviewSize"),
-            BaseMessages.getString(PKG, "TableInputDialog.NumberOfRowsToPreview"));
-    int previewSize = numberDialog.open();
-    if (previewSize > 0) {
-      oneMeta.setRowLimit(Integer.toString(previewSize));
-      PipelineMeta previewMeta =
-          PipelinePreviewFactory.generatePreviewPipeline(
-              pipelineMeta.getMetadataProvider(), oneMeta, wTransformName.getText());
+            previewVariables,
+            previewMeta,
+            new String[] {wTransformName.getText()},
+            new int[] {previewRows});
+    progressDialog.open();
 
-      PipelinePreviewProgressDialog progressDialog =
-          new PipelinePreviewProgressDialog(
-              shell,
-              variables,
-              previewMeta,
-              new String[] {wTransformName.getText()},
-              new int[] {previewSize});
-      progressDialog.open();
+    Pipeline pipeline = progressDialog.getPipeline();
+    String loggingText = progressDialog.getLoggingText();
 
-      Pipeline pipeline = progressDialog.getPipeline();
-      String loggingText = progressDialog.getLoggingText();
-
-      if (!progressDialog.isCancelled()) {
-        if (pipeline.getResult() != null && pipeline.getResult().getNrErrors() > 0) {
-          EnterTextDialog etd =
-              new EnterTextDialog(
-                  shell,
-                  BaseMessages.getString(PKG, "System.Dialog.PreviewError.Title"),
-                  BaseMessages.getString(PKG, "System.Dialog.PreviewError.Message"),
-                  loggingText,
-                  true);
-          etd.setReadOnly();
-          etd.open();
-        } else {
-          PreviewRowsDialog prd =
-              new PreviewRowsDialog(
-                  shell,
-                  variables,
-                  SWT.NONE,
-                  wTransformName.getText(),
-                  progressDialog.getPreviewRowsMeta(wTransformName.getText()),
-                  progressDialog.getPreviewRows(wTransformName.getText()),
-                  loggingText);
-          prd.open();
-        }
+    if (!progressDialog.isCancelled()) {
+      if (pipeline.getResult() != null && pipeline.getResult().getNrErrors() > 0) {
+        EnterTextDialog etd =
+            new EnterTextDialog(
+                shell,
+                BaseMessages.getString(PKG, "System.Dialog.PreviewError.Title"),
+                BaseMessages.getString(PKG, "System.Dialog.PreviewError.Message"),
+                loggingText,
+                true);
+        etd.setReadOnly();
+        etd.open();
+      } else {
+        PreviewRowsDialog prd =
+            new PreviewRowsDialog(
+                shell,
+                variables,
+                SWT.NONE,
+                wTransformName.getText(),
+                progressDialog.getPreviewRowsMeta(wTransformName.getText()),
+                progressDialog.getPreviewRows(wTransformName.getText()),
+                loggingText);
+        prd.open();
       }
     }
   }

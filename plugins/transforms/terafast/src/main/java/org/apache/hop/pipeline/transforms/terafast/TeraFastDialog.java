@@ -54,7 +54,6 @@ import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
-import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
@@ -159,19 +158,8 @@ public class TeraFastDialog extends BaseTransformDialog {
    */
   @Override
   public String open() {
+    createShell(BaseMessages.getString(PKG, "TeraFastDialog.Shell.Title"));
     this.changed = this.meta.hasChanged();
-    final Shell parent = getParent();
-
-    this.shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MIN | SWT.MAX);
-    PropsUi.setLook(this.shell);
-    setShellImage(this.shell, this.meta);
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    this.shell.setLayout(formLayout);
-    this.shell.setText(BaseMessages.getString(PKG, "TeraFastDialog.Shell.Title"));
 
     buildUi();
     listeners();
@@ -209,6 +197,8 @@ public class TeraFastDialog extends BaseTransformDialog {
     this.meta.setChanged(this.changed);
     disableInputs();
 
+    focusTransformName();
+
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return this.transformName;
@@ -225,33 +215,45 @@ public class TeraFastDialog extends BaseTransformDialog {
 
   /** Set data values in dialog. */
   public void getData() {
-    setTextIfPropertyValue(this.meta.getFastloadPath(), this.wFastLoadPath);
-    setTextIfPropertyValue(this.meta.getControlFile(), this.wControlFile);
-    setTextIfPropertyValue(this.meta.getDataFile(), this.wDataFile);
-    setTextIfPropertyValue(this.meta.getLogFile(), this.wLogFile);
-    setTextIfPropertyValue(this.meta.getTargetTable(), this.wTable);
-    setTextIfPropertyValue(this.meta.getErrorLimit(), this.wErrLimit);
-    setTextIfPropertyValue(this.meta.getSessions(), this.wSessions);
-    setTextIfPropertyValue(this.meta.getConnectionName(), this.wConnection.getComboWidget());
-    this.wbTruncateTable.setSelection(this.meta.getTruncateTable().getValue());
-    this.wUseControlFile.setSelection(this.meta.getUseControlFile().getValue());
-    this.wVariableSubstitution.setSelection(this.meta.getVariableSubstitution().getValue());
-
-    if (this.meta.getTableFieldList().getValue().size()
-        == this.meta.getStreamFieldList().getValue().size()) {
-      for (int i = 0; i < this.meta.getTableFieldList().getValue().size(); i++) {
+    this.wFastLoadPath.setText(Const.NVL(this.meta.getFastloadPath(), ""));
+    if (this.wFastLoadPath.getText().isEmpty()) {
+      this.wFastLoadPath.setText(TeraFastMeta.DEFAULT_FASTLOAD_PATH);
+    }
+    this.wControlFile.setText(Const.NVL(this.meta.getControlFile(), ""));
+    this.wDataFile.setText(Const.NVL(this.meta.getDataFile(), ""));
+    if (this.wDataFile.getText().isEmpty()) {
+      this.wDataFile.setText(TeraFastMeta.DEFAULT_DATA_FILE);
+    }
+    this.wLogFile.setText(Const.NVL(this.meta.getLogFile(), ""));
+    this.wTable.setText(Const.NVL(this.meta.getTargetTable(), ""));
+    if (this.wTable.getText().isEmpty()) {
+      this.wTable.setText(TeraFastMeta.DEFAULT_TARGET_TABLE);
+    }
+    // Integer fields: always set from meta or default (evaluate() is false when value is 0)
+    Integer errLimit = this.meta.getErrorLimit();
+    this.wErrLimit.setText(
+        errLimit != null
+            ? String.valueOf(errLimit)
+            : String.valueOf(TeraFastMeta.DEFAULT_ERROR_LIMIT));
+    Integer sessions = this.meta.getSessions();
+    this.wSessions.setText(
+        sessions != null
+            ? String.valueOf(sessions)
+            : String.valueOf(TeraFastMeta.DEFAULT_SESSIONS));
+    this.wbTruncateTable.setSelection(this.meta.isTruncateTable());
+    this.wUseControlFile.setSelection(this.meta.isUseControlFile());
+    this.wVariableSubstitution.setSelection(this.meta.isVariableSubstitution());
+    if (this.meta.getTableFieldList().size() == this.meta.getStreamFieldList().size()) {
+      for (int i = 0; i < this.meta.getTableFieldList().size(); i++) {
         TableItem item = this.wReturn.table.getItem(i);
-        item.setText(1, this.meta.getTableFieldList().getValue().get(i));
-        item.setText(2, this.meta.getStreamFieldList().getValue().get(i));
+        item.setText(1, this.meta.getTableFieldList().get(i));
+        item.setText(2, this.meta.getStreamFieldList().get(i));
       }
     }
-    if (this.meta.getDbMeta() != null) {
-      this.wConnection.setText(this.meta.getConnectionName().getValue());
+    if (this.meta.getConnectionName() != null) {
+      this.wConnection.setText(this.meta.getConnectionName());
     }
     setTableFieldCombo();
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   /** Configure listeners. */
@@ -295,7 +297,7 @@ public class TeraFastDialog extends BaseTransformDialog {
       return;
     }
     // refresh fields
-    this.meta.getTargetTable().setValue(this.wTable.getText());
+    this.meta.setTargetTable(this.wTable.getText());
     try {
       targetFields = this.meta.getRequiredFields(variables);
     } catch (HopException e) {
@@ -399,32 +401,27 @@ public class TeraFastDialog extends BaseTransformDialog {
   /** Ok clicked. */
   public void ok() {
     this.transformName = this.wTransformName.getText(); // return value
-    this.meta.getUseControlFile().setValue(this.wUseControlFile.getSelection());
-    this.meta.getVariableSubstitution().setValue(this.wVariableSubstitution.getSelection());
-    this.meta.getControlFile().setValue(this.wControlFile.getText());
-    this.meta.getFastloadPath().setValue(this.wFastLoadPath.getText());
-    this.meta.getDataFile().setValue(this.wDataFile.getText());
-    this.meta.getLogFile().setValue(this.wLogFile.getText());
-    this.meta
-        .getErrorLimit()
-        .setValue(Const.toInt(this.wErrLimit.getText(), TeraFastMeta.DEFAULT_ERROR_LIMIT));
-    this.meta
-        .getSessions()
-        .setValue(Const.toInt(this.wSessions.getText(), TeraFastMeta.DEFAULT_SESSIONS));
-    this.meta.getTargetTable().setValue(this.wTable.getText());
-    this.meta.getConnectionName().setValue(this.wConnection.getText());
-    this.meta
-        .getTruncateTable()
-        .setValue(this.wbTruncateTable.getSelection() && this.wbTruncateTable.getEnabled());
-    this.meta.setDbMeta(this.pipelineMeta.findDatabase(this.wConnection.getText(), variables));
+    this.meta.setUseControlFile(this.wUseControlFile.getSelection());
+    this.meta.setVariableSubstitution(this.wVariableSubstitution.getSelection());
+    this.meta.setControlFile(this.wControlFile.getText());
+    this.meta.setFastloadPath(this.wFastLoadPath.getText());
+    this.meta.setDataFile(this.wDataFile.getText());
+    this.meta.setLogFile(this.wLogFile.getText());
+    this.meta.setErrorLimit(
+        Const.toInt(this.wErrLimit.getText(), TeraFastMeta.DEFAULT_ERROR_LIMIT));
+    this.meta.setSessions(Const.toInt(this.wSessions.getText(), TeraFastMeta.DEFAULT_SESSIONS));
+    this.meta.setTargetTable(this.wTable.getText());
+    this.meta.setConnectionName(this.wConnection.getText());
+    this.meta.setTruncateTable(
+        this.wbTruncateTable.getSelection() && this.wbTruncateTable.getEnabled());
 
-    this.meta.getTableFieldList().getValue().clear();
-    this.meta.getStreamFieldList().getValue().clear();
+    this.meta.getTableFieldList().clear();
+    this.meta.getStreamFieldList().clear();
     int nrFields = this.wReturn.nrNonEmpty();
     for (int i = 0; i < nrFields; i++) {
       TableItem item = this.wReturn.getNonEmpty(i);
-      this.meta.getTableFieldList().getValue().add(item.getText(1));
-      this.meta.getStreamFieldList().getValue().add(item.getText(2));
+      this.meta.getTableFieldList().add(item.getText(1));
+      this.meta.getStreamFieldList().add(item.getText(2));
     }
 
     dispose();
@@ -454,7 +451,7 @@ public class TeraFastDialog extends BaseTransformDialog {
           }
         };
 
-    this.buildTransformNameLine(factory);
+    // Transform name line is already created by createShell() in BaseTransformDialog
     this.buildUseControlFileLine(factory);
     this.buildControlFileLine(factory);
     this.buildVariableSubstitutionLine(factory);
@@ -462,7 +459,8 @@ public class TeraFastDialog extends BaseTransformDialog {
     this.buildLogFileLine(factory);
 
     // Connection line
-    this.wConnection = addConnectionLine(this.shell, this.wLogFile, meta.getDbMeta(), lsMod);
+    DatabaseMeta databaseMeta = pipelineMeta.findDatabase(meta.getConnectionName(), variables);
+    this.wConnection = addConnectionLine(this.shell, this.wLogFile, databaseMeta, lsMod);
     this.buildTableLine(factory);
     this.buildTruncateTableLine(factory);
     this.buildDataFileLine(factory);
@@ -540,7 +538,7 @@ public class TeraFastDialog extends BaseTransformDialog {
    * @param factory factory to use.
    */
   protected void buildUseControlFileLine(final PluginWidgetFactory factory) {
-    final Control topControl = this.wTransformName;
+    final Control topControl = this.wSpacer;
 
     Label wlUseControlFile =
         factory.createRightLabel(
@@ -602,24 +600,6 @@ public class TeraFastDialog extends BaseTransformDialog {
     formData = factory.createControlLayoutData(topControl);
     formData.right = new FormAttachment(this.wbLogFile, -factory.getMargin());
     this.wLogFile.setLayoutData(formData);
-  }
-
-  /**
-   * Build transform name line.
-   *
-   * @param factory factory to use.
-   */
-  protected void buildTransformNameLine(final PluginWidgetFactory factory) {
-    this.wlTransformName =
-        factory.createRightLabel(BaseMessages.getString(PKG, "TeraFastDialog.TransformName.Label"));
-    PropsUi.setLook(this.wlTransformName);
-    this.fdlTransformName = factory.createLabelLayoutData(null);
-    this.wlTransformName.setLayoutData(this.fdlTransformName);
-
-    this.wTransformName = factory.createSingleTextLeft(this.transformName);
-    PropsUi.setLook(this.wTransformName);
-    this.fdTransformName = factory.createControlLayoutData(null);
-    this.wTransformName.setLayoutData(this.fdTransformName);
   }
 
   /**

@@ -17,6 +17,7 @@
 
 package org.apache.hop.core.gui.plugin;
 
+import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -28,9 +29,14 @@ import java.util.Map;
 import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.vfs2.FileObject;
+import org.apache.commons.vfs2.FileSystemException;
+import org.apache.hop.core.Const;
 import org.apache.hop.core.action.GuiContextAction;
 import org.apache.hop.core.action.GuiContextActionFilter;
+import org.apache.hop.core.exception.HopFileException;
+import org.apache.hop.core.exception.HopXmlException;
 import org.apache.hop.core.gui.plugin.action.GuiAction;
 import org.apache.hop.core.gui.plugin.action.GuiActionFilter;
 import org.apache.hop.core.gui.plugin.callback.GuiCallback;
@@ -47,6 +53,10 @@ import org.apache.hop.core.gui.plugin.toolbar.GuiToolbarElementFilter;
 import org.apache.hop.core.gui.plugin.toolbar.GuiToolbarItem;
 import org.apache.hop.core.gui.plugin.toolbar.GuiToolbarItemFilter;
 import org.apache.hop.core.util.TranslateUtil;
+import org.apache.hop.core.vfs.HopVfs;
+import org.apache.hop.core.xml.XmlHandler;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
 
 /**
  * This singleton keeps track of the various GUI elements that are made plug-able by the developers.
@@ -102,6 +112,66 @@ public class GuiRegistry {
       guiRegistry = new GuiRegistry();
     }
     return guiRegistry;
+  }
+
+  private static List<String> disabledGuiElements;
+
+  /**
+   * Returns the list of GUI element IDs that should be disabled (excluded from the UI). Loaded from
+   * disabledGuiElements.xml in the application folder and/or config folder. Used
+   * by @GuiWidgetElement, @GuiToolbarElement, @GuiContextAction, @HopPerspectivePlugin, @GuiMenuElement, @GuiTab, @GuiKeyboardShortcut, @HopMetadata, @ExtensionPoint
+   * and @ConfigPlugin.
+   *
+   * @return List of exclusion IDs (never null)
+   */
+  public static List<String> getDisabledGuiElements() {
+    if (disabledGuiElements == null) {
+      disabledGuiElements = loadDisabledGuiElements();
+    }
+    return disabledGuiElements;
+  }
+
+  private static List<String> loadDisabledGuiElements() {
+    List<String> excluded = new ArrayList<>();
+    try {
+      FileObject applicationFolderFile = HopVfs.getFileObject("./disabledGuiElements.xml");
+      FileObject configFolderFile =
+          HopVfs.getFileObject(
+              Const.HOP_CONFIG_FOLDER + File.separator + "disabledGuiElements.xml");
+
+      if (applicationFolderFile.exists()) {
+        String path = applicationFolderFile.getPath().toAbsolutePath().toString();
+        Document document = XmlHandler.loadXmlFile(path);
+        Node exclusionsNode = XmlHandler.getSubNode(document, "exclusions");
+        if (exclusionsNode != null) {
+          List<Node> exclusionNodes = XmlHandler.getNodes(exclusionsNode, "exclusion");
+          for (Node exclusionNode : exclusionNodes) {
+            String text = exclusionNode.getTextContent();
+            if (text != null && !text.isBlank()) {
+              excluded.add(text.trim());
+            }
+          }
+        }
+      }
+
+      if (configFolderFile.exists()) {
+        String path = configFolderFile.getPath().toAbsolutePath().toString();
+        Document document = XmlHandler.loadXmlFile(path);
+        Node exclusionsNode = XmlHandler.getSubNode(document, "exclusions");
+        if (exclusionsNode != null) {
+          List<Node> exclusionNodes = XmlHandler.getNodes(exclusionsNode, "exclusion");
+          for (Node exclusionNode : exclusionNodes) {
+            String text = exclusionNode.getTextContent();
+            if (text != null && !text.isBlank()) {
+              excluded.add(text.trim());
+            }
+          }
+        }
+      }
+    } catch (HopXmlException | FileSystemException | HopFileException e) {
+      // ignore - file may not exist
+    }
+    return excluded;
   }
 
   /**
@@ -492,8 +562,36 @@ public class GuiRegistry {
     shortcuts.add(new KeyboardShortcut(shortcut, parentMethod));
   }
 
+  /**
+   * Returns keyboard shortcuts for the given class in a stable order: by method name, then by
+   * isOsx() (non-OSX before OSX). Callers (menus, config panel, key handler) then see a consistent
+   * modifier/key order and display order.
+   */
   public List<KeyboardShortcut> getKeyboardShortcuts(String parentClassName) {
-    return shortCutsMap.get(parentClassName);
+    List<KeyboardShortcut> list = shortCutsMap.get(parentClassName);
+    if (list == null) {
+      return null;
+    }
+    if (list.isEmpty()) {
+      return list;
+    }
+    List<KeyboardShortcut> sorted = new ArrayList<>(list);
+    sorted.sort(
+        (a, b) -> {
+          int c = a.getParentMethodName().compareTo(b.getParentMethodName());
+          if (c != 0) return c;
+          return Boolean.compare(a.isOsx(), b.isOsx());
+        });
+    return sorted;
+  }
+
+  /**
+   * Get all keyboard shortcuts from all registered classes
+   *
+   * @return Map of all keyboard shortcuts (className -> List of shortcuts)
+   */
+  public Map<String, List<KeyboardShortcut>> getAllKeyboardShortcuts() {
+    return shortCutsMap;
   }
 
   // Shortcuts are pretty much global so we'll look everywhere...

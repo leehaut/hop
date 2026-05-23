@@ -25,9 +25,11 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.apache.commons.lang.StringUtils;
+import lombok.Getter;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.RowMetaAndData;
+import org.apache.hop.core.config.HopConfig;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.RowMeta;
@@ -36,11 +38,14 @@ import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.core.vfs.HopVfs;
 import org.apache.hop.history.AuditEvent;
 import org.apache.hop.history.AuditManager;
+import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.PipelineSvgPainter;
+import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.dialog.BaseDialog;
 import org.apache.hop.ui.core.dialog.ErrorDialog;
 import org.apache.hop.ui.core.dialog.MessageBox;
+import org.apache.hop.ui.core.dialog.MessageDialogWithToggle;
 import org.apache.hop.ui.core.dialog.SelectRowDialog;
 import org.apache.hop.ui.core.gui.HopNamespace;
 import org.apache.hop.ui.hopgui.HopGui;
@@ -51,6 +56,8 @@ import org.apache.hop.ui.hopgui.file.pipeline.HopGuiPipelineGraph;
 import org.apache.hop.ui.hopgui.file.workflow.HopGuiWorkflowGraph;
 import org.apache.hop.ui.hopgui.perspective.IHopPerspective;
 import org.apache.hop.ui.hopgui.perspective.TabItemHandler;
+import org.apache.hop.ui.hopgui.perspective.execution.ExecutionPerspective;
+import org.apache.hop.ui.hopgui.perspective.explorer.ExplorerPerspective;
 import org.apache.hop.ui.util.EnvironmentUtils;
 import org.apache.hop.workflow.WorkflowMeta;
 import org.apache.hop.workflow.WorkflowSvgPainter;
@@ -58,15 +65,20 @@ import org.eclipse.swt.SWT;
 
 public class HopGuiFileDelegate {
 
+  private static final Class<?> PKG = BaseDialog.class;
   public static final String CONST_ERROR = "Error";
   private final HopGui hopGui;
 
+  /** Returns a boolean indicating whether the gui in the process of closing files. */
+  @Getter private boolean isClosing;
+
   public HopGuiFileDelegate(HopGui hopGui) {
     this.hopGui = hopGui;
+    this.isClosing = false;
   }
 
   public IHopFileTypeHandler getActiveFileTypeHandler() {
-    return hopGui.getActivePerspective().getActiveFileTypeHandler();
+    return hopGui.getActiveFileTypeHandler();
   }
 
   public void fileOpen() {
@@ -92,8 +104,12 @@ public class HopGuiFileDelegate {
   }
 
   public IHopFileTypeHandler fileOpen(String filename) throws Exception {
-    HopFileTypeRegistry fileRegistry = HopFileTypeRegistry.getInstance();
+    return fileOpen(filename, true);
+  }
 
+  public IHopFileTypeHandler fileOpen(String filename, boolean activatePerspective)
+      throws Exception {
+    HopFileTypeRegistry fileRegistry = HopFileTypeRegistry.getInstance();
     IHopFileType hopFile = fileRegistry.findHopFileType(filename);
     if (hopFile == null) {
       throw new HopException(
@@ -103,18 +119,37 @@ public class HopGuiFileDelegate {
               + filename
               + "'");
     }
+    return fileOpenWithType(filename, hopFile, activatePerspective);
+  }
 
+  /**
+   * Open a file with a specific file type. Used when restoring tabs so the same file can be
+   * reopened in different modes (e.g. pipeline and text).
+   */
+  public IHopFileTypeHandler fileOpenWithType(
+      String filename, IHopFileType hopFile, boolean activatePerspective) throws Exception {
     IHopFileTypeHandler fileTypeHandler = hopFile.openFile(hopGui, filename, hopGui.getVariables());
     if (fileTypeHandler != null) {
-      hopGui.handleFileCapabilities(hopFile, fileTypeHandler.hasChanged(), false, false);
+      hopGui.handleFileCapabilities(
+          hopFile, fileTypeHandler, fileTypeHandler.hasChanged(), false, false);
       if (EnvironmentUtils.getInstance().isWeb()) {
         // Do it again to test
-        hopGui.handleFileCapabilities(hopFile, fileTypeHandler.hasChanged(), false, false);
+        hopGui.handleFileCapabilities(
+            hopFile, fileTypeHandler, fileTypeHandler.hasChanged(), false, false);
       }
 
       // Also save the state of Hop GUI
       //
       hopGui.auditDelegate.writeLastOpenFiles();
+
+      // Switch to the perspective
+      //
+      if (activatePerspective) {
+        IHopPerspective perspective = hopGui.getPerspectiveManager().findPerspective(hopFile);
+        if (perspective != null) {
+          perspective.activate();
+        }
+      }
     }
 
     return fileTypeHandler;
@@ -196,7 +231,11 @@ public class HopGuiFileDelegate {
       IHopFileTypeHandler typeHandler = getActiveFileTypeHandler();
       IHopFileType fileType = typeHandler.getFileType();
       if (fileType.hasCapability(IHopFileType.CAPABILITY_CLOSE)) {
-        perspective.remove(typeHandler);
+        boolean removed = perspective.remove(typeHandler);
+        if (removed) {
+          hopGui.auditDelegate.writeLastOpenFiles();
+        }
+        return removed;
       }
     } catch (Exception e) {
       new ErrorDialog(hopGui.getActiveShell(), CONST_ERROR, "Error saving/closing file", e);
@@ -225,6 +264,7 @@ public class HopGuiFileDelegate {
   }
 
   public void closeAllFiles() {
+    this.isClosing = true;
     for (IHopPerspective perspective : hopGui.getPerspectiveManager().getPerspectives()) {
       List<TabItemHandler> tabItemHandlers = perspective.getItems();
       if (tabItemHandlers != null) {
@@ -237,6 +277,7 @@ public class HopGuiFileDelegate {
         }
       }
     }
+    this.isClosing = false;
   }
 
   /** When the app exits we need to see if all open files are saved in all perspectives... */
@@ -245,9 +286,68 @@ public class HopGuiFileDelegate {
     if (!saveGuardAllFiles()) {
       return false;
     }
+
+    // Check if we should ask the user for confirmation before exiting
+    //
+    PropsUi props = PropsUi.getInstance();
+    if (props.showExitWarning()) {
+      String title = BaseMessages.getString(PKG, "EnterOptionsDialog.AskOnExit.Label");
+      String message = BaseMessages.getString(PKG, "EnterOptionsDialog.AskOnExit.ConfirmMessage");
+      String toggleLabel =
+          BaseMessages.getString(PKG, "EnterOptionsDialog.AskOnExit.DoNotAskAgain");
+      String[] buttonLabels = {
+        BaseMessages.getString(PKG, "System.Button.Yes"),
+        BaseMessages.getString(PKG, "System.Button.No")
+      };
+
+      MessageDialogWithToggle dialog =
+          new MessageDialogWithToggle(
+              hopGui.getShell(),
+              title,
+              message,
+              SWT.ICON_QUESTION,
+              buttonLabels,
+              toggleLabel,
+              false);
+      int answer = dialog.open();
+
+      // If user checked "Do not ask this again", disable the exit warning
+      if (dialog.getToggleState()) {
+        props.setExitWarningShown(false);
+        try {
+          HopConfig.getInstance().saveToFile();
+        } catch (Exception e) {
+          new ErrorDialog(hopGui.getActiveShell(), CONST_ERROR, "Error saving configuration", e);
+        }
+      }
+
+      // Return code 0 is Yes, 1 is No
+      if (answer != 0) {
+        return false; // User chose not to exit
+      }
+    }
+
     // Also save all the open files in a list
     //
     hopGui.auditDelegate.writeLastOpenFiles();
+
+    // Save all open terminal tabs
+    //
+    if (hopGui.getTerminalPanel() != null) {
+      hopGui.getTerminalPanel().saveTerminalsOnShutdown();
+    }
+
+    // Save explorer perspective state (file explorer panel visibility)
+    //
+    ExplorerPerspective explorerPerspective = ExplorerPerspective.getInstance();
+    if (explorerPerspective != null) {
+      explorerPerspective.saveExplorerStateOnShutdown();
+    }
+
+    ExecutionPerspective executionPerspective = ExecutionPerspective.getInstance();
+    if (executionPerspective != null) {
+      executionPerspective.saveState();
+    }
 
     return true;
   }
@@ -285,7 +385,7 @@ public class HopGuiFileDelegate {
       RowMetaAndData row = rowDialog.open();
       if (row != null) {
         String filename = row.getString("filename", null);
-        hopGui.fileDelegate.fileOpen(filename);
+        fileOpen(filename);
       }
     } catch (Exception e) {
       new ErrorDialog(

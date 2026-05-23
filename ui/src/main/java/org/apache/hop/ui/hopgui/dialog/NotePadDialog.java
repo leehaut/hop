@@ -111,7 +111,7 @@ public class NotePadDialog extends Dialog {
   public NotePadMeta open() {
     Shell parent = getParent();
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN | SWT.NONE);
+    shell = new Shell(parent, BaseDialog.getDefaultDialogStyle());
     PropsUi.setLook(shell);
     shell.setImage(guiresource.getImageNote());
 
@@ -252,6 +252,7 @@ public class NotePadDialog extends Dialog {
             refreshTextNote();
           }
         });
+    PropsUi.setLook(wFontSize);
 
     // Font bold?
     Label wlFontBold = new Label(wNoteFontComp, SWT.RIGHT);
@@ -466,7 +467,7 @@ public class NotePadDialog extends Dialog {
     fdNoteFolder.left = new FormAttachment(0, 0);
     fdNoteFolder.top = new FormAttachment(0, margin);
     fdNoteFolder.right = new FormAttachment(100, 0);
-    fdNoteFolder.bottom = new FormAttachment(wOk, -2 * margin);
+    fdNoteFolder.bottom = new FormAttachment(wOk, -margin);
     wNoteFolder.setLayoutData(fdNoteFolder);
 
     getData();
@@ -488,6 +489,13 @@ public class NotePadDialog extends Dialog {
   }
 
   public void getData() {
+    PropsUi.getInstance()
+        .getDisplay()
+        .asyncExec(
+            () -> {
+              PropsUi.getInstance().getDisplay().update();
+            });
+
     if (notePadMeta != null) {
       wDesc.setText(Const.NVL(notePadMeta.getNote(), ""));
       wFontName.setText(
@@ -566,7 +574,10 @@ public class NotePadDialog extends Dialog {
   }
 
   private void ok() {
+    NotePadMeta originalNotePadMeta = notePadMeta;
+
     notePadMeta = new NotePadMeta();
+
     if (wDesc.getText() != null) {
       notePadMeta.setNote(wDesc.getText());
     }
@@ -576,19 +587,63 @@ public class NotePadDialog extends Dialog {
     notePadMeta.setFontSize(wFontSize.getSelection());
     notePadMeta.setFontBold(wFontBold.getSelection());
     notePadMeta.setFontItalic(wFontItalic.getSelection());
-    // font color
-    notePadMeta.setFontColorRed(wFontColor.getBackground().getRed());
-    notePadMeta.setFontColorGreen(wFontColor.getBackground().getGreen());
-    notePadMeta.setFontColorBlue(wFontColor.getBackground().getBlue());
-    // background color
-    notePadMeta.setBackGroundColorRed(wBackGroundColor.getBackground().getRed());
-    notePadMeta.setBackGroundColorGreen(wBackGroundColor.getBackground().getGreen());
-    notePadMeta.setBackGroundColorBlue(wBackGroundColor.getBackground().getBlue());
-    // border color
-    notePadMeta.setBorderColorRed(wBorderColor.getBackground().getRed());
-    notePadMeta.setBorderColorGreen(wBorderColor.getBackground().getGreen());
-    notePadMeta.setBorderColorBlue(wBorderColor.getBackground().getBlue());
+
+    RGB fontRGB =
+        new RGB(
+            wFontColor.getBackground().getRed(),
+            wFontColor.getBackground().getGreen(),
+            wFontColor.getBackground().getBlue());
+    RGB bgRGB =
+        new RGB(
+            wBackGroundColor.getBackground().getRed(),
+            wBackGroundColor.getBackground().getGreen(),
+            wBackGroundColor.getBackground().getBlue());
+    RGB borderRGB =
+        new RGB(
+            wBorderColor.getBackground().getRed(),
+            wBorderColor.getBackground().getGreen(),
+            wBorderColor.getBackground().getBlue());
+
+    if (originalNotePadMeta != null) { // Editing existing note
+      RGB originalFont =
+          new RGB(
+              originalNotePadMeta.getFontColorRed(),
+              originalNotePadMeta.getFontColorGreen(),
+              originalNotePadMeta.getFontColorBlue());
+      RGB originalBg =
+          new RGB(
+              originalNotePadMeta.getBackGroundColorRed(),
+              originalNotePadMeta.getBackGroundColorGreen(),
+              originalNotePadMeta.getBackGroundColorBlue());
+      RGB originalBorder =
+          new RGB(
+              originalNotePadMeta.getBorderColorRed(),
+              originalNotePadMeta.getBorderColorGreen(),
+              originalNotePadMeta.getBorderColorBlue());
+
+      fontRGB = keepOriginalColorIfUnchanged(originalFont, fontRGB);
+      bgRGB = keepOriginalColorIfUnchanged(originalBg, bgRGB);
+      borderRGB = keepOriginalColorIfUnchanged(originalBorder, borderRGB);
+    }
+
+    notePadMeta.setFontColorRed(fontRGB.red);
+    notePadMeta.setFontColorGreen(fontRGB.green);
+    notePadMeta.setFontColorBlue(fontRGB.blue);
+
+    notePadMeta.setBackGroundColorRed(bgRGB.red);
+    notePadMeta.setBackGroundColorGreen(bgRGB.green);
+    notePadMeta.setBackGroundColorBlue(bgRGB.blue);
+
+    notePadMeta.setBorderColorRed(borderRGB.red);
+    notePadMeta.setBorderColorGreen(borderRGB.green);
+    notePadMeta.setBorderColorBlue(borderRGB.blue);
+
     dispose();
+  }
+
+  private RGB keepOriginalColorIfUnchanged(RGB originalColor, RGB selectedColor) {
+    RGB displayedOriginalColor = props.contrastColor(originalColor);
+    return selectedColor.equals(displayedOriginalColor) ? originalColor : selectedColor;
   }
 
   private void refreshTextNote() {

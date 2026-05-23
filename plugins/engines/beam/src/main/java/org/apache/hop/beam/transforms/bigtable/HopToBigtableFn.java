@@ -30,6 +30,7 @@ import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.values.KV;
 import org.apache.hop.beam.core.BeamHop;
 import org.apache.hop.beam.core.HopRow;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.row.JsonRowMeta;
@@ -84,8 +85,8 @@ public class HopToBigtableFn extends DoFn<HopRow, KV<ByteString, Iterable<Mutati
       JSONArray array = (JSONArray) parser.parse(columnsJson);
       columns = new ArrayList<>();
       sourceFieldIndexes = new ArrayList<>();
-      for (int i = 0; i < array.size(); i++) {
-        JSONObject jc = (JSONObject) array.get(i);
+      for (Object o : array) {
+        JSONObject jc = (JSONObject) o;
         String qualifier = (String) jc.get("qualifier");
         String family = (String) jc.get("family");
         String sourceField = (String) jc.get("field");
@@ -97,7 +98,7 @@ public class HopToBigtableFn extends DoFn<HopRow, KV<ByteString, Iterable<Mutati
     } catch (Exception e) {
       errorCounter.inc();
       LOG.info("Parse error on setup of Hop data to Bigtable KV : " + e.getMessage());
-      throw new RuntimeException("Error on setup of converting Hop data to Bigtable KV", e);
+      throw new HopRuntimeException("Error on setup of converting Hop data to Bigtable KV", e);
     }
   }
 
@@ -136,7 +137,7 @@ public class HopToBigtableFn extends DoFn<HopRow, KV<ByteString, Iterable<Mutati
     } catch (Exception e) {
       errorCounter.inc();
       LOG.info("Conversion error HopRow to Bigtable KV : " + e.getMessage());
-      throw new RuntimeException("Error converting HopRow to Bigtable KV", e);
+      throw new HopRuntimeException("Error converting HopRow to Bigtable KV", e);
     }
   }
 

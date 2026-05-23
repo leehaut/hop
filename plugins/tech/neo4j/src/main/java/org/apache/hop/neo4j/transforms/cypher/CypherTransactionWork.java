@@ -20,11 +20,12 @@ package org.apache.hop.neo4j.transforms.cypher;
 
 import java.util.Map;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.neo4j.driver.Result;
-import org.neo4j.driver.Transaction;
-import org.neo4j.driver.TransactionWork;
+import org.neo4j.driver.TransactionCallback;
+import org.neo4j.driver.TransactionContext;
 
-public class CypherTransactionWork implements TransactionWork<Void> {
+public class CypherTransactionWork implements TransactionCallback<Void> {
   private final Cypher transform;
   private final Object[] currentRow;
   private final boolean unwind;
@@ -45,13 +46,13 @@ public class CypherTransactionWork implements TransactionWork<Void> {
   }
 
   @Override
-  public Void execute(Transaction tx) {
+  public Void execute(TransactionContext tx) {
     try {
       Result result = tx.run(cypher, unwindMap);
       transform.getResultRows(result, currentRow, unwind);
       return null;
     } catch (HopException e) {
-      throw new RuntimeException("Unable to execute cypher statement '" + cypher + "'", e);
+      throw new HopRuntimeException("Unable to execute cypher statement '" + cypher + "'", e);
     }
   }
 

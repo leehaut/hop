@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.CheckResult;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.ICheckResult;
@@ -31,7 +31,6 @@ import org.apache.hop.core.annotations.Transform;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopPluginException;
 import org.apache.hop.core.exception.HopTransformException;
-import org.apache.hop.core.exception.HopXmlException;
 import org.apache.hop.core.file.IHasFilename;
 import org.apache.hop.core.logging.LogChannel;
 import org.apache.hop.core.row.IRowMeta;
@@ -84,7 +83,9 @@ public class WorkflowExecutorMeta
   private static final Class<?> PKG = WorkflowExecutorMeta.class;
 
   /** The name of the workflow run configuration to execute with */
-  @HopMetadataProperty(key = "run_configuration")
+  @HopMetadataProperty(
+      key = "run_configuration",
+      hopMetadataPropertyType = HopMetadataPropertyType.WORKFLOW_RUN_CONFIG)
   private String runConfigurationName;
 
   @HopMetadataProperty(
@@ -229,33 +230,21 @@ public class WorkflowExecutorMeta
     super(); // allocate BaseTransformMeta
   }
 
-  /**
-   * @deprecated keep for backwards compatibility
-   * @param transformNode the XML of the transform node
-   * @param metadataProvider the metadata provider
-   * @throws HopXmlException when unable to parse the XML
-   */
+  /** Added for backwards compatibility with older parameter style XML. */
   @Override
-  @Deprecated(since = "2.13")
-  public void loadXml(Node transformNode, IHopMetadataProvider metadataProvider)
-      throws HopXmlException {
-    try {
-      super.loadXml(transformNode, metadataProvider);
+  public void convertLegacyXml(Node node) throws HopException {
+    if (node == null) {
+      return;
+    }
 
-      // Load inherit_all_vars
-      //
-      String value =
-          XmlHandler.getTagValue(
-              XmlHandler.getSubNode(transformNode, "parameters"), "inherit_all_vars");
-      if (value != null) {
-        setInheritingAllVariables("Y".equalsIgnoreCase(value));
-      }
-
-    } catch (Exception e) {
-      throw new HopXmlException(
-          BaseMessages.getString(
-              PKG, "WorkflowExecutorMeta.Exception.ErrorLoadingJobExecutorDetailsFromXML"),
-          e);
+    // Load inherit_all_vars from the old nested location under <parameters>
+    Node parametersNode = XmlHandler.getSubNode(node, "parameters");
+    if (parametersNode == null) {
+      return;
+    }
+    String value = XmlHandler.getTagValue(parametersNode, "inherit_all_vars");
+    if (value != null) {
+      setInheritingAllVariables("Y".equalsIgnoreCase(value));
     }
   }
 
@@ -300,19 +289,19 @@ public class WorkflowExecutorMeta
     row.clear();
 
     if (nextTransform != null && nextTransform.equals(resultRowsTargetTransformMeta)) {
-      for (int i = 0; i < resultRowsField.size(); i++) {
+      for (WorkflowExecutorResultRows workflowExecutorResultRows : resultRowsField) {
         IValueMeta value;
         try {
           value =
               ValueMetaFactory.createValueMeta(
-                  resultRowsField.get(i).getName(),
-                  ValueMetaFactory.getIdForValueMeta(resultRowsField.get(i).getType()),
-                  resultRowsField.get(i).getLength(),
-                  resultRowsField.get(i).getPrecision());
+                  workflowExecutorResultRows.getName(),
+                  ValueMetaFactory.getIdForValueMeta(workflowExecutorResultRows.getType()),
+                  workflowExecutorResultRows.getLength(),
+                  workflowExecutorResultRows.getPrecision());
         } catch (HopPluginException e) {
-          value = new ValueMetaNone(resultRowsField.get(i).getName());
+          value = new ValueMetaNone(workflowExecutorResultRows.getName());
           value.setLength(
-              resultRowsField.get(i).getLength(), resultRowsField.get(i).getPrecision());
+              workflowExecutorResultRows.getLength(), workflowExecutorResultRows.getPrecision());
         }
         row.addValueMeta(value);
       }
@@ -627,12 +616,15 @@ public class WorkflowExecutorMeta
     switch (index) {
       case 0:
         setExecutionResultTargetTransformMeta(transform);
+        setExecutionResultTargetTransform(transform.getName());
         break;
       case 1:
         setResultRowsTargetTransformMeta(transform);
+        setResultRowsTargetTransform(transform.getName());
         break;
       case 2:
         setResultFilesTargetTransformMeta(transform);
+        setResultFilesTargetTransform(transform.getName());
         break;
       default:
         break;
@@ -706,8 +698,11 @@ public class WorkflowExecutorMeta
   @Override
   public boolean cleanAfterHopFromRemove() {
     setExecutionResultTargetTransformMeta(null);
+    setExecutionResultTargetTransform(null);
     setResultRowsTargetTransformMeta(null);
+    setResultRowsTargetTransform(null);
     setResultFilesTargetTransformMeta(null);
+    setResultFilesTargetTransform(null);
     return true;
   }
 
@@ -723,16 +718,24 @@ public class WorkflowExecutorMeta
     if (getExecutionResultTargetTransformMeta() != null
         && toTransformName.equals(getExecutionResultTargetTransformMeta().getName())) {
       setExecutionResultTargetTransformMeta(null);
+      setExecutionResultTargetTransform(null);
       hasChanged = true;
     } else if (getResultRowsTargetTransformMeta() != null
         && toTransformName.equals(getResultRowsTargetTransformMeta().getName())) {
       setResultRowsTargetTransformMeta(null);
+      setResultRowsTargetTransform(null);
       hasChanged = true;
     } else if (getResultFilesTargetTransformMeta() != null
         && toTransformName.equals(getResultFilesTargetTransformMeta().getName())) {
       setResultFilesTargetTransformMeta(null);
+      setResultFilesTargetTransform(null);
       hasChanged = true;
     }
     return hasChanged;
+  }
+
+  @Override
+  public boolean supportsDrillDown() {
+    return true;
   }
 }

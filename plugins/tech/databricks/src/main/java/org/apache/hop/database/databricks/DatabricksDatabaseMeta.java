@@ -22,7 +22,7 @@ import java.util.Arrays;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.database.BaseDatabaseMeta;
 import org.apache.hop.core.database.DatabaseMeta;
 import org.apache.hop.core.database.DatabaseMetaPlugin;
@@ -143,16 +143,6 @@ public class DatabricksDatabaseMeta extends BaseDatabaseMeta implements IDatabas
   }
 
   @Override
-  public boolean isSupportsBooleanDataType() {
-    return true;
-  }
-
-  @Override
-  public boolean isSupportsTimestampDataType() {
-    return true;
-  }
-
-  @Override
   public boolean isSupportsOptionsInURL() {
     return true;
   }
@@ -201,5 +191,11 @@ public class DatabricksDatabaseMeta extends BaseDatabaseMeta implements IDatabas
   @Override
   public boolean isRequiresName() {
     return false;
+  }
+
+  @Override
+  public void addDefaultOptions() {
+    setSupportsBooleanDataType(true);
+    setSupportsTimestampDataType(true);
   }
 }

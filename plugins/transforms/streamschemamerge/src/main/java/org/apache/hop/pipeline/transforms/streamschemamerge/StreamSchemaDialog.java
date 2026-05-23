@@ -17,14 +17,10 @@
 
 package org.apache.hop.pipeline.transforms.streamschemamerge;
 
-import java.util.List;
+import org.apache.hop.core.Const;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.pipeline.PipelineMeta;
-import org.apache.hop.pipeline.transform.TransformMeta;
-import org.apache.hop.pipeline.transform.stream.IStream;
-import org.apache.hop.pipeline.transform.stream.Stream;
-import org.apache.hop.pipeline.transform.stream.StreamIcon;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.dialog.BaseDialog;
 import org.apache.hop.ui.core.widget.ColumnInfo;
@@ -34,13 +30,10 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
-import org.eclipse.swt.layout.FormLayout;
-import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 public class StreamSchemaDialog extends BaseTransformDialog {
 
@@ -73,14 +66,13 @@ public class StreamSchemaDialog extends BaseTransformDialog {
    */
   @Override
   public String open() {
+    createShell(BaseMessages.getString(PKG, "StreamSchemaTransform.Shell.Title"));
 
-    // store some convenient SWT variables
-    Shell parent = getParent();
-
-    // SWT code for preparing the dialog
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MIN | SWT.MAX);
-    PropsUi.setLook(shell);
-    setShellImage(shell, meta);
+    buildButtonBar()
+        .ok(e -> ok())
+        .get(e -> getSourceTransformNames())
+        .cancel(e -> cancel())
+        .build();
 
     // Save the value of the changed flag on the meta object. If the user cancels
     // the dialog, it will be restored to this saved value.
@@ -91,50 +83,6 @@ public class StreamSchemaDialog extends BaseTransformDialog {
     // indicate that changes are being made.
     ModifyListener lsMod = e -> meta.setChanged();
 
-    // ------------------------------------------------------- //
-    // SWT code for building the actual settings dialog        //
-    // ------------------------------------------------------- //
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "StreamSchemaTransform.Shell.Title"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // TransformName line
-    Label wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "System.TransformName.Label"));
-    wlTransformName.setToolTipText(BaseMessages.getString(PKG, "System.TransformName.Tooltip"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
-
-    // OK, get and cancel buttons
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wGet = new Button(shell, SWT.PUSH);
-    wGet.setText(BaseMessages.getString(PKG, "StreamSchema.getPreviousTransforms.Label"));
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-
-    setButtonPositions(new Button[] {wOk, wGet, wCancel}, margin, null);
-
     // Table with fields for inputting transform names
     Label wlTransforms = new Label(shell, SWT.NONE);
     wlTransforms.setText(
@@ -142,29 +90,27 @@ public class StreamSchemaDialog extends BaseTransformDialog {
     PropsUi.setLook(wlTransforms);
     FormData fdlTransforms = new FormData();
     fdlTransforms.left = new FormAttachment(0, 0);
-    fdlTransforms.top = new FormAttachment(wTransformName, margin);
+    fdlTransforms.top = new FormAttachment(wSpacer, margin);
     wlTransforms.setLayoutData(fdlTransforms);
-
-    final int FieldsCols = 1;
-    final int FieldsRows = meta.getNumberOfTransforms();
 
     previousTransforms = pipelineMeta.getPrevTransformNames(transformName);
 
-    ColumnInfo[] colinf = new ColumnInfo[FieldsCols];
-    colinf[0] =
-        new ColumnInfo(
-            BaseMessages.getString(PKG, "StreamSchemaTransformDialog.TransformName.Column"),
-            ColumnInfo.COLUMN_TYPE_CCOMBO,
-            previousTransforms,
-            false);
+    ColumnInfo[] columnInfos =
+        new ColumnInfo[] {
+          new ColumnInfo(
+              BaseMessages.getString(PKG, "StreamSchemaTransformDialog.TransformName.Column"),
+              ColumnInfo.COLUMN_TYPE_CCOMBO,
+              previousTransforms,
+              false)
+        };
 
     wTransforms =
         new TableView(
             variables,
             shell,
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
-            colinf,
-            FieldsRows,
+            columnInfos,
+            1,
             lsMod,
             props);
 
@@ -172,13 +118,8 @@ public class StreamSchemaDialog extends BaseTransformDialog {
     fdTransforms.left = new FormAttachment(0, 0);
     fdTransforms.top = new FormAttachment(wlTransforms, margin);
     fdTransforms.right = new FormAttachment(100, 0);
-    fdTransforms.bottom = new FormAttachment(wOk, -2 * margin);
+    fdTransforms.bottom = new FormAttachment(wOk, -margin);
     wTransforms.setLayoutData(fdTransforms);
-
-    // Add listeners for cancel and OK
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    wOk.addListener(SWT.Selection, e -> ok());
-    wGet.addListener(SWT.Selection, e -> get());
 
     // populate the dialog with the values from the meta object
     populateDialog();
@@ -188,6 +129,7 @@ public class StreamSchemaDialog extends BaseTransformDialog {
     meta.setChanged(changed);
 
     // open dialog and enter event loop
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     // at this point the dialog has closed, so either ok() or cancel() have been executed
@@ -200,40 +142,23 @@ public class StreamSchemaDialog extends BaseTransformDialog {
    * the dialog controls.
    */
   private void populateDialog() {
-    Table table = wTransforms.table;
-    if (meta.getNumberOfTransforms() > 0) {
-      table.removeAll();
+    for (StreamSchemaMeta.TransformToMerge transformToMerge : meta.getTransformsToMerge()) {
+      TableItem ti = new TableItem(wTransforms.table, SWT.NONE);
+      ti.setText(1, Const.NVL(transformToMerge.getName(), ""));
     }
-    String[] transformNames = meta.getTransformsToMerge();
-    for (int i = 0; i < transformNames.length; i++) {
-      TableItem ti = new TableItem(table, SWT.NONE);
-      ti.setText(0, "" + (i + 1));
-      if (transformNames[i] != null) {
-        ti.setText(1, transformNames[i]);
-      }
-    }
-
-    wTransforms.removeEmptyRows();
-    wTransforms.setRowNums();
-    wTransforms.optWidth(true);
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
+    wTransforms.optimizeTableView();
   }
 
   /** Populates the table with a list of fields that have incoming hops */
-  private void get() {
+  private void getSourceTransformNames() {
     wTransforms.removeAll();
     Table table = wTransforms.table;
 
-    for (int i = 0; i < previousTransforms.length; i++) {
+    for (String previousTransform : previousTransforms) {
       TableItem ti = new TableItem(table, SWT.NONE);
-      ti.setText(0, "" + (i + 1));
-      ti.setText(1, previousTransforms[i]);
+      ti.setText(1, previousTransform);
     }
-    wTransforms.removeEmptyRows();
-    wTransforms.setRowNums();
-    wTransforms.optWidth(true);
+    wTransforms.optimizeTableView();
   }
 
   /** Called when the user cancels the dialog. */
@@ -247,42 +172,6 @@ public class StreamSchemaDialog extends BaseTransformDialog {
     dispose();
   }
 
-  /**
-   * Helping method to update meta information when ok is selected
-   *
-   * @param inputTransforms Names of the transforms that are being merged together
-   */
-  private void getMeta(String[] inputTransforms) {
-    List<IStream> infoStreams = meta.getTransformIOMeta().getInfoStreams();
-
-    if (infoStreams.isEmpty() || inputTransforms.length < infoStreams.size()) {
-      if (inputTransforms.length != 0) {
-        for (String inputTransform : inputTransforms) {
-          meta.getTransformIOMeta()
-              .addStream(new Stream(IStream.StreamType.INFO, null, "", StreamIcon.INFO, null));
-        }
-        infoStreams = meta.getTransformIOMeta().getInfoStreams();
-      }
-    } else if (infoStreams.size() < inputTransforms.length) {
-      int requiredStreams = inputTransforms.length - infoStreams.size();
-
-      for (int i = 0; i < requiredStreams; i++) {
-        meta.getTransformIOMeta()
-            .addStream(new Stream(IStream.StreamType.INFO, null, "", StreamIcon.INFO, null));
-      }
-      infoStreams = meta.getTransformIOMeta().getInfoStreams();
-    }
-    int streamCount = infoStreams.size();
-
-    String[] transformsToMerge = meta.getTransformsToMerge();
-    for (int i = 0; i < streamCount; i++) {
-      String transform = transformsToMerge[i];
-      IStream infoStream = infoStreams.get(i);
-      infoStream.setTransformMeta(pipelineMeta.findTransform(transform));
-      infoStream.setSubject(transform);
-    }
-  }
-
   /** Called when the user confirms the dialog */
   private void ok() {
     // The "TransformName" variable will be the return value for the open() method.
@@ -290,17 +179,13 @@ public class StreamSchemaDialog extends BaseTransformDialog {
     transformName = wTransformName.getText();
     // set output field name
 
-    int nrtransforms = wTransforms.nrNonEmpty();
-    String[] transformNames = new String[nrtransforms];
-    for (int i = 0; i < nrtransforms; i++) {
-      TableItem ti = wTransforms.getNonEmpty(i);
-      TransformMeta tm = pipelineMeta.findTransform(ti.getText(1));
-      if (tm != null) {
-        transformNames[i] = tm.getName();
-      }
+    meta.getTransformsToMerge().clear();
+    for (TableItem item : wTransforms.getNonEmptyItems()) {
+      StreamSchemaMeta.TransformToMerge transformToMerge = new StreamSchemaMeta.TransformToMerge();
+      transformToMerge.setName(item.getText(1));
+      meta.getTransformsToMerge().add(transformToMerge);
     }
-    meta.setTransformsToMerge(transformNames);
-    getMeta(transformNames);
+    meta.resetTransformIoMeta();
 
     // close the SWT dialog window
     dispose();

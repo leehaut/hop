@@ -144,7 +144,7 @@ public class TokenReplacementDialog extends BaseTransformDialog {
 
   private TableView wFields;
 
-  private ColumnInfo[] colinf;
+  private ColumnInfo[] columnInfos;
 
   private final TokenReplacementMeta input;
 
@@ -165,61 +165,49 @@ public class TokenReplacementDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "TokenReplacementDialog.DialogTitle"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
     ModifyListener lsMod = e -> input.setChanged();
     changed = input.hasChanged();
 
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "TokenReplacementDialog.DialogTitle"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // Buttons at the bottom
-    //
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wCancel}, margin, null);
-
-    // Transform name line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "System.TransformName.Label"));
-    wlTransformName.setToolTipText(BaseMessages.getString(PKG, "System.TransformName.Tooltip"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
-
     CTabFolder wTabFolder = new CTabFolder(shell, SWT.BORDER);
     PropsUi.setLook(wTabFolder, Props.WIDGET_STYLE_TAB);
 
-    // ////////////////////////
-    // START OF INPUT TAB///
-    // /
+    addInputTab(wTabFolder, lsMod);
+    addOutputTab(wTabFolder, lsMod);
+    addTokensTab(wTabFolder, lsMod);
+
+    FormData fdTabFolder = new FormData();
+    fdTabFolder.left = new FormAttachment(0, 0);
+    fdTabFolder.top = new FormAttachment(wSpacer, margin);
+    fdTabFolder.right = new FormAttachment(100, 0);
+    fdTabFolder.bottom = new FormAttachment(wOk, -margin);
+    wTabFolder.setLayoutData(fdTabFolder);
+
+    lsResize =
+        event -> {
+          Point size = shell.getSize();
+          wFields.setSize(size.x - 10, size.y - 50);
+          wFields.table.setSize(size.x - 10, size.y - 50);
+          wFields.redraw();
+        };
+    shell.addListener(SWT.Resize, lsResize);
+
+    wTabFolder.setSelection(0);
+
+    getData();
+    input.setChanged(changed);
+    updateInputType();
+    updateOutputType();
+    focusTransformName();
+    BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
+
+    return transformName;
+  }
+
+  private void addInputTab(CTabFolder wTabFolder, ModifyListener lsMod) {
     CTabItem wInputTab = new CTabItem(wTabFolder, SWT.NONE);
     wInputTab.setFont(GuiResource.getInstance().getFontDefault());
     wInputTab.setText(BaseMessages.getString(PKG, "TokenReplacementDialog.InputTab.TabTitle"));
@@ -267,7 +255,7 @@ public class TokenReplacementDialog extends BaseTransformDialog {
 
     /////////////////////
     // Input text group
-    gInputText = new Group(wInputComp, SWT.SHADOW_ETCHED_IN);
+    gInputText = new Group(wInputComp, SWT.SHADOW_NONE);
     gInputText.setText(BaseMessages.getString(PKG, "TokenReplacementDialog.InputTextGroup.Label"));
     FormLayout inputTextLayout = new FormLayout();
     inputTextLayout.marginWidth = 3;
@@ -300,13 +288,13 @@ public class TokenReplacementDialog extends BaseTransformDialog {
     FormData fdgInputText = new FormData();
     fdgInputText.left = new FormAttachment(0, 0);
     fdgInputText.right = new FormAttachment(100, 0);
-    fdgInputText.top = new FormAttachment(wInputType, margin * 2);
-    fdgInputText.bottom = new FormAttachment(100, -margin * 2);
+    fdgInputText.top = new FormAttachment(wInputType, margin);
+    fdgInputText.bottom = new FormAttachment(100, -margin);
     gInputText.setLayoutData(fdgInputText);
 
     /////////////////////
     // Input field group
-    gInputField = new Group(wInputComp, SWT.SHADOW_ETCHED_IN);
+    gInputField = new Group(wInputComp, SWT.SHADOW_NONE);
     gInputField.setText(
         BaseMessages.getString(PKG, "TokenReplacementDialog.InputFieldGroup.Label"));
     FormLayout inputFieldLayout = new FormLayout();
@@ -354,12 +342,12 @@ public class TokenReplacementDialog extends BaseTransformDialog {
     FormData fdgInputField = new FormData();
     fdgInputField.left = new FormAttachment(0, 0);
     fdgInputField.right = new FormAttachment(100, 0);
-    fdgInputField.top = new FormAttachment(wInputType, margin * 2);
+    fdgInputField.top = new FormAttachment(wInputType, margin);
     gInputField.setLayoutData(fdgInputField);
 
     /////////////////////
     // Input file group
-    gInputFile = new Group(wInputComp, SWT.SHADOW_ETCHED_IN);
+    gInputFile = new Group(wInputComp, SWT.SHADOW_NONE);
     gInputFile.setText(BaseMessages.getString(PKG, "TokenReplacementDialog.InputFileGroup.Label"));
     FormLayout inputFileLayout = new FormLayout();
     inputFileLayout.marginWidth = 3;
@@ -385,6 +373,16 @@ public class TokenReplacementDialog extends BaseTransformDialog {
     fdbInputFilename.right = new FormAttachment(100, 0);
     fdbInputFilename.top = new FormAttachment(0, 0);
     wbInputFilename.setLayoutData(fdbInputFilename);
+    wbInputFilename.addListener(
+        SWT.Selection,
+        e ->
+            BaseDialog.presentFileDialog(
+                shell,
+                wInputFilename,
+                variables,
+                new String[] {"*"},
+                new String[] {BaseMessages.getString(PKG, "System.FileType.AllFiles")},
+                true));
 
     wInputFilename = new TextVar(variables, gInputFile, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wInputFilename);
@@ -394,6 +392,9 @@ public class TokenReplacementDialog extends BaseTransformDialog {
     fdInputFilename.top = new FormAttachment(0, margin);
     fdInputFilename.right = new FormAttachment(wbInputFilename, -margin);
     wInputFilename.setLayoutData(fdInputFilename);
+    // Whenever something changes, set the tooltip to the expanded version:
+    wInputFilename.addModifyListener(
+        e -> wInputFilename.setToolTipText(variables.resolve(wInputFilename.getText())));
 
     // File name in field line
     //
@@ -491,7 +492,7 @@ public class TokenReplacementDialog extends BaseTransformDialog {
     FormData fdgInputFile = new FormData();
     fdgInputFile.left = new FormAttachment(0, 0);
     fdgInputFile.right = new FormAttachment(100, 0);
-    fdgInputFile.top = new FormAttachment(wInputType, margin * 2);
+    fdgInputFile.top = new FormAttachment(wInputType, margin);
     gInputFile.setLayoutData(fdgInputFile);
 
     FormData fdInputComp = new FormData();
@@ -503,10 +504,9 @@ public class TokenReplacementDialog extends BaseTransformDialog {
 
     wInputComp.layout();
     wInputTab.setControl(wInputComp);
+  }
 
-    // ////////////////////////
-    // START OF OUTPUT TAB///
-    // /
+  private void addOutputTab(CTabFolder wTabFolder, ModifyListener lsMod) {
     CTabItem wOutputTab = new CTabItem(wTabFolder, SWT.NONE);
     wOutputTab.setFont(GuiResource.getInstance().getFontDefault());
     wOutputTab.setText(BaseMessages.getString(PKG, "TokenReplacementDialog.OutputTab.TabTitle"));
@@ -554,7 +554,7 @@ public class TokenReplacementDialog extends BaseTransformDialog {
 
     /////////////////////
     // Output field group
-    gOutputField = new Group(wOutputComp, SWT.SHADOW_ETCHED_IN);
+    gOutputField = new Group(wOutputComp, SWT.SHADOW_NONE);
     gOutputField.setText(
         BaseMessages.getString(PKG, "TokenReplacementDialog.OutputFieldGroup.Label"));
     FormLayout outputFieldLayout = new FormLayout();
@@ -588,12 +588,12 @@ public class TokenReplacementDialog extends BaseTransformDialog {
     FormData fdgOutputField = new FormData();
     fdgOutputField.left = new FormAttachment(0, 0);
     fdgOutputField.right = new FormAttachment(100, 0);
-    fdgOutputField.top = new FormAttachment(wOutputType, margin * 2);
+    fdgOutputField.top = new FormAttachment(wOutputType, margin);
     gOutputField.setLayoutData(fdgOutputField);
 
     /////////////////////
     // Output file group
-    gOutputFile = new Group(wOutputComp, SWT.SHADOW_ETCHED_IN);
+    gOutputFile = new Group(wOutputComp, SWT.SHADOW_NONE);
     gOutputFile.setText(
         BaseMessages.getString(PKG, "TokenReplacementDialog.OutputFileGroup.Label"));
     FormLayout outputFileLayout = new FormLayout();
@@ -620,6 +620,16 @@ public class TokenReplacementDialog extends BaseTransformDialog {
     fdbOutputFilename.right = new FormAttachment(100, 0);
     fdbOutputFilename.top = new FormAttachment(0, 0);
     wbOutputFilename.setLayoutData(fdbOutputFilename);
+    wbOutputFilename.addListener(
+        SWT.Selection,
+        e ->
+            BaseDialog.presentFileDialog(
+                shell,
+                wOutputFilename,
+                variables,
+                new String[] {"*"},
+                new String[] {BaseMessages.getString(PKG, "System.FileType.AllFiles")},
+                true));
 
     wOutputFilename = new TextVar(variables, gOutputFile, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wOutputFilename);
@@ -629,6 +639,9 @@ public class TokenReplacementDialog extends BaseTransformDialog {
     fdOutputFilename.top = new FormAttachment(0, margin);
     fdOutputFilename.right = new FormAttachment(wbOutputFilename, -margin);
     wOutputFilename.setLayoutData(fdOutputFilename);
+    // Whenever something changes, set the tooltip to the expanded version:
+    wOutputFilename.addModifyListener(
+        e -> wOutputFilename.setToolTipText(variables.resolve(wOutputFilename.getText())));
 
     // File name in field line
     //
@@ -1026,7 +1039,7 @@ public class TokenReplacementDialog extends BaseTransformDialog {
     FormData fdgOutputFile = new FormData();
     fdgOutputFile.left = new FormAttachment(0, 0);
     fdgOutputFile.right = new FormAttachment(100, 0);
-    fdgOutputFile.top = new FormAttachment(wOutputType, margin * 2);
+    fdgOutputFile.top = new FormAttachment(wOutputType, margin);
     gOutputFile.setLayoutData(fdgOutputFile);
 
     FormData fdOutputComp = new FormData();
@@ -1038,13 +1051,9 @@ public class TokenReplacementDialog extends BaseTransformDialog {
 
     wOutputComp.layout();
     wOutputTab.setControl(wOutputComp);
+  }
 
-    // ///////////////////////////////////////////////////////////
-    // / END OF FILE TAB
-    // ///////////////////////////////////////////////////////////
-
-    // Token tab...
-    //
+  private void addTokensTab(CTabFolder wTabFolder, ModifyListener lsMod) {
     CTabItem wTokensTab = new CTabItem(wTabFolder, SWT.NONE);
     wTokensTab.setFont(GuiResource.getInstance().getFontDefault());
     wTokensTab.setText(BaseMessages.getString(PKG, "TokenReplacementDialog.TokensTab.TabTitle"));
@@ -1064,6 +1073,7 @@ public class TokenReplacementDialog extends BaseTransformDialog {
     fdGet.right = new FormAttachment(50, -margin);
     fdGet.bottom = new FormAttachment(100, 0);
     wGet.setLayoutData(fdGet);
+    wGet.addListener(SWT.Selection, e -> get());
 
     // Token Start String
     Label wlTokenStartString = new Label(wTokensComp, SWT.RIGHT);
@@ -1106,35 +1116,33 @@ public class TokenReplacementDialog extends BaseTransformDialog {
     wTokenEndString.setLayoutData(fdTokenEndString);
 
     // Tokens table
-    final int FieldsCols = 2;
-    final int FieldsRows = input.getTokenReplacementFields().length;
 
-    colinf = new ColumnInfo[FieldsCols];
-    colinf[0] =
-        new ColumnInfo(
-            BaseMessages.getString(PKG, "TokenReplacementDialog.TokenColumn.Column"),
-            ColumnInfo.COLUMN_TYPE_TEXT,
-            false);
-    colinf[1] =
-        new ColumnInfo(
-            BaseMessages.getString(PKG, "TokenReplacementDialog.StreamColumn.Column"),
-            ColumnInfo.COLUMN_TYPE_CCOMBO,
-            new String[] {""},
-            false);
+    columnInfos =
+        new ColumnInfo[] {
+          new ColumnInfo(
+              BaseMessages.getString(PKG, "TokenReplacementDialog.TokenColumn.Column"),
+              ColumnInfo.COLUMN_TYPE_TEXT,
+              false),
+          new ColumnInfo(
+              BaseMessages.getString(PKG, "TokenReplacementDialog.StreamColumn.Column"),
+              ColumnInfo.COLUMN_TYPE_CCOMBO,
+              new String[] {""},
+              false)
+        };
 
     wFields =
         new TableView(
             variables,
             wTokensComp,
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
-            colinf,
-            FieldsRows,
+            columnInfos,
+            1,
             lsMod,
             props);
 
     FormData fdFields = new FormData();
     fdFields.left = new FormAttachment(0, 0);
-    fdFields.top = new FormAttachment(wTokenEndString, margin * 2);
+    fdFields.top = new FormAttachment(wTokenEndString, margin);
     fdFields.right = new FormAttachment(100, 0);
     fdFields.bottom = new FormAttachment(wGet, -margin);
     wFields.setLayoutData(fdFields);
@@ -1170,66 +1178,6 @@ public class TokenReplacementDialog extends BaseTransformDialog {
 
     wTokensComp.layout();
     wTokensTab.setControl(wTokensComp);
-
-    FormData fdTabFolder = new FormData();
-    fdTabFolder.left = new FormAttachment(0, 0);
-    fdTabFolder.top = new FormAttachment(wTransformName, margin);
-    fdTabFolder.right = new FormAttachment(100, 0);
-    fdTabFolder.bottom = new FormAttachment(wOk, -2 * margin);
-    wTabFolder.setLayoutData(fdTabFolder);
-
-    // Add listeners
-    wGet.addListener(SWT.Selection, e -> get());
-
-    // Whenever something changes, set the tooltip to the expanded version:
-    wInputFilename.addModifyListener(
-        e -> wInputFilename.setToolTipText(variables.resolve(wInputFilename.getText())));
-
-    // Whenever something changes, set the tooltip to the expanded version:
-    wOutputFilename.addModifyListener(
-        e -> wOutputFilename.setToolTipText(variables.resolve(wOutputFilename.getText())));
-
-    wbInputFilename.addListener(
-        SWT.Selection,
-        e ->
-            BaseDialog.presentFileDialog(
-                shell,
-                wInputFilename,
-                variables,
-                new String[] {"*"},
-                new String[] {BaseMessages.getString(PKG, "System.FileType.AllFiles")},
-                true));
-
-    wbOutputFilename.addListener(
-        SWT.Selection,
-        e ->
-            BaseDialog.presentFileDialog(
-                shell,
-                wOutputFilename,
-                variables,
-                new String[] {"*"},
-                new String[] {BaseMessages.getString(PKG, "System.FileType.AllFiles")},
-                true));
-
-    lsResize =
-        event -> {
-          Point size = shell.getSize();
-          wFields.setSize(size.x - 10, size.y - 50);
-          wFields.table.setSize(size.x - 10, size.y - 50);
-          wFields.redraw();
-        };
-    shell.addListener(SWT.Resize, lsResize);
-
-    wTabFolder.setSelection(0);
-
-    getData();
-    input.setChanged(changed);
-    updateInputType();
-    updateOutputType();
-
-    BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
-
-    return transformName;
   }
 
   private void setEncodings() {
@@ -1244,7 +1192,7 @@ public class TokenReplacementDialog extends BaseTransformDialog {
       }
 
       // Now select the default!
-      String defEncoding = Const.getEnvironmentVariable("file.encoding", "UTF-8");
+      String defEncoding = Const.getEnvironmentVariable("file.encoding", Const.UTF_8);
       int idx = Const.indexOfString(defEncoding, wOutputFileEncoding.getItems());
       if (idx >= 0) {
         wOutputFileEncoding.select(idx);
@@ -1399,7 +1347,7 @@ public class TokenReplacementDialog extends BaseTransformDialog {
     // Something was changed in the row.
     //
     String[] fieldNames = ConstUi.sortFieldNames(inputFields);
-    colinf[1].setComboValues(fieldNames);
+    columnInfos[1].setComboValues(fieldNames);
   }
 
   /** Copy information from the meta-data input to the dialog fields. */
@@ -1434,77 +1382,57 @@ public class TokenReplacementDialog extends BaseTransformDialog {
     wTokenStartString.setText(Const.NVL(input.getTokenStartString(), ""));
     wTokenEndString.setText(Const.NVL(input.getTokenEndString(), ""));
 
-    logDebug("getting fields info...");
-
-    for (int i = 0; i < input.getTokenReplacementFields().length; i++) {
-      TokenReplacementField field = input.getTokenReplacementFields()[i];
-
-      TableItem item = wFields.table.getItem(i);
-      if (field.getName() != null) {
-        item.setText(2, field.getName());
-      }
-      if (field.getTokenName() != null) {
-        item.setText(1, field.getTokenName());
-      }
+    for (TokenReplacementField field : input.getTokenReplacementFields()) {
+      TableItem item = new TableItem(wFields.table, SWT.NONE);
+      item.setText(1, Const.NVL(field.getTokenName(), ""));
+      item.setText(2, Const.NVL(field.getName(), ""));
     }
-
-    wFields.optWidth(true);
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
+    wFields.optimizeTableView();
   }
 
   private void cancel() {
     transformName = null;
-
     input.setChanged(backupChanged);
-
     dispose();
   }
 
-  private void getInfo(TokenReplacementMeta tfoi) {
-    tfoi.setInputType(wInputType.getText());
-    tfoi.setInputText(wInputText.getText());
-    tfoi.setInputFieldName(wInputField.getText());
-    tfoi.setInputFileName(wInputFilename.getText());
-    tfoi.setInputFileNameInField(wInputFilenameInField.getSelection());
-    tfoi.setInputFileNameField(wInputFilenameField.getText());
-    tfoi.setAddInputFileNameToResult(wAddInputFilenameToResult.getSelection());
+  private void getInfo(TokenReplacementMeta meta) {
+    meta.setInputType(wInputType.getText());
+    meta.setInputText(wInputText.getText());
+    meta.setInputFieldName(wInputField.getText());
+    meta.setInputFileName(wInputFilename.getText());
+    meta.setInputFileNameInField(wInputFilenameInField.getSelection());
+    meta.setInputFileNameField(wInputFilenameField.getText());
+    meta.setAddInputFileNameToResult(wAddInputFilenameToResult.getSelection());
 
-    tfoi.setOutputType(wOutputType.getText());
-    tfoi.setOutputFieldName(wOutputField.getText());
-    tfoi.setOutputFileName(wOutputFilename.getText());
-    tfoi.setOutputFileNameInField(wOutputFilenameInField.getSelection());
-    tfoi.setOutputFileNameField(wOutputFilenameField.getText());
-    tfoi.setAppendOutputFileName(wAppendOutputFilename.getSelection());
-    tfoi.setCreateParentFolder(wCreateParentFolder.getSelection());
-    tfoi.setOutputFileFormat(
+    meta.setOutputType(wOutputType.getText());
+    meta.setOutputFieldName(wOutputField.getText());
+    meta.setOutputFileName(wOutputFilename.getText());
+    meta.setOutputFileNameInField(wOutputFilenameInField.getSelection());
+    meta.setOutputFileNameField(wOutputFilenameField.getText());
+    meta.setAppendOutputFileName(wAppendOutputFilename.getSelection());
+    meta.setCreateParentFolder(wCreateParentFolder.getSelection());
+    meta.setOutputFileFormat(
         TokenReplacementMeta.formatMapperLineTerminator[wFormat.getSelectionIndex()]);
-    tfoi.setOutputFileEncoding(wOutputFileEncoding.getText());
-    tfoi.setSplitEvery(Const.toInt(wOutputSplitEvery.getText(), 0));
-    tfoi.setIncludeTransformNrInOutputFileName(wIncludeTransformNrInFilename.getSelection());
-    tfoi.setIncludePartNrInOutputFileName(wIncludePartNrInFilename.getSelection());
-    tfoi.setIncludeDateInOutputFileName(wIncludeDateInFilename.getSelection());
-    tfoi.setIncludeTimeInOutputFileName(wIncludeTimeInFilename.getSelection());
-    tfoi.setSpecifyDateFormatOutputFileName(wSpecifyDateFormat.getSelection());
-    tfoi.setDateFormatOutputFileName(wDateFormat.getText());
-    tfoi.setAddOutputFileNameToResult(wAddOutputFilenameToResult.getSelection());
+    meta.setOutputFileEncoding(wOutputFileEncoding.getText());
+    meta.setSplitEvery(Const.toInt(wOutputSplitEvery.getText(), 0));
+    meta.setIncludeTransformNrInOutputFileName(wIncludeTransformNrInFilename.getSelection());
+    meta.setIncludePartNrInOutputFileName(wIncludePartNrInFilename.getSelection());
+    meta.setIncludeDateInOutputFileName(wIncludeDateInFilename.getSelection());
+    meta.setIncludeTimeInOutputFileName(wIncludeTimeInFilename.getSelection());
+    meta.setSpecifyDateFormatOutputFileName(wSpecifyDateFormat.getSelection());
+    meta.setDateFormatOutputFileName(wDateFormat.getText());
+    meta.setAddOutputFileNameToResult(wAddOutputFilenameToResult.getSelection());
+    meta.setTokenStartString(wTokenStartString.getText());
+    meta.setTokenEndString(wTokenEndString.getText());
 
-    tfoi.setTokenStartString(wTokenStartString.getText());
-    tfoi.setTokenEndString(wTokenEndString.getText());
-
-    int nrFields = wFields.nrNonEmpty();
-
-    tfoi.allocate(nrFields);
-
-    for (int i = 0; i < nrFields; i++) {
+    meta.getTokenReplacementFields().clear();
+    for (TableItem item : wFields.getNonEmptyItems()) {
       TokenReplacementField field = new TokenReplacementField();
+      meta.getTokenReplacementFields().add(field);
 
-      TableItem item = wFields.getNonEmpty(i);
-      field.setName(item.getText(2));
       field.setTokenName(item.getText(1));
-
-      tfoi.getTokenReplacementFields()[i] = field;
+      field.setName(item.getText(2));
     }
   }
 

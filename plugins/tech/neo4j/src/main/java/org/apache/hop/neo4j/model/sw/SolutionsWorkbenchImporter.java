@@ -23,8 +23,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.neo4j.model.GraphModel;
 import org.apache.hop.neo4j.model.GraphNode;
 import org.apache.hop.neo4j.model.GraphPresentation;
@@ -91,8 +92,8 @@ public class SolutionsWorkbenchImporter {
             JSONArray jSecondaryNodeLabelKeys =
                 (JSONArray) jNodeLabel.get("secondaryNodeLabelKeys");
             List<String> keys = new ArrayList<>();
-            for (int s = 0; s < jSecondaryNodeLabelKeys.size(); s++) {
-              keys.add((String) jSecondaryNodeLabelKeys.get(s));
+            for (Object jSecondaryNodeLabelKey : jSecondaryNodeLabelKeys) {
+              keys.add((String) jSecondaryNodeLabelKey);
             }
             secondaryNodeLabels.put(graphNode.getName(), keys);
 
@@ -159,7 +160,7 @@ public class SolutionsWorkbenchImporter {
 
   private static Double getDouble(Object obj) {
     if (obj == null) {
-      return Double.valueOf(0);
+      return (double) 0;
     }
     if (obj instanceof Double doubleValue) {
       return doubleValue;
@@ -170,7 +171,7 @@ public class SolutionsWorkbenchImporter {
     if (obj instanceof Long longValue) {
       return longValue.doubleValue();
     }
-    throw new RuntimeException("Unrecognized data type for value " + obj.toString());
+    throw new HopRuntimeException("Unrecognized data type for value " + obj.toString());
   }
 
   private static List<GraphProperty> importProperties(JSONObject j, String propertiesKey) {

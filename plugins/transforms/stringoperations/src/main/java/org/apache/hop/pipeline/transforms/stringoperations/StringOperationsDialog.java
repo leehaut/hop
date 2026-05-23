@@ -19,6 +19,7 @@ package org.apache.hop.pipeline.transforms.stringoperations;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.IValueMeta;
@@ -40,13 +41,10 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
-import org.eclipse.swt.layout.FormLayout;
-import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 public class StringOperationsDialog extends BaseTransformDialog {
 
@@ -72,69 +70,92 @@ public class StringOperationsDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
+    createShell(BaseMessages.getString(PKG, "StringOperationsDialog.Shell.Title"));
+    buildButtonBar().ok(e -> ok()).get(e -> get()).cancel(e -> cancel()).build();
+
     Shell parent = getParent();
     Display display = parent.getDisplay();
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
-
     ModifyListener lsMod = e -> input.setChanged();
     changed = input.hasChanged();
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "StringOperationsDialog.Shell.Title"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // THE BUTTONS at the bottom of the dialog
-    //
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    wGet = new Button(shell, SWT.PUSH);
-    wGet.setText(BaseMessages.getString(PKG, "StringOperationsDialog.GetFields.Button"));
-    wGet.addListener(SWT.Selection, e -> get());
-    setButtonPositions(new Button[] {wOk, wGet, wCancel}, margin, null);
-
-    // TransformName line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(
-        BaseMessages.getString(PKG, "StringOperationsDialog.TransformName.Label"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
 
     Label wlKey = new Label(shell, SWT.NONE);
     wlKey.setText(BaseMessages.getString(PKG, "StringOperationsDialog.Fields.Label"));
     PropsUi.setLook(wlKey);
     FormData fdlKey = new FormData();
     fdlKey.left = new FormAttachment(0, 0);
-    fdlKey.top = new FormAttachment(wTransformName, 2 * margin);
+    fdlKey.top = new FormAttachment(wSpacer, margin);
     wlKey.setLayoutData(fdlKey);
 
+    buildColumnsForFields();
+
+    wFields =
+        new TableView(
+            variables,
+            shell,
+            SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI | SWT.V_SCROLL | SWT.H_SCROLL,
+            ciKey,
+            1,
+            lsMod,
+            props);
+
+    FormData fdKey = new FormData();
+    fdKey.left = new FormAttachment(0, 0);
+    fdKey.top = new FormAttachment(wlKey, margin);
+    fdKey.right = new FormAttachment(100, -margin);
+    fdKey.bottom = new FormAttachment(wOk, -margin);
+    wFields.setLayoutData(fdKey);
+
+    getData();
+
+    findFieldsInBackground(display);
+
+    input.setChanged(changed);
+    focusTransformName();
+    BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
+
+    return transformName;
+  }
+
+  private void findFieldsInBackground(Display display) {
+    final Runnable runnable =
+        () -> {
+          TransformMeta transformMeta = pipelineMeta.findTransform(transformName);
+          if (transformMeta == null) {
+            return;
+          }
+          try {
+            IRowMeta row = pipelineMeta.getPrevTransformFields(variables, transformMeta);
+            if (row != null) {
+              // Remember these fields...
+              for (int i = 0; i < row.size(); i++) {
+                inputFields.add(row.getValueMeta(i).getName());
+              }
+
+              setComboBoxes();
+            }
+
+            // Dislay in red missing field names
+            display.asyncExec(
+                () -> {
+                  if (!wFields.isDisposed()) {
+                    for (int i = 0; i < wFields.table.getItemCount(); i++) {
+                      TableItem it = wFields.table.getItem(i);
+                      if (!Utils.isEmpty(it.getText(1)) && (!inputFields.contains(it.getText(1)))) {
+                        it.setBackground(GuiResource.getInstance().getColorRed());
+                      }
+                    }
+                  }
+                });
+          } catch (HopException e) {
+            logError("Error getting fields from incoming stream!", e);
+          }
+        };
+    new Thread(runnable).start();
+  }
+
+  private void buildColumnsForFields() {
     int nrFieldCols = 11;
-    int nrFieldRows = (input.getFieldInStream() != null ? input.getFieldInStream().length : 1);
 
     ciKey = new ColumnInfo[nrFieldCols];
     ciKey[0] =
@@ -152,19 +173,19 @@ public class StringOperationsDialog extends BaseTransformDialog {
         new ColumnInfo(
             BaseMessages.getString(PKG, "StringOperationsDialog.ColumnInfo.Trim"),
             ColumnInfo.COLUMN_TYPE_CCOMBO,
-            StringOperationsMeta.trimTypeDesc,
+            StringOperationsMeta.TrimType.getDescriptions(),
             true);
     ciKey[3] =
         new ColumnInfo(
             BaseMessages.getString(PKG, "StringOperationsDialog.ColumnInfo.LowerUpper"),
             ColumnInfo.COLUMN_TYPE_CCOMBO,
-            StringOperationsMeta.lowerUpperDesc,
+            StringOperationsMeta.LowerUpper.getDescriptions(),
             true);
     ciKey[4] =
         new ColumnInfo(
             BaseMessages.getString(PKG, "StringOperationsDialog.ColumnInfo.Padding"),
             ColumnInfo.COLUMN_TYPE_CCOMBO,
-            StringOperationsMeta.paddingDesc,
+            StringOperationsMeta.Padding.getDescriptions(),
             true);
     ciKey[5] =
         new ColumnInfo(
@@ -180,23 +201,23 @@ public class StringOperationsDialog extends BaseTransformDialog {
         new ColumnInfo(
             BaseMessages.getString(PKG, "StringOperationsDialog.ColumnInfo.InitCap"),
             ColumnInfo.COLUMN_TYPE_CCOMBO,
-            StringOperationsMeta.initCapDesc);
+            StringOperationsMeta.InitCap.getDescriptions());
     ciKey[8] =
         new ColumnInfo(
             BaseMessages.getString(PKG, "StringOperationsDialog.ColumnInfo.MaskXML"),
             ColumnInfo.COLUMN_TYPE_CCOMBO,
-            StringOperationsMeta.maskXMLDesc);
+            StringOperationsMeta.MaskXml.getDescriptions());
     ciKey[9] =
         new ColumnInfo(
             BaseMessages.getString(PKG, "StringOperationsDialog.ColumnInfo.Digits"),
             ColumnInfo.COLUMN_TYPE_CCOMBO,
-            StringOperationsMeta.digitsDesc);
+            StringOperationsMeta.Digits.getDescriptions());
     ciKey[10] =
         new ColumnInfo(
             BaseMessages.getString(
                 PKG, "StringOperationsDialog.ColumnInfo.RemoveSpecialCharacters"),
             ColumnInfo.COLUMN_TYPE_CCOMBO,
-            StringOperationsMeta.removeSpecialCharactersDesc);
+            StringOperationsMeta.RemoveSpecialChars.getDescriptions());
 
     ciKey[1].setToolTip(
         BaseMessages.getString(PKG, "StringOperationsDialog.ColumnInfo.OutStreamField.Tooltip"));
@@ -205,71 +226,6 @@ public class StringOperationsDialog extends BaseTransformDialog {
     ciKey[5].setUsingVariables(true);
     ciKey[6].setUsingVariables(true);
     ciKey[7].setUsingVariables(true);
-
-    wFields =
-        new TableView(
-            variables,
-            shell,
-            SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI | SWT.V_SCROLL | SWT.H_SCROLL,
-            ciKey,
-            nrFieldRows,
-            lsMod,
-            props);
-
-    FormData fdKey = new FormData();
-    fdKey.left = new FormAttachment(0, 0);
-    fdKey.top = new FormAttachment(wlKey, margin);
-    fdKey.right = new FormAttachment(100, -margin);
-    fdKey.bottom = new FormAttachment(wOk, -2 * margin);
-    wFields.setLayoutData(fdKey);
-
-    getData();
-
-    //
-    // Search the fields in the background
-    //
-
-    final Runnable runnable =
-        () -> {
-          TransformMeta transformMeta = pipelineMeta.findTransform(transformName);
-          if (transformMeta != null) {
-            try {
-              IRowMeta row = pipelineMeta.getPrevTransformFields(variables, transformMeta);
-              if (row != null) {
-                // Remember these fields...
-                for (int i = 0; i < row.size(); i++) {
-                  inputFields.add(row.getValueMeta(i).getName());
-                }
-
-                setComboBoxes();
-              }
-
-              // Dislay in red missing field names
-              display.asyncExec(
-                  () -> {
-                    if (!wFields.isDisposed()) {
-                      for (int i = 0; i < wFields.table.getItemCount(); i++) {
-                        TableItem it = wFields.table.getItem(i);
-                        if (!Utils.isEmpty(it.getText(1))
-                            && (!inputFields.contains(it.getText(1)))) {
-                          it.setBackground(GuiResource.getInstance().getColorRed());
-                        }
-                      }
-                    }
-                  });
-
-            } catch (HopException e) {
-              logError("Error getting fields from incoming stream!", e);
-            }
-          }
-        };
-    new Thread(runnable).start();
-
-    input.setChanged(changed);
-
-    BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
-
-    return transformName;
   }
 
   protected void setComboBoxes() {
@@ -279,39 +235,23 @@ public class StringOperationsDialog extends BaseTransformDialog {
 
   /** Copy information from the meta-data input to the dialog fields. */
   public void getData() {
-    if (input.getFieldInStream() != null) {
-      for (int i = 0; i < input.getFieldInStream().length; i++) {
-        TableItem item = wFields.table.getItem(i);
-        if (input.getFieldInStream()[i] != null) {
-          item.setText(1, input.getFieldInStream()[i]);
-        }
-        if (input.getFieldOutStream()[i] != null) {
-          item.setText(2, input.getFieldOutStream()[i]);
-        }
-        item.setText(3, StringOperationsMeta.getTrimTypeDesc(input.getTrimType()[i]));
-        item.setText(4, StringOperationsMeta.getLowerUpperDesc(input.getLowerUpper()[i]));
-        item.setText(5, StringOperationsMeta.getPaddingDesc(input.getPaddingType()[i]));
-        if (input.getPadChar()[i] != null) {
-          item.setText(6, input.getPadChar()[i]);
-        }
-        if (input.getPadLen()[i] != null) {
-          item.setText(7, input.getPadLen()[i]);
-        }
-        item.setText(8, StringOperationsMeta.getInitCapDesc(input.getInitCap()[i]));
-        item.setText(9, StringOperationsMeta.getMaskXMLDesc(input.getMaskXML()[i]));
-        item.setText(10, StringOperationsMeta.getDigitsDesc(input.getDigits()[i]));
-        item.setText(
-            11,
-            StringOperationsMeta.getRemoveSpecialCharactersDesc(
-                input.getRemoveSpecialCharacters()[i]));
-      }
+    for (StringOperationsMeta.StringOperation operation : input.getOperations()) {
+      TableItem item = new TableItem(wFields.table, SWT.NONE);
+      item.setText(1, Const.NVL(operation.getFieldInStream(), ""));
+      item.setText(2, Const.NVL(operation.getFieldOutStream(), ""));
+      item.setText(3, operation.getTrimType().getDescription());
+      item.setText(4, operation.getLowerUpper().getDescription());
+      item.setText(5, operation.getPaddingType().getDescription());
+      item.setText(6, Const.NVL(operation.getPadChar(), ""));
+      item.setText(7, Const.NVL(operation.getPadLen(), ""));
+      item.setText(8, operation.getInitCap().getDescription());
+      item.setText(9, operation.getMaskXml().getDescription());
+      item.setText(10, operation.getDigits().getDescription());
+      item.setText(11, operation.getRemoveSpecialChars().getDescription());
     }
 
     wFields.setRowNums();
     wFields.optWidth(true);
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   private void cancel() {
@@ -320,30 +260,23 @@ public class StringOperationsDialog extends BaseTransformDialog {
     dispose();
   }
 
-  private void getInfo(StringOperationsMeta inf) {
-    int nrkeys = wFields.nrNonEmpty();
-
-    inf.allocate(nrkeys);
-    if (isDebug()) {
-      logDebug(
-          BaseMessages.getString(
-              PKG, "StringOperationsDialog.Log.FoundFields", String.valueOf(nrkeys)));
-    }
-
-    for (int i = 0; i < nrkeys; i++) {
-      TableItem item = wFields.getNonEmpty(i);
-      inf.getFieldInStream()[i] = item.getText(1);
-      inf.getFieldOutStream()[i] = item.getText(2);
-      inf.getTrimType()[i] = StringOperationsMeta.getTrimTypeByDesc(item.getText(3));
-      inf.getLowerUpper()[i] = StringOperationsMeta.getLowerUpperByDesc(item.getText(4));
-      inf.getPaddingType()[i] = StringOperationsMeta.getPaddingByDesc(item.getText(5));
-      inf.getPadChar()[i] = item.getText(6);
-      inf.getPadLen()[i] = item.getText(7);
-      inf.getInitCap()[i] = StringOperationsMeta.getInitCapByDesc(item.getText(8));
-      inf.getMaskXML()[i] = StringOperationsMeta.getMaskXMLByDesc(item.getText(9));
-      inf.getDigits()[i] = StringOperationsMeta.getDigitsByDesc(item.getText(10));
-      inf.getRemoveSpecialCharacters()[i] =
-          StringOperationsMeta.getRemoveSpecialCharactersByDesc(item.getText(11));
+  private void getInfo(StringOperationsMeta m) {
+    m.getOperations().clear();
+    for (TableItem item : wFields.getNonEmptyItems()) {
+      StringOperationsMeta.StringOperation o = new StringOperationsMeta.StringOperation();
+      o.setFieldInStream(item.getText(1));
+      o.setFieldOutStream(item.getText(2));
+      o.setTrimType(StringOperationsMeta.TrimType.lookupDescription(item.getText(3)));
+      o.setLowerUpper(StringOperationsMeta.LowerUpper.lookupDescription(item.getText(4)));
+      o.setPaddingType(StringOperationsMeta.Padding.lookupDescription(item.getText(5)));
+      o.setPadChar(item.getText(6));
+      o.setPadLen(item.getText(7));
+      o.setInitCap(StringOperationsMeta.InitCap.lookupDescription(item.getText(8)));
+      o.setMaskXml(StringOperationsMeta.MaskXml.lookupDescription(item.getText(9)));
+      o.setDigits(StringOperationsMeta.Digits.lookupDescription(item.getText(10)));
+      o.setRemoveSpecialChars(
+          StringOperationsMeta.RemoveSpecialChars.lookupDescription(item.getText(11)));
+      m.getOperations().add(o);
     }
 
     transformName = wTransformName.getText(); // return value

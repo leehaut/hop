@@ -17,44 +17,28 @@
 
 package org.apache.hop.parquet.transforms.input;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.Const;
-import org.apache.hop.core.RowMetaAndData;
 import org.apache.hop.core.logging.LogChannel;
 import org.apache.hop.core.row.IRowMeta;
-import org.apache.hop.core.row.IValueMeta;
-import org.apache.hop.core.row.RowMeta;
 import org.apache.hop.core.row.value.ValueMetaFactory;
 import org.apache.hop.core.variables.IVariables;
-import org.apache.hop.core.vfs.HopVfs;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.dialog.BaseDialog;
-import org.apache.hop.ui.core.gui.WindowProperty;
 import org.apache.hop.ui.core.widget.ColumnInfo;
 import org.apache.hop.ui.core.widget.TableView;
+import org.apache.hop.ui.core.widget.TextVar;
 import org.apache.hop.ui.pipeline.transform.BaseTransformDialog;
-import org.apache.parquet.column.ColumnDescriptor;
-import org.apache.parquet.hadoop.ParquetReader;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.PrimitiveType;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
-import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 public class ParquetInputDialog extends BaseTransformDialog {
 
@@ -63,6 +47,8 @@ public class ParquetInputDialog extends BaseTransformDialog {
   protected ParquetInputMeta input;
 
   private Combo wFilenameField;
+  private TextVar wMetaFilename;
+  private Button wNullWhenEmpty;
   private TableView wFields;
 
   private String returnValue;
@@ -78,53 +64,11 @@ public class ParquetInputDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
+    createShell(BaseMessages.getString(PKG, "ParquetInput.Name"));
 
-    Shell parent = getParent();
+    buildButtonBar().ok(e -> ok()).get(e -> getFields()).cancel(e -> cancel()).build();
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MIN | SWT.MAX);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "ParquetInput.Name"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // Some buttons at the bottom
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wGet = new Button(shell, SWT.PUSH);
-    wGet.setText(BaseMessages.getString(PKG, "System.Button.GetFields"));
-    wGet.addListener(SWT.Selection, e -> getFields());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wGet, wCancel}, margin, null);
-
-    // TransformName line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "ParquetInputDialog.TransformName.Label"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(wlTransformName, 0, SWT.CENTER);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
-    Control lastControl = wTransformName;
+    Control lastControl = wSpacer;
 
     Label wlFilenameField = new Label(shell, SWT.RIGHT);
     wlFilenameField.setText(BaseMessages.getString(PKG, "ParquetInputDialog.FilenameField.Label"));
@@ -143,13 +87,47 @@ public class ParquetInputDialog extends BaseTransformDialog {
     wFilenameField.setLayoutData(fdFilenameField);
     lastControl = wFilenameField;
 
+    Label wlMetaFilename = new Label(shell, SWT.RIGHT);
+    wlMetaFilename.setText(BaseMessages.getString(PKG, "ParquetInputDialog.MetaFilename.Label"));
+    PropsUi.setLook(wlMetaFilename);
+    FormData fdlMetaFilename = new FormData();
+    fdlMetaFilename.left = new FormAttachment(0, 0);
+    fdlMetaFilename.right = new FormAttachment(middle, -margin);
+    fdlMetaFilename.top = new FormAttachment(lastControl, margin);
+    wlMetaFilename.setLayoutData(fdlMetaFilename);
+    wMetaFilename = new TextVar(variables, shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
+    PropsUi.setLook(wMetaFilename);
+    FormData fdMetaFilename = new FormData();
+    fdMetaFilename.left = new FormAttachment(middle, 0);
+    fdMetaFilename.top = new FormAttachment(wlMetaFilename, 0, SWT.CENTER);
+    fdMetaFilename.right = new FormAttachment(100, 0);
+    wMetaFilename.setLayoutData(fdMetaFilename);
+    lastControl = wMetaFilename;
+
+    Label wlNullWhenEmpty = new Label(shell, SWT.RIGHT);
+    wlNullWhenEmpty.setText(BaseMessages.getString(PKG, "ParquetInputDialog.NullWhenEmpty.Label"));
+    PropsUi.setLook(wlNullWhenEmpty);
+    FormData fdlNullWhenEmpty = new FormData();
+    fdlNullWhenEmpty.left = new FormAttachment(0, 0);
+    fdlNullWhenEmpty.right = new FormAttachment(middle, -margin);
+    fdlNullWhenEmpty.top = new FormAttachment(lastControl, margin);
+    wlNullWhenEmpty.setLayoutData(fdlNullWhenEmpty);
+    wNullWhenEmpty = new Button(shell, SWT.CHECK);
+    PropsUi.setLook(wNullWhenEmpty);
+    FormData fdNullWhenEmpty = new FormData();
+    fdNullWhenEmpty.left = new FormAttachment(middle, 0);
+    fdNullWhenEmpty.top = new FormAttachment(wlNullWhenEmpty, 0, SWT.CENTER);
+    fdNullWhenEmpty.right = new FormAttachment(100, 0);
+    wNullWhenEmpty.setLayoutData(fdNullWhenEmpty);
+    lastControl = wNullWhenEmpty;
+
     Label wlFields = new Label(shell, SWT.LEFT);
     wlFields.setText(BaseMessages.getString(PKG, "ParquetInputDialog.Fields.Label"));
     PropsUi.setLook(wlFields);
     FormData fdlFields = new FormData();
     fdlFields.left = new FormAttachment(0, 0);
     fdlFields.right = new FormAttachment(middle, -margin);
-    fdlFields.top = new FormAttachment(lastControl, margin);
+    fdlFields.top = new FormAttachment(lastControl, 2 * margin);
     wlFields.setLayoutData(fdlFields);
 
     ColumnInfo[] columns =
@@ -191,11 +169,11 @@ public class ParquetInputDialog extends BaseTransformDialog {
     fdFields.left = new FormAttachment(0, 0);
     fdFields.top = new FormAttachment(wlFields, margin);
     fdFields.right = new FormAttachment(100, 0);
-    fdFields.bottom = new FormAttachment(wOk, -2 * margin);
+    fdFields.bottom = new FormAttachment(100, -50);
     wFields.setLayoutData(fdFields);
 
     getData();
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
     return returnValue;
   }
@@ -211,63 +189,7 @@ public class ParquetInputDialog extends BaseTransformDialog {
               new String[] {"Parquet files", "All files"},
               true);
       if (filename != null) {
-        FileObject fileObject = HopVfs.getFileObject(variables.resolve(filename), variables);
-
-        long size = fileObject.getContent().getSize();
-        InputStream inputStream = HopVfs.getInputStream(fileObject);
-
-        // Reads the whole file into memory...
-        //
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream((int) size);
-        IOUtils.copy(inputStream, outputStream);
-        ParquetStream inputFile = new ParquetStream(outputStream.toByteArray(), filename);
-        // Empty list of fields to retrieve: we still grab the schema
-        //
-        ParquetReadSupport readSupport = new ParquetReadSupport(new ArrayList<>());
-        ParquetReader<RowMetaAndData> reader =
-            new ParquetReaderBuilder<>(readSupport, inputFile).build();
-
-        // Read one empty row...
-        //
-        reader.read();
-
-        // Now we have the schema...
-        //
-        MessageType schema = readSupport.getMessageType();
-        IRowMeta rowMeta = new RowMeta();
-        List<ColumnDescriptor> columns = schema.getColumns();
-        for (ColumnDescriptor column : columns) {
-          String sourceField = "";
-          String[] path = column.getPath();
-          if (path.length == 1) {
-            sourceField = path[0];
-          } else {
-            for (int i = 0; i < path.length; i++) {
-              if (i > 0) {
-                sourceField += ".";
-              }
-              sourceField += path[i];
-            }
-          }
-          PrimitiveType primitiveType = column.getPrimitiveType();
-          int hopType = IValueMeta.TYPE_STRING;
-          switch (primitiveType.getPrimitiveTypeName()) {
-            case INT32, INT64:
-              hopType = IValueMeta.TYPE_INTEGER;
-              break;
-            case INT96:
-              hopType = IValueMeta.TYPE_BINARY;
-              break;
-            case FLOAT, DOUBLE:
-              hopType = IValueMeta.TYPE_NUMBER;
-              break;
-            case BOOLEAN:
-              hopType = IValueMeta.TYPE_BOOLEAN;
-              break;
-          }
-          IValueMeta valueMeta = ValueMetaFactory.createValueMeta(sourceField, hopType, -1, -1);
-          rowMeta.addValueMeta(valueMeta);
-        }
+        IRowMeta rowMeta = ParquetInputMeta.extractRowMeta(variables, filename);
 
         BaseTransformDialog.getFieldsFromPrevious(
             rowMeta, wFields, 1, new int[] {1, 2}, new int[] {3}, -1, -1, null);
@@ -284,9 +206,9 @@ public class ParquetInputDialog extends BaseTransformDialog {
     } catch (Exception e) {
       LogChannel.UI.logError("Error getting source fields", e);
     }
-
-    wTransformName.setText(Const.NVL(transformName, ""));
     wFilenameField.setText(Const.NVL(input.getFilenameField(), ""));
+    wMetaFilename.setText(Const.NVL(input.getMetadataFilename(), ""));
+    wNullWhenEmpty.setSelection(input.isSendingNullsRowWhenEmpty());
     for (int i = 0; i < input.getFields().size(); i++) {
       ParquetField field = input.getFields().get(i);
       TableItem item = wFields.table.getItem(i);
@@ -310,6 +232,8 @@ public class ParquetInputDialog extends BaseTransformDialog {
 
   private void getInfo(ParquetInputMeta meta) {
     meta.setFilenameField(wFilenameField.getText());
+    meta.setMetadataFilename(wMetaFilename.getText());
+    meta.setSendingNullsRowWhenEmpty(wNullWhenEmpty.getSelection());
     meta.getFields().clear();
     for (TableItem item : wFields.getNonEmptyItems()) {
       int index = 1;
@@ -328,11 +252,5 @@ public class ParquetInputDialog extends BaseTransformDialog {
   private void cancel() {
     returnValue = null;
     dispose();
-  }
-
-  @Override
-  public void dispose() {
-    props.setScreen(new WindowProperty(shell));
-    shell.dispose();
   }
 }

@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.HopEnvironment;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.logging.HopLogStore;
 import org.apache.hop.core.logging.ILogChannel;
 import org.apache.hop.core.logging.LogChannel;
@@ -136,7 +137,7 @@ public class HopServerSingleton {
                               Math.floor(
                                   (System.currentTimeMillis()
                                           - pipeline.getExecutionStartDate().getTime())
-                                      / 60000);
+                                      / 60000.0);
                       if (diffInMinutes >= objectTimeout) {
                         // Let's remove this from the pipeline map...
                         //
@@ -178,7 +179,7 @@ public class HopServerSingleton {
                               Math.floor(
                                   (System.currentTimeMillis()
                                           - workflow.getExecutionStartDate().getTime())
-                                      / 60000);
+                                      / 60000.0);
                       if (diffInMinutes >= objectTimeout) {
                         // Let's remove this from the workflow map...
                         //
@@ -234,7 +235,7 @@ public class HopServerSingleton {
         return hopServerSingleton;
       }
     } catch (HopException ke) {
-      throw new RuntimeException(ke);
+      throw new HopRuntimeException(ke);
     }
   }
 

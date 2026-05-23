@@ -19,7 +19,7 @@ package org.apache.hop.ui.core.widget;
 
 import java.util.Collections;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.Props;
 import org.apache.hop.core.exception.HopException;
@@ -35,8 +35,10 @@ import org.apache.hop.metadata.util.HopMetadataUtil;
 import org.apache.hop.ui.core.ConstUi;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.gui.GuiToolbarWidgets;
+import org.apache.hop.ui.core.gui.IToolbarContainer;
 import org.apache.hop.ui.core.metadata.MetadataManager;
 import org.apache.hop.ui.hopgui.HopGui;
+import org.apache.hop.ui.hopgui.ToolbarFacade;
 import org.apache.hop.ui.hopgui.perspective.metadata.MetadataPerspective;
 import org.apache.hop.ui.util.EnvironmentUtils;
 import org.apache.hop.ui.util.SwtSvgImageUtil;
@@ -53,7 +55,6 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Listener;
-import org.eclipse.swt.widgets.ToolBar;
 
 /**
  * The goal of this composite is to add a line on a dialog which contains: - A label (for example:
@@ -79,7 +80,10 @@ public class MetaSelectionLine<T extends IHopMetadata> extends Composite {
   private PropsUi props;
   private final Label wLabel;
   private ComboVar wCombo = null;
-  private final ToolBar wToolBar;
+  private final Control wToolBar;
+
+  /** Prevents re-entrant refresh while {@link #fillItems()} runs. */
+  private boolean repopulatingItems;
 
   public MetaSelectionLine(
       IVariables variables,
@@ -189,19 +193,20 @@ public class MetaSelectionLine<T extends IHopMetadata> extends Composite {
 
     // Toolbar for default actions
     //
-    wToolBar = new ToolBar(this, SWT.FLAT | SWT.HORIZONTAL);
+    IToolbarContainer toolBarContainer =
+        ToolbarFacade.createToolbarContainer(this, SWT.FLAT | SWT.HORIZONTAL);
+    wToolBar = toolBarContainer.getControl();
     PropsUi.setLook(wToolBar, Props.WIDGET_STYLE_DEFAULT);
     FormData fdToolBar = new FormData();
     fdToolBar.right = new FormAttachment(100, 0);
-    fdToolBar.top = new FormAttachment(0, 0);
+    fdToolBar.top = new FormAttachment(wLabel, 0, SWT.CENTER);
     wToolBar.setLayoutData(fdToolBar);
 
     // Add more toolbar items from plugins.
     //
     GuiToolbarWidgets toolbarWidgets = new GuiToolbarWidgets();
     toolbarWidgets.registerGuiPluginObject(this);
-    // Removed for Windows dark mode
-    toolbarWidgets.createToolbarWidgets(wToolBar, GUI_PLUGIN_TOOLBAR_PARENT_ID);
+    toolbarWidgets.createToolbarWidgets(toolBarContainer, GUI_PLUGIN_TOOLBAR_PARENT_ID);
 
     int textFlags = SWT.SINGLE | SWT.LEFT | SWT.BORDER;
     if (flags != SWT.NONE) {
@@ -224,6 +229,25 @@ public class MetaSelectionLine<T extends IHopMetadata> extends Composite {
     wCombo.setToolTipText(toolTipText);
 
     PropsUi.setLook(wCombo);
+
+    // Refresh the item list whenever the user focuses the control (including opening the
+    // dropdown), so names added elsewhere in the GUI are visible without reopening the dialog.
+    wCombo
+        .getCComboWidget()
+        .addListener(
+            SWT.FocusIn,
+            e -> {
+              if (repopulatingItems || wCombo.getCComboWidget().isDisposed()) {
+                return;
+              }
+              try {
+                fillItems();
+              } catch (HopException ex) {
+                LogChannel.UI.logError(
+                    "Error refreshing list of " + getMetadataDescription() + " metadata elements",
+                    ex);
+              }
+            });
 
     layout(true, true);
   }
@@ -316,9 +340,21 @@ public class MetaSelectionLine<T extends IHopMetadata> extends Composite {
    * @throws HopException In case something went horribly wrong.
    */
   public void fillItems() throws HopException {
-    List<String> elementNames = manager.getSerializer().listObjectNames();
-    Collections.sort(elementNames);
-    wCombo.setItems(elementNames.toArray(new String[0]));
+    if (repopulatingItems) {
+      return;
+    }
+    repopulatingItems = true;
+    try {
+      String previous = wCombo.getText();
+      List<String> elementNames = manager.getSerializer().listObjectNames();
+      Collections.sort(elementNames);
+      wCombo.setItems(elementNames.toArray(new String[0]));
+      if (!wCombo.getCComboWidget().isDisposed()) {
+        wCombo.setText(Const.NVL(previous, ""));
+      }
+    } finally {
+      repopulatingItems = false;
+    }
   }
 
   /**
@@ -527,11 +563,11 @@ public class MetaSelectionLine<T extends IHopMetadata> extends Composite {
   }
 
   /**
-   * Gets wToolBar
+   * Gets wToolBar (the toolbar control; on desktop a ToolBar, on web a Composite with RowLayout).
    *
    * @return value of wToolBar
    */
-  public ToolBar getwToolBar() {
+  public Control getwToolBar() {
     return wToolBar;
   }
 }

@@ -29,6 +29,7 @@ import org.apache.hop.core.ResultFile;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopFileException;
 import org.apache.hop.core.exception.HopTransformException;
+import org.apache.hop.core.io.CountingOutputStream;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.row.RowMeta;
@@ -36,6 +37,8 @@ import org.apache.hop.core.row.value.ValueMetaString;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.vfs.HopVfs;
 import org.apache.hop.i18n.BaseMessages;
+import org.apache.hop.lineage.LineageFileIoEmitter;
+import org.apache.hop.lineage.model.FileIoOperation;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransform;
@@ -330,8 +333,10 @@ public class ExcelWriterTransform
 
   private void closeOutputFile(ExcelWriterWorkbookDefinition file) throws HopException {
     OutputStream out = null;
+    CountingOutputStream countingOut = null;
     try {
-      out = new BufferedOutputStream(HopVfs.getOutputStream(file.getFile(), false));
+      countingOut = new CountingOutputStream(HopVfs.getOutputStream(file.getFile(), false));
+      out = new BufferedOutputStream(countingOut);
       // may have to write a footer here
       if (meta.isFooterEnabled()) {
         writeHeader(file, file.getSheet(), file.getPosX(), file.getPosY());
@@ -374,6 +379,18 @@ public class ExcelWriterTransform
       if (out != null) {
         try {
           out.flush();
+          if (countingOut != null) {
+            long written = countingOut.getCount();
+            dataVolumeOut = (dataVolumeOut != null ? dataVolumeOut : 0L) + written;
+            if (!data.isBeamContext() && written > 0 && file.getFile() != null) {
+              try {
+                LineageFileIoEmitter.emitTransformFileIo(
+                    this, FileIoOperation.WRITE, null, file.getFile(), written, true, null);
+              } catch (Exception ignored) {
+                // optional lineage
+              }
+            }
+          }
           out.close();
         } catch (Exception e) {
           throw new HopException("Error closing excel file " + file.getFile(), e);
@@ -576,15 +593,14 @@ public class ExcelWriterTransform
             setDataFormat(workbookDefinition, excelField.getFormat(), cell);
           }
 
-          if (!isTitle && excelField != null && Utils.isEmpty(excelField.getFormat())) {
-
-            if (vMeta.getType() == IValueMeta.TYPE_DATE
-                || vMeta.getType() == IValueMeta.TYPE_TIMESTAMP) {
-
-              String format = vMeta.getFormatMask();
-              if (!Utils.isEmpty(format)) {
-                setDataFormat(workbookDefinition, format, cell);
-              }
+          if (!isTitle
+              && excelField != null
+              && Utils.isEmpty(excelField.getFormat())
+              && (vMeta.getType() == IValueMeta.TYPE_DATE
+                  || vMeta.getType() == IValueMeta.TYPE_TIMESTAMP)) {
+            String format = vMeta.getFormatMask();
+            if (!Utils.isEmpty(format)) {
+              setDataFormat(workbookDefinition, format, cell);
             }
           }
           // cache it for later runs
@@ -811,10 +827,12 @@ public class ExcelWriterTransform
       FileObject file = getFileLocation(row);
 
       if (!file.getParent().exists() && meta.getFile().isCreateParentFolder()) {
-        logDebug(
-            "Create parent directory for "
-                + file.getName().toString()
-                + " because it does not exist.");
+        if (isDebug()) {
+          logDebug(
+              "Create parent directory for "
+                  + file.getName().toString()
+                  + " because it does not exist.");
+        }
         createParentFolder(file);
       }
 

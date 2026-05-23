@@ -141,7 +141,7 @@ public class Denormaliser extends BaseTransform<DenormaliserMeta, DenormaliserDa
         return false;
       }
       data.fieldNameIndex[i] = idx;
-      subjects.put(Integer.valueOf(idx), Integer.valueOf(idx));
+      subjects.put(idx, idx);
 
       // See if by accident, the value fieldname isn't the same as the key fieldname.
       // This is not supported of-course and given the complexity of the transform, you can miss:
@@ -163,7 +163,7 @@ public class Denormaliser extends BaseTransform<DenormaliserMeta, DenormaliserDa
       if (indexes == null) {
         indexes = new ArrayList<>(2);
       }
-      indexes.add(Integer.valueOf(i)); // Add the index to the list...
+      indexes.add(i); // Add the index to the list...
       data.keyValue.put(keyValue, indexes); // store the list
     }
 
@@ -184,7 +184,7 @@ public class Denormaliser extends BaseTransform<DenormaliserMeta, DenormaliserDa
     }
 
     List<Integer> removeList = new ArrayList<>();
-    removeList.add(Integer.valueOf(data.keyFieldNr));
+    removeList.add(data.keyFieldNr);
     for (int i = 0; i < data.fieldNrs.length; i++) {
       removeList.add(data.fieldNrs[i]);
     }
@@ -243,20 +243,18 @@ public class Denormaliser extends BaseTransform<DenormaliserMeta, DenormaliserDa
           long count = data.counters[i];
           Object sum = data.sum[i];
           if (count > 0) {
-            if (sum instanceof Long longValue) {
-              resultValue = longValue / count;
-            } else if (sum instanceof Double doubleValue) {
-              resultValue = doubleValue / count;
-            } else if (sum instanceof BigDecimal bigDecimalValue) {
-              resultValue = bigDecimalValue.divide(new BigDecimal(count));
-            } else {
-              resultValue = null;
-            }
+            resultValue =
+                switch (sum) {
+                  case Long l -> l / count;
+                  case Double d -> d / count;
+                  case BigDecimal bd -> bd.divide(BigDecimal.valueOf(count));
+                  default -> null;
+                };
           }
           break;
         case TYPE_AGGR_COUNT_ALL:
           if (resultValue == null) {
-            resultValue = Long.valueOf(0);
+            resultValue = 0L;
           }
           if (!field
               .getTargetType()
@@ -337,7 +335,7 @@ public class Denormaliser extends BaseTransform<DenormaliserMeta, DenormaliserDa
       }
       // keyNr is the field in DenormaliserTargetField[]
       //
-      int idx = keyNr.intValue();
+      int idx = keyNr;
       DenormaliserTargetField field = meta.getDenormaliserTargetFields().get(idx);
 
       // This is the value we need to de-normalise, convert, aggregate.
@@ -448,12 +446,14 @@ public class Denormaliser extends BaseTransform<DenormaliserMeta, DenormaliserDa
   private IValueMeta getConversionMeta(String mask) {
     IValueMeta meta = null;
     if (!Utils.isEmpty(mask)) {
-      meta = conversionMetaCache.get(mask);
-      if (meta == null) {
-        meta = new ValueMetaDate();
-        meta.setConversionMask(mask);
-        conversionMetaCache.put(mask, meta);
-      }
+      meta =
+          conversionMetaCache.computeIfAbsent(
+              mask,
+              key -> {
+                ValueMetaDate m = new ValueMetaDate();
+                m.setConversionMask(key);
+                return m;
+              });
     }
     return meta;
   }

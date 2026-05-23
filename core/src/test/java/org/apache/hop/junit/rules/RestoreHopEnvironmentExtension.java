@@ -29,6 +29,7 @@ import org.apache.hop.core.Const;
 import org.apache.hop.core.HopClientEnvironment;
 import org.apache.hop.core.database.Database;
 import org.apache.hop.core.database.DatabaseMeta;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.extension.ExtensionPointMap;
 import org.apache.hop.core.logging.HopLogStore;
 import org.apache.hop.core.logging.LogChannel;
@@ -48,7 +49,7 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 
 /**
  * JUnit 5 Extension that restores all system properties and resets any Hop related environment
- * instances. This is the JUnit 5 equivalent of the JUnit 4 RestoreHopEnvironment rule.
+ * instances.
  */
 public class RestoreHopEnvironmentExtension implements BeforeAllCallback, AfterAllCallback {
   private Properties originalProperties;
@@ -114,7 +115,7 @@ public class RestoreHopEnvironmentExtension implements BeforeAllCallback, AfterA
     LanguageChoice.getInstance().setDefaultLocale(Locale.US);
 
     tmpHopHome = Files.createTempDirectory(Long.toString(System.nanoTime()));
-    System.setProperty("file.encoding", "UTF-8");
+    System.setProperty("file.encoding", Const.UTF_8);
     System.setProperty("user.timezone", "UTC");
     System.setProperty("HOP_HOME", tmpHopHome.toString());
     System.setProperty(Const.HOP_DISABLE_CONSOLE_LOGGING, "Y");
@@ -130,7 +131,7 @@ public class RestoreHopEnvironmentExtension implements BeforeAllCallback, AfterA
     try {
       defaultInit();
     } catch (Throwable e) {
-      throw new RuntimeException("Failed to initialize Hop environment", e);
+      throw new HopRuntimeException("Failed to initialize Hop environment", e);
     }
   }
 

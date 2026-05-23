@@ -20,6 +20,9 @@ package org.apache.hop.pipeline.debug;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.Getter;
+import lombok.Setter;
+import org.apache.hop.core.Condition;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopTransformException;
 import org.apache.hop.core.row.IRowMeta;
@@ -35,52 +38,27 @@ import org.apache.hop.pipeline.transform.TransformMeta;
  * breakpoints can be applied to transforms. When a certain condition is met, the pipeline will be
  * paused and the caller will be informed of this fact through a listener system.
  */
+@Getter
+@Setter
 public class PipelineDebugMeta {
 
   public static final String XML_TAG = "pipeline-debug-meta";
 
   private PipelineMeta pipelineMeta;
   private Map<TransformMeta, TransformDebugMeta> transformDebugMetaMap;
-  private boolean dataShown = false;
+
+  /** Flag indicating whether the preview data has already been shown. */
+  private boolean stopClosePressed = false;
 
   public PipelineDebugMeta(PipelineMeta pipelineMeta) {
     this.pipelineMeta = pipelineMeta;
     transformDebugMetaMap = new HashMap<>();
   }
 
-  /**
-   * @return the referenced pipeline metadata
-   */
-  public PipelineMeta getPipelineMeta() {
-    return pipelineMeta;
-  }
-
-  /**
-   * @param pipelineMeta the pipeline metadata to reference
-   */
-  public void setPipelineMeta(PipelineMeta pipelineMeta) {
-    this.pipelineMeta = pipelineMeta;
-  }
-
-  /**
-   * @return the map that contains the debugging information per transform
-   */
-  public Map<TransformMeta, TransformDebugMeta> getTransformDebugMetaMap() {
-    return transformDebugMetaMap;
-  }
-
-  /**
-   * @param transformDebugMeta the map that contains the debugging information per transform
-   */
-  public void setTransformDebugMetaMap(Map<TransformMeta, TransformDebugMeta> transformDebugMeta) {
-    this.transformDebugMetaMap = transformDebugMeta;
-  }
-
   public synchronized void addRowListenersToPipeline(final IPipelineEngine<PipelineMeta> pipeline) {
 
     // for every transform in the map, add a row listener...
     //
-    dataShown = false;
     for (final TransformMeta transformMeta : transformDebugMetaMap.keySet()) {
       final TransformDebugMeta transformDebugMeta = transformDebugMetaMap.get(transformMeta);
 
@@ -107,13 +85,27 @@ public class PipelineDebugMeta {
                       if (transformDebugMeta.isReadingFirstRows() && rowCount > 0) {
 
                         int bufferSize = transformDebugMeta.getRowBuffer().size();
-                        if (bufferSize < rowCount) {
+                        if (bufferSize < rowCount - 1) {
 
                           // This is the classic preview mode.
                           // We add simply add the row to the buffer.
                           //
                           transformDebugMeta.setRowBufferMeta(rowMeta);
                           transformDebugMeta.getRowBuffer().add(rowMeta.cloneRow(row));
+
+                          // "Retrieve first rows" and "pause on breakpoint" can both be enabled;
+                          // the
+                          // former used to hide this branch behind if/else so the condition never
+                          // ran until the preview buffer was full.
+                          if (transformDebugMeta.isPausingOnBreakPoint()) {
+                            Condition condition = transformDebugMeta.getCondition();
+                            if (condition != null
+                                && !condition.isEmpty()
+                                && condition.evaluate(rowMeta, row)) {
+                              pipeline.pauseExecution();
+                              transformDebugMeta.fireBreakPointListeners(PipelineDebugMeta.this);
+                            }
+                          }
                         } else {
                           // pause the pipeline...
                           //
@@ -122,11 +114,13 @@ public class PipelineDebugMeta {
                           // Also call the pause / break-point listeners on the transform
                           // debugger...
                           //
-                          dataShown = true;
+                          transformDebugMeta.setRowBufferMeta(rowMeta);
+                          transformDebugMeta.getRowBuffer().add(rowMeta.cloneRow(row));
                           transformDebugMeta.fireBreakPointListeners(PipelineDebugMeta.this);
                         }
                       } else if (transformDebugMeta.isPausingOnBreakPoint()
-                          && transformDebugMeta.getCondition() != null) {
+                          && transformDebugMeta.getCondition() != null
+                          && !transformDebugMeta.getCondition().isEmpty()) {
                         // A break-point is set
                         // Verify the condition and pause if required
                         // Before we do that, see if a row count is set.
@@ -184,9 +178,12 @@ public class PipelineDebugMeta {
     try {
       pipeline.addExecutionFinishedListener(
           p -> {
-            if (dataShown) {
+            // If the preview data has already been displayed, skip firing the break-point listeners
+            // to avoid showing the preview dialog multiple times.
+            if (stopClosePressed) {
               return;
             }
+
             for (TransformMeta transformMeta : transformDebugMetaMap.keySet()) {
               TransformDebugMeta transformDebugMeta = transformDebugMetaMap.get(transformMeta);
               if (transformDebugMeta != null) {
@@ -232,33 +229,14 @@ public class PipelineDebugMeta {
     int nr = 0;
 
     for (TransformDebugMeta transformDebugMeta : transformDebugMetaMap.values()) {
-      if (transformDebugMeta.isReadingFirstRows() && transformDebugMeta.getRowCount() > 0) {
-        nr++;
-      } else if (transformDebugMeta.isPausingOnBreakPoint()
-          && transformDebugMeta.getCondition() != null
-          && !transformDebugMeta.getCondition().isEmpty()) {
+      if ((transformDebugMeta.isReadingFirstRows() && transformDebugMeta.getRowCount() > 0)
+          || (transformDebugMeta.isPausingOnBreakPoint()
+              && transformDebugMeta.getCondition() != null
+              && !transformDebugMeta.getCondition().isEmpty())) {
         nr++;
       }
     }
 
     return nr;
-  }
-
-  /**
-   * Gets dataShown
-   *
-   * @return value of dataShown
-   */
-  public boolean isDataShown() {
-    return dataShown;
-  }
-
-  /**
-   * Sets dataShown
-   *
-   * @param dataShown value of dataShown
-   */
-  public void setDataShown(boolean dataShown) {
-    this.dataShown = dataShown;
   }
 }

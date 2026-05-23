@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.stream.IntStream;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.exception.HopTransformException;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.row.RowDataUtil;
@@ -89,7 +90,7 @@ public class Formula extends BaseTransform<FormulaMeta, FormulaData> {
         data.outputRowMeta = getInputRowMeta().clone();
         meta.getFields(data.outputRowMeta, getTransformName(), null, null, this, metadataProvider);
       } catch (HopTransformException e) {
-        throw new RuntimeException(e);
+        throw new HopRuntimeException(e);
       }
 
       data.returnType = new int[meta.getFormulas().size()];
@@ -139,10 +140,8 @@ public class Formula extends BaseTransform<FormulaMeta, FormulaData> {
     }
 
     Object[] outputRowData = RowDataUtil.resizeArray(r, data.outputRowMeta.size());
-    Object outputValue = null;
-
     for (int i = 0; i < meta.getFormulas().size(); i++) {
-
+      Object outputValue = null;
       FormulaMetaFunction formula = meta.getFormulas().get(i);
       FormulaParser parser =
           new FormulaParser(
@@ -222,7 +221,7 @@ public class Formula extends BaseTransform<FormulaMeta, FormulaData> {
     if (isRowLevel()) {
       logRowlevel("Wrote row #" + getLinesWritten() + " : " + Arrays.toString(r));
     }
-    if (checkFeedback(getLinesRead())) {
+    if (checkFeedback(getLinesRead()) && isBasic()) {
       logBasic("Linenr " + getLinesRead());
     }
 

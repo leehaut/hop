@@ -22,7 +22,7 @@ import java.util.ArrayList;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.Result;
 import org.apache.hop.core.exception.HopException;
@@ -43,6 +43,7 @@ import org.apache.hop.pipeline.transform.ITransformMeta;
 import org.apache.hop.pipeline.transform.RowAdapter;
 import org.apache.hop.pipeline.transform.TransformMeta;
 import org.apache.hop.pipeline.transforms.injector.InjectorMeta;
+import org.apache.hop.pipeline.transforms.kafka.shared.KafkaOption;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -222,10 +223,10 @@ public class KafkaConsumerInput
 
     // Set all the configuration options...
     //
-    for (String option : meta.getConfig().keySet()) {
-      String value = variables.resolve(meta.getConfig().get(option));
+    for (KafkaOption option : meta.getOptions()) {
+      String value = variables.resolve(option.getValue());
       if (StringUtils.isNotEmpty(value)) {
-        config.put(option, variables.resolve(value));
+        config.put(option.getProperty(), variables.resolve(value));
       }
     }
 
@@ -299,7 +300,9 @@ public class KafkaConsumerInput
             }
             incrementLinesInput();
           }
-          logBasic("Number of rows read: " + data.rowProducer.getRowSet().size());
+          if (isBasic()) {
+            logBasic("Number of rows read: " + data.rowProducer.getRowSet().size());
+          }
           // Pass them to the single threaded transformation and do an iteration...
           //
           data.executor.oneIteration();
@@ -307,7 +310,9 @@ public class KafkaConsumerInput
           if (data.executor.isStopped() || data.executor.getErrors() > 0) {
             // An error occurred in the sub-transformation
             //
-            logDebug("Executor's reported errors #: " + data.executor.getErrors());
+            if (isDebug()) {
+              logDebug("Executor's reported errors #: " + data.executor.getErrors());
+            }
             if (data.executor.getErrors() > 0 && errorHandlingConditionIsSatisfied()) {
               // If error handling is enabled return record that generates error in subpipeline
               // For future improvements in managing rows that generates error in sub pipeline

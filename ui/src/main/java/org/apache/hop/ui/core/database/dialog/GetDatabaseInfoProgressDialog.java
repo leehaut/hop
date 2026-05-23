@@ -35,7 +35,7 @@ import org.eclipse.swt.widgets.Shell;
 
 /**
  * Takes care of displaying a dialog that will handle the wait while we're finding out what tables,
- * views etc we can reach in the database.
+ * views etc. we can reach in the database.
  */
 public class GetDatabaseInfoProgressDialog {
   private static final Class<?> PKG = GetDatabaseInfoProgressDialog.class;
@@ -45,7 +45,7 @@ public class GetDatabaseInfoProgressDialog {
   private DatabaseMeta databaseMeta;
 
   /**
-   * Creates a new dialog that will handle the wait while we're finding out what tables, views etc
+   * Creates a new dialog that will handle the wait while we're finding out what tables, views etc.
    * we can reach in the database.
    */
   public GetDatabaseInfoProgressDialog(
@@ -77,10 +77,7 @@ public class GetDatabaseInfoProgressDialog {
         pmd.run(true, op);
 
         if (pmd.getProgressMonitor().isCanceled()) return null;
-      } catch (InvocationTargetException e) {
-        showErrorDialog(e);
-        return null;
-      } catch (InterruptedException e) {
+      } catch (InvocationTargetException | InterruptedException e) {
         showErrorDialog(e);
         return null;
       }
@@ -104,10 +101,16 @@ public class GetDatabaseInfoProgressDialog {
    * @param e
    */
   private void showErrorDialog(Exception e) {
+    String databaseName = databaseMeta == null ? "" : databaseMeta.getName();
+    String message =
+        BaseMessages.getString(PKG, "GetDatabaseInfoProgressDialog.Error.Message")
+            + (databaseName.isEmpty()
+                ? ""
+                : " Unable to connect to database '" + databaseName + "'.");
     new ErrorDialog(
         shell,
         BaseMessages.getString(PKG, "GetDatabaseInfoProgressDialog.Error.Title"),
-        BaseMessages.getString(PKG, "GetDatabaseInfoProgressDialog.Error.Message"),
+        message,
         e);
   }
 }

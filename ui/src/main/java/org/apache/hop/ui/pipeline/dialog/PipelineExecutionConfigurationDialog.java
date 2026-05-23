@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.extension.ExtensionPointHandler;
@@ -113,19 +113,11 @@ public class PipelineExecutionConfigurationDialog extends ConfigurationDialog {
         BaseMessages.getString(PKG, "PipelineExecutionConfigurationDialog.Shell.Title");
     mainLayout(shellTitle, GuiResource.getInstance().getImagePipeline());
 
-    String alwaysShowOptionLabel =
-        BaseMessages.getString(PKG, "PipelineExecutionConfigurationDialog.AlwaysOption.Value");
-    String alwaysShowOptionTooltip =
-        BaseMessages.getString(PKG, "PipelineExecutionConfigurationDialog.alwaysShowOption");
     String docUrl =
         Const.getDocUrl(
             BaseMessages.getString(
                 HopGui.class, "HopGui.PipelineExecutionConfigurationDialog.Help"));
-    String docTitle = BaseMessages.getString(PKG, "PipelineExecutionConfigurationDialog.docTitle");
-    String docHeader =
-        BaseMessages.getString(PKG, "PipelineExecutionConfigurationDialog.docHeader");
-    buttonsSectionLayout(
-        alwaysShowOptionLabel, alwaysShowOptionTooltip, docTitle, docUrl, docHeader);
+    buttonsSectionLayout(docUrl);
 
     addRunConfigurationSectionLayout();
 
@@ -168,8 +160,7 @@ public class PipelineExecutionConfigurationDialog extends ConfigurationDialog {
     List<String> variableNames = new ArrayList<>(configuration.getVariablesMap().keySet());
     Collections.sort(variableNames);
 
-    for (int i = 0; i < variableNames.size(); i++) {
-      String variableName = variableNames.get(i);
+    for (String variableName : variableNames) {
       String variableValue = configuration.getVariablesMap().get(variableName);
 
       if (Const.indexOfString(variableName, abstractMeta.listParameters()) < 0) {

@@ -47,7 +47,6 @@ public class HadoopSnappyCompressionProvider implements ICompressionProvider {
    * Locate the Snappy Shim for the active Hadoop Configuration via the Hadoop Configuration Util
    *
    * @throws Exception Error locating a valid Snappy shim:
-   *     <p>
    *     <ul>
    *       <li>No active Hadoop configuration
    *       <li>Active Hadoop configuration doesn't support Snappy
@@ -89,7 +88,7 @@ public class HadoopSnappyCompressionProvider implements ICompressionProvider {
     try {
       Object snappyShim = getActiveSnappyShim();
       Method m = snappyShim.getClass().getMethod("isHadoopSnappyAvailable");
-      return ((Boolean) m.invoke(snappyShim)).booleanValue();
+      return (Boolean) m.invoke(snappyShim);
     } catch (Exception ex) {
       return false;
     }

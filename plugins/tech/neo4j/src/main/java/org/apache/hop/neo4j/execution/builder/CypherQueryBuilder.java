@@ -19,7 +19,7 @@
 package org.apache.hop.neo4j.execution.builder;
 
 import java.util.Map;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 
 public class CypherQueryBuilder extends BaseCypherBuilder {
 
@@ -96,7 +96,51 @@ public class CypherQueryBuilder extends BaseCypherBuilder {
   }
 
   public CypherQueryBuilder withWhereIsNull(String nodeAlias, String property) {
-    cypher.append("WHERE ").append(nodeAlias).append(".").append(property).append(" IS NULL ");
+    return withWhereIsNull(true, nodeAlias, property);
+  }
+
+  public CypherQueryBuilder withWhereIsNull(
+      boolean firstCondition, String nodeAlias, String property) {
+    addWhereOrAnd(firstCondition);
+    cypher.append(nodeAlias).append(".").append(property).append(" IS NULL ");
+    return this;
+  }
+
+  public CypherQueryBuilder withWhereEquals(
+      boolean firstCondition, String nodeAlias, String property, String valueKey, Object value) {
+    addWhereOrAnd(firstCondition);
+    cypher
+        .append(nodeAlias)
+        .append(".")
+        .append(property)
+        .append(" = $")
+        .append(valueKey)
+        .append(" ");
+    // Add to the parameters
+    parameters.put(valueKey, value);
+    return this;
+  }
+
+  private void addWhereOrAnd(boolean firstCondition) {
+    if (firstCondition) {
+      cypher.append("WHERE ");
+    } else {
+      cypher.append(" AND ");
+    }
+  }
+
+  public CypherQueryBuilder withWhereContains(
+      boolean firstCondition, String nodeAlias, String property, String valueKey, Object value) {
+    addWhereOrAnd(firstCondition);
+    cypher
+        .append(nodeAlias)
+        .append(".")
+        .append(property)
+        .append(" CONTAINS $")
+        .append(valueKey)
+        .append(" ");
+    // Add to the parameters
+    parameters.put(valueKey, value);
     return this;
   }
 

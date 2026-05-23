@@ -32,12 +32,9 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
-import org.eclipse.swt.layout.FormLayout;
-import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 public class RowsFromResultDialog extends BaseTransformDialog {
   private static final Class<?> PKG = RowsFromResultMeta.class;
@@ -57,56 +54,24 @@ public class RowsFromResultDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(getTitle());
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MIN | SWT.MAX);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
     ModifyListener lsMod = e -> input.setChanged();
     changed = input.hasChanged();
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(getTitle());
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // TransformName line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(
-        BaseMessages.getString(PKG, "RowsFromResultDialog.TransformName.Label"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
 
     Label wlFields = new Label(shell, SWT.NONE);
     wlFields.setText(BaseMessages.getString(PKG, "RowsFromResultDialog.Fields.Label"));
     PropsUi.setLook(wlFields);
     FormData fdlFields = new FormData();
     fdlFields.left = new FormAttachment(0, 0);
-    fdlFields.top = new FormAttachment(wTransformName, margin);
+    fdlFields.top = new FormAttachment(wSpacer, margin);
     wlFields.setLayoutData(fdlFields);
 
-    final int FieldsRows = input.getFieldname().length;
+    final int FieldsRows = input.getResultFields().size();
 
-    ColumnInfo[] colinf =
+    ColumnInfo[] columnInfos =
         new ColumnInfo[] {
           new ColumnInfo(
               BaseMessages.getString(PKG, "RowsFromResultDialog.ColumnInfo.Fieldname"),
@@ -131,33 +96,21 @@ public class RowsFromResultDialog extends BaseTransformDialog {
             variables,
             shell,
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
-            colinf,
+            columnInfos,
             FieldsRows,
             lsMod,
             props);
-
-    // Some buttons
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-
-    setButtonPositions(new Button[] {wOk, wCancel}, margin, null);
 
     FormData fdFields = new FormData();
     fdFields.left = new FormAttachment(0, 0);
     fdFields.top = new FormAttachment(wlFields, margin);
     fdFields.right = new FormAttachment(100, 0);
-    fdFields.bottom = new FormAttachment(wOk, -margin * 2);
+    fdFields.bottom = new FormAttachment(wOk, -margin);
     wFields.setLayoutData(fdFields);
-
-    // Add listeners
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    wOk.addListener(SWT.Selection, e -> ok());
 
     getData();
     input.setChanged(changed);
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -169,18 +122,16 @@ public class RowsFromResultDialog extends BaseTransformDialog {
 
   /** Copy information from the meta-data input to the dialog fields. */
   public void getData() {
-    for (int i = 0; i < input.getFieldname().length; i++) {
+    for (int i = 0; i < input.getResultFields().size(); i++) {
+      RowsFromResultMeta.ResultRowField field = input.getResultFields().get(i);
       TableItem item = wFields.table.getItem(i);
-      item.setText(1, input.getFieldname()[i] == null ? "" : input.getFieldname()[i]);
-      item.setText(2, ValueMetaFactory.getValueMetaName(input.getType()[i]));
-      int len = input.getLength()[i];
-      int prc = input.getPrecision()[i];
+      item.setText(1, Const.NVL(field.getName(), ""));
+      item.setText(2, ValueMetaFactory.getValueMetaName(field.getHopType()));
+      int len = field.getLength();
+      int prc = field.getPrecision();
       item.setText(3, len >= 0 ? "" + len : "");
       item.setText(4, prc >= 0 ? "" + prc : "");
     }
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   private void cancel() {
@@ -195,15 +146,15 @@ public class RowsFromResultDialog extends BaseTransformDialog {
     }
 
     transformName = wTransformName.getText(); // return value
-    int nrFields = wFields.nrNonEmpty();
-    input.allocate(nrFields);
 
-    for (int i = 0; i < nrFields; i++) {
-      TableItem item = wFields.getNonEmpty(i);
-      input.getFieldname()[i] = item.getText(1);
-      input.getType()[i] = ValueMetaFactory.getIdForValueMeta(item.getText(2));
-      input.getLength()[i] = Const.toInt(item.getText(3), -1);
-      input.getPrecision()[i] = Const.toInt(item.getText(4), -1);
+    input.getResultFields().clear();
+    for (TableItem item : wFields.getNonEmptyItems()) {
+      RowsFromResultMeta.ResultRowField field = new RowsFromResultMeta.ResultRowField();
+      field.setName(item.getText(1));
+      field.setHopType(ValueMetaFactory.getIdForValueMeta(item.getText(2)));
+      field.setLength(Const.toInt(item.getText(3), -1));
+      field.setPrecision(Const.toInt(item.getText(4), -1));
+      input.getResultFields().add(field);
     }
     dispose();
   }

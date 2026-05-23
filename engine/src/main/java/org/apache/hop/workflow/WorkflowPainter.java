@@ -97,7 +97,7 @@ public class WorkflowPainter extends BasePainter<WorkflowHopMeta, ActionMeta> {
     gc.setBackground(EColor.BACKGROUND);
     gc.fillRectangle(0, 0, area.x, area.y);
 
-    // Draw the pipeline onto the image
+    // Draw the workflow onto the image
     //
     gc.setAlpha(255);
     gc.setTransform((float) offset.x, (float) offset.y, magnification);
@@ -111,10 +111,54 @@ public class WorkflowPainter extends BasePainter<WorkflowHopMeta, ActionMeta> {
     gc.dispose();
   }
 
+  @Override
+  protected void drawNavigationViewContent(
+      double graphX, double graphY, double scaleX, double scaleY) {
+    if (workflowMeta == null || maximum == null) {
+      return;
+    }
+    // Minimum size in viewport pixels so actions remain visible
+    int minSize = 2;
+    // Draw hops as lines first (behind actions)
+    gc.setForeground(EColor.DARKGRAY);
+    gc.setLineWidth(1);
+    for (WorkflowHopMeta hop : workflowMeta.getWorkflowHops()) {
+      if (hop.getFromAction() == null || hop.getToAction() == null) {
+        continue;
+      }
+      Point fromLoc = hop.getFromAction().getLocation();
+      Point toLoc = hop.getToAction().getLocation();
+      if (fromLoc == null || toLoc == null) {
+        continue;
+      }
+      int fromCenterX = (int) (graphX + (fromLoc.x + iconSize / 2) * scaleX);
+      int fromCenterY = (int) (graphY + (fromLoc.y + iconSize / 2) * scaleY);
+      int toCenterX = (int) (graphX + (toLoc.x + iconSize / 2) * scaleX);
+      int toCenterY = (int) (graphY + (toLoc.y + iconSize / 2) * scaleY);
+      gc.drawLine(fromCenterX, fromCenterY, toCenterX, toCenterY);
+    }
+    // Draw actions as small rectangles
+    gc.setForeground(EColor.BLACK);
+    gc.setBackground(EColor.WHITE);
+    for (ActionMeta action : workflowMeta.getActions()) {
+      Point loc = action.getLocation();
+      if (loc == null) {
+        continue;
+      }
+      int w = Math.max(minSize, (int) Math.ceil(iconSize * scaleX));
+      int h = Math.max(minSize, (int) Math.ceil(iconSize * scaleY));
+      int x = (int) (graphX + loc.x * scaleX);
+      int y = (int) (graphY + loc.y * scaleY);
+      gc.fillRectangle(x, y, w, h);
+      gc.drawRectangle(x, y, w, h);
+    }
+  }
+
   private void drawActions() throws HopException {
     if (gridSize > 1) {
       drawGrid();
     }
+    drawOriginBoundary();
 
     try {
       ExtensionPointHandler.callExtensionPoint(
@@ -194,23 +238,24 @@ public class WorkflowPainter extends BasePainter<WorkflowHopMeta, ActionMeta> {
       drawAction(actionMeta);
     }
 
-    // Display an icon on the indicated location signaling to the user that the action in
-    // question does not accept input
+    // Display a red cross on the indicated location signaling to the user that the action in
+    // question does not accept input or is not a good candidate for a hop (duplicate hop or
+    // workflow loop)
     //
     if (noInputAction != null) {
       gc.setLineWidth(2);
       gc.setForeground(EColor.RED);
       Point n = noInputAction.getLocation();
       gc.drawLine(
-          round(offset.x + n.x - 5),
-          round(offset.y + n.y - 5),
-          round(offset.x + n.x + iconSize + 5),
-          round(offset.y + n.y + iconSize + 5));
+          round(offset.x + n.x - 1),
+          round(offset.y + n.y - 1),
+          round(offset.x + n.x + iconSize + 1),
+          round(offset.y + n.y + iconSize + 1));
       gc.drawLine(
-          round(offset.x + n.x - 5),
-          round(offset.y + n.y + iconSize + 5),
-          round(offset.x + n.x + iconSize + 5),
-          round(offset.y + n.y - 5));
+          round(offset.x + n.x - 1),
+          round(offset.y + n.y + iconSize + 1),
+          round(offset.x + n.x + iconSize + 1),
+          round(offset.y + n.y - 1));
     }
 
     try {

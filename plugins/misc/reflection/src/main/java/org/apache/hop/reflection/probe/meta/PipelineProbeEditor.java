@@ -20,7 +20,7 @@ package org.apache.hop.reflection.probe.meta;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.pipeline.PipelineHopMeta;
@@ -38,7 +38,6 @@ import org.apache.hop.ui.core.widget.TableView;
 import org.apache.hop.ui.core.widget.TextVar;
 import org.apache.hop.ui.hopgui.HopGui;
 import org.apache.hop.ui.hopgui.file.pipeline.HopPipelineFileType;
-import org.apache.hop.ui.hopgui.perspective.dataorch.HopDataOrchestrationPerspective;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
@@ -134,7 +133,7 @@ public class PipelineProbeEditor extends MetadataEditor<PipelineProbe> {
     FormData fdlFilename = new FormData();
     fdlFilename.left = new FormAttachment(0, 0);
     fdlFilename.right = new FormAttachment(middle, 0);
-    fdlFilename.top = new FormAttachment(lastControl, 2 * margin);
+    fdlFilename.top = new FormAttachment(lastControl, margin);
     wlFilename.setLayoutData(fdlFilename);
 
     Button wbbFilename = new Button(parent, SWT.PUSH);
@@ -181,7 +180,7 @@ public class PipelineProbeEditor extends MetadataEditor<PipelineProbe> {
     FormData fdlSources = new FormData();
     fdlSources.left = new FormAttachment(0, 0);
     fdlSources.right = new FormAttachment(100, 0);
-    fdlSources.top = new FormAttachment(lastControl, 2 * margin);
+    fdlSources.top = new FormAttachment(lastControl, margin);
     wlSources.setLayoutData(fdlSources);
     lastControl = wlSources;
     ColumnInfo[] columns = {
@@ -272,15 +271,13 @@ public class PipelineProbeEditor extends MetadataEditor<PipelineProbe> {
         pipelineMeta.setFilename(realFilename);
         pipelineMeta.clearChanged();
 
-        HopDataOrchestrationPerspective perspective = HopGui.getDataOrchestrationPerspective();
+        // Open it in the Hop GUI
+        //
+        HopGui.getExplorerPerspective().addPipeline(pipelineMeta);
 
         // Switch to the perspective
         //
-        perspective.activate();
-
-        // Open it in the Hop GUI
-        //
-        HopGui.getDataOrchestrationPerspective().addPipeline(hopGui, pipelineMeta, type);
+        HopGui.getExplorerPerspective().activate();
 
         // Save the file
         hopGui.fileDelegate.fileSave();

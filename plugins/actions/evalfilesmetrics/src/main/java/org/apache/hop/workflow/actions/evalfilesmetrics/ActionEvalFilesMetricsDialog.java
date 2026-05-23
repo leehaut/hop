@@ -17,6 +17,7 @@
 
 package org.apache.hop.workflow.actions.evalfilesmetrics;
 
+import org.apache.hop.core.Const;
 import org.apache.hop.core.Props;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
@@ -28,9 +29,7 @@ import org.apache.hop.ui.core.gui.GuiResource;
 import org.apache.hop.ui.core.widget.ColumnInfo;
 import org.apache.hop.ui.core.widget.TableView;
 import org.apache.hop.ui.core.widget.TextVar;
-import org.apache.hop.ui.pipeline.transform.BaseTransformDialog;
 import org.apache.hop.ui.workflow.action.ActionDialog;
-import org.apache.hop.ui.workflow.dialog.WorkflowDialog;
 import org.apache.hop.workflow.WorkflowMeta;
 import org.apache.hop.workflow.action.IAction;
 import org.eclipse.swt.SWT;
@@ -49,7 +48,6 @@ import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 /** This dialog allows you to edit the eval files metrics action settings. */
 public class ActionEvalFilesMetricsDialog extends ActionDialog {
@@ -57,8 +55,6 @@ public class ActionEvalFilesMetricsDialog extends ActionDialog {
 
   private static final String[] FILETYPES =
       new String[] {BaseMessages.getString(PKG, "ActionEvalFilesMetrics.Filetype.All")};
-
-  private Text wName;
 
   private Label wlSourceFileFolder;
   private Button wbSourceFileFolder;
@@ -125,59 +121,218 @@ public class ActionEvalFilesMetricsDialog extends ActionDialog {
 
   @Override
   public IAction open() {
-
-    shell = new Shell(getParent(), SWT.DIALOG_TRIM | SWT.MIN | SWT.MAX | SWT.RESIZE);
-    PropsUi.setLook(shell);
-    WorkflowDialog.setShellImage(shell, action);
+    createShell(BaseMessages.getString(PKG, "ActionEvalFilesMetrics.Title"), action);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
     ModifyListener lsMod = e -> action.setChanged();
     changed = action.hasChanged();
 
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "ActionEvalFilesMetrics.Title"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // Buttons go at the very bottom
-    //
-    Button wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    Button wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    BaseTransformDialog.positionBottomButtons(shell, new Button[] {wOk, wCancel}, margin, null);
-
-    // Filename line
-    Label wlName = new Label(shell, SWT.RIGHT);
-    wlName.setText(BaseMessages.getString(PKG, "ActionEvalFilesMetrics.Name.Label"));
-    PropsUi.setLook(wlName);
-    FormData fdlName = new FormData();
-    fdlName.left = new FormAttachment(0, 0);
-    fdlName.right = new FormAttachment(middle, -margin);
-    fdlName.top = new FormAttachment(0, margin);
-    wlName.setLayoutData(fdlName);
-    wName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    PropsUi.setLook(wName);
-    wName.addModifyListener(lsMod);
-    FormData fdName = new FormData();
-    fdName.left = new FormAttachment(middle, 0);
-    fdName.top = new FormAttachment(0, margin);
-    fdName.right = new FormAttachment(100, 0);
-    wName.setLayoutData(fdName);
-
     CTabFolder wTabFolder = new CTabFolder(shell, SWT.BORDER);
     PropsUi.setLook(wTabFolder, Props.WIDGET_STYLE_TAB);
 
-    // ////////////////////////
-    // START OF GENERAL TAB ///
-    // ////////////////////////
+    addGeneralTab(wTabFolder, lsMod);
+    addAdvancedTab(wTabFolder, lsMod);
 
+    FormData fdTabFolder = new FormData();
+    fdTabFolder.left = new FormAttachment(0, 0);
+    fdTabFolder.top = new FormAttachment(wSpacer, margin);
+    fdTabFolder.right = new FormAttachment(100, 0);
+    fdTabFolder.bottom = new FormAttachment(wCancel, -margin);
+    wTabFolder.setLayoutData(fdTabFolder);
+
+    getData();
+    refresh();
+    refreshSize();
+    refreshSourceFiles();
+    wTabFolder.setSelection(0);
+    focusActionName();
+    BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
+
+    return action;
+  }
+
+  private void addAdvancedTab(CTabFolder wTabFolder, ModifyListener lsMod) {
+    CTabItem wAdvancedTab = new CTabItem(wTabFolder, SWT.NONE);
+    wAdvancedTab.setFont(GuiResource.getInstance().getFontDefault());
+    wAdvancedTab.setText(BaseMessages.getString(PKG, "ActionEvalFilesMetrics.Tab.Advanced.Label"));
+
+    FormLayout contentLayout = new FormLayout();
+    contentLayout.marginWidth = 3;
+    contentLayout.marginHeight = 3;
+
+    Composite wAdvancedComp = new Composite(wTabFolder, SWT.NONE);
+    PropsUi.setLook(wAdvancedComp);
+    wAdvancedComp.setLayout(contentLayout);
+
+    // ////////////////////////
+    // START OF SUCCESS ON GROUP///
+    // /
+    Group wSuccessOn = new Group(wAdvancedComp, SWT.SHADOW_NONE);
+    PropsUi.setLook(wSuccessOn);
+    wSuccessOn.setText(BaseMessages.getString(PKG, "ActionEvalFilesMetrics.SuccessOn.Group.Label"));
+
+    FormLayout successongroupLayout = new FormLayout();
+    successongroupLayout.marginWidth = 10;
+    successongroupLayout.marginHeight = 10;
+
+    wSuccessOn.setLayout(successongroupLayout);
+
+    // Scale
+    wlScale = new Label(wSuccessOn, SWT.RIGHT);
+    wlScale.setText(BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.Scale.Label"));
+    PropsUi.setLook(wlScale);
+    FormData fdlScale = new FormData();
+    fdlScale.left = new FormAttachment(0, 0);
+    fdlScale.right = new FormAttachment(middle, -margin);
+    fdlScale.top = new FormAttachment(0, margin);
+    wlScale.setLayoutData(fdlScale);
+
+    wScale = new CCombo(wSuccessOn, SWT.SINGLE | SWT.READ_ONLY | SWT.BORDER);
+    wScale.setItems(ActionEvalFilesMetrics.Scale.getDescriptions());
+    wScale.select(0); // +1: starts at -1
+
+    PropsUi.setLook(wScale);
+    FormData fdScale = new FormData();
+    fdScale.left = new FormAttachment(middle, 0);
+    fdScale.top = new FormAttachment(0, margin);
+    fdScale.right = new FormAttachment(100, 0);
+    wScale.setLayoutData(fdScale);
+    wScale.addSelectionListener(
+        new SelectionAdapter() {
+          @Override
+          public void widgetSelected(SelectionEvent e) {
+            action.setChanged();
+          }
+        });
+
+    // Success number Condition
+    Label wlSuccessNumberCondition = new Label(wSuccessOn, SWT.RIGHT);
+    wlSuccessNumberCondition.setText(
+        BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.SuccessCondition.Label"));
+    PropsUi.setLook(wlSuccessNumberCondition);
+    FormData fdlSuccessNumberCondition = new FormData();
+    fdlSuccessNumberCondition.left = new FormAttachment(0, 0);
+    fdlSuccessNumberCondition.right = new FormAttachment(middle, -margin);
+    fdlSuccessNumberCondition.top = new FormAttachment(wScale, margin);
+    wlSuccessNumberCondition.setLayoutData(fdlSuccessNumberCondition);
+
+    wSuccessNumberCondition = new CCombo(wSuccessOn, SWT.SINGLE | SWT.READ_ONLY | SWT.BORDER);
+    wSuccessNumberCondition.setItems(ActionEvalFilesMetrics.SuccesConditionType.getDescriptions());
+    wSuccessNumberCondition.select(0); // +1: starts at -1
+
+    PropsUi.setLook(wSuccessNumberCondition);
+    FormData fdSuccessNumberCondition = new FormData();
+    fdSuccessNumberCondition.left = new FormAttachment(middle, 0);
+    fdSuccessNumberCondition.top = new FormAttachment(wScale, margin);
+    fdSuccessNumberCondition.right = new FormAttachment(100, 0);
+    wSuccessNumberCondition.setLayoutData(fdSuccessNumberCondition);
+    wSuccessNumberCondition.addSelectionListener(
+        new SelectionAdapter() {
+          @Override
+          public void widgetSelected(SelectionEvent e) {
+            refresh();
+            action.setChanged();
+          }
+        });
+
+    // Compare with value
+    wlCompareValue = new Label(wSuccessOn, SWT.RIGHT);
+    wlCompareValue.setText(
+        BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.CompareValue.Label"));
+    PropsUi.setLook(wlCompareValue);
+    FormData fdlCompareValue = new FormData();
+    fdlCompareValue.left = new FormAttachment(0, 0);
+    fdlCompareValue.top = new FormAttachment(wSuccessNumberCondition, margin);
+    fdlCompareValue.right = new FormAttachment(middle, -margin);
+    wlCompareValue.setLayoutData(fdlCompareValue);
+
+    wCompareValue =
+        new TextVar(
+            variables,
+            wSuccessOn,
+            SWT.SINGLE | SWT.LEFT | SWT.BORDER,
+            BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.CompareValue.Tooltip"));
+    PropsUi.setLook(wCompareValue);
+    wCompareValue.addModifyListener(lsMod);
+    FormData fdCompareValue = new FormData();
+    fdCompareValue.left = new FormAttachment(middle, 0);
+    fdCompareValue.top = new FormAttachment(wSuccessNumberCondition, margin);
+    fdCompareValue.right = new FormAttachment(100, -margin);
+    wCompareValue.setLayoutData(fdCompareValue);
+
+    // Min value
+    wlMinValue = new Label(wSuccessOn, SWT.RIGHT);
+    wlMinValue.setText(BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.MinValue.Label"));
+    PropsUi.setLook(wlMinValue);
+    FormData fdlMinValue = new FormData();
+    fdlMinValue.left = new FormAttachment(0, 0);
+    fdlMinValue.top = new FormAttachment(wSuccessNumberCondition, margin);
+    fdlMinValue.right = new FormAttachment(middle, -margin);
+    wlMinValue.setLayoutData(fdlMinValue);
+
+    wMinValue =
+        new TextVar(
+            variables,
+            wSuccessOn,
+            SWT.SINGLE | SWT.LEFT | SWT.BORDER,
+            BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.MinValue.Tooltip"));
+    PropsUi.setLook(wMinValue);
+    wMinValue.addModifyListener(lsMod);
+    FormData fdMinValue = new FormData();
+    fdMinValue.left = new FormAttachment(middle, 0);
+    fdMinValue.top = new FormAttachment(wSuccessNumberCondition, margin);
+    fdMinValue.right = new FormAttachment(100, -margin);
+    wMinValue.setLayoutData(fdMinValue);
+
+    // Maximum value
+    wlMaxValue = new Label(wSuccessOn, SWT.RIGHT);
+    wlMaxValue.setText(BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.MaxValue.Label"));
+    PropsUi.setLook(wlMaxValue);
+    FormData fdlMaxValue = new FormData();
+    fdlMaxValue.left = new FormAttachment(0, 0);
+    fdlMaxValue.top = new FormAttachment(wMinValue, margin);
+    fdlMaxValue.right = new FormAttachment(middle, -margin);
+    wlMaxValue.setLayoutData(fdlMaxValue);
+
+    wMaxValue =
+        new TextVar(
+            variables,
+            wSuccessOn,
+            SWT.SINGLE | SWT.LEFT | SWT.BORDER,
+            BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.MaxValue.Tooltip"));
+    PropsUi.setLook(wMaxValue);
+    wMaxValue.addModifyListener(lsMod);
+    FormData fdMaxValue = new FormData();
+    fdMaxValue.left = new FormAttachment(middle, 0);
+    fdMaxValue.top = new FormAttachment(wMinValue, margin);
+    fdMaxValue.right = new FormAttachment(100, -margin);
+    wMaxValue.setLayoutData(fdMaxValue);
+
+    FormData fdSuccessOn = new FormData();
+    fdSuccessOn.left = new FormAttachment(0, margin);
+    fdSuccessOn.top = new FormAttachment(0, margin);
+    fdSuccessOn.right = new FormAttachment(100, -margin);
+    wSuccessOn.setLayoutData(fdSuccessOn);
+    // ///////////////////////////////////////////////////////////
+    // / END OF Success ON GROUP
+    // ///////////////////////////////////////////////////////////
+
+    FormData fdAdvancedComp = new FormData();
+    fdAdvancedComp.left = new FormAttachment(0, 0);
+    fdAdvancedComp.top = new FormAttachment(0, 0);
+    fdAdvancedComp.right = new FormAttachment(100, 0);
+    fdAdvancedComp.bottom = new FormAttachment(100, 0);
+    wAdvancedComp.setLayoutData(fdAdvancedComp);
+
+    wAdvancedComp.layout();
+    wAdvancedTab.setControl(wAdvancedComp);
+
+    // ///////////////////////////////////////////////////////////
+    // / END OF ADVANCED TAB
+    // ///////////////////////////////////////////////////////////
+  }
+
+  private void addGeneralTab(CTabFolder wTabFolder, ModifyListener lsMod) {
     CTabItem wGeneralTab = new CTabItem(wTabFolder, SWT.NONE);
     wGeneralTab.setFont(GuiResource.getInstance().getFontDefault());
     wGeneralTab.setText(BaseMessages.getString(PKG, "ActionEvalFilesMetrics.Tab.General.Label"));
@@ -190,7 +345,6 @@ public class ActionEvalFilesMetricsDialog extends ActionDialog {
     generalLayout.marginHeight = 3;
     wGeneralComp.setLayout(generalLayout);
 
-    // SETTINGS grouping?
     // ////////////////////////
     // START OF SETTINGS GROUP
     //
@@ -212,17 +366,17 @@ public class ActionEvalFilesMetricsDialog extends ActionDialog {
     FormData fdlSourceFiles = new FormData();
     fdlSourceFiles.left = new FormAttachment(0, 0);
     fdlSourceFiles.right = new FormAttachment(middle, -margin);
-    fdlSourceFiles.top = new FormAttachment(wName, margin);
+    fdlSourceFiles.top = new FormAttachment(0, margin);
     wlSourceFiles.setLayoutData(fdlSourceFiles);
 
     wSourceFiles = new CCombo(wSettings, SWT.SINGLE | SWT.READ_ONLY | SWT.BORDER);
-    wSourceFiles.setItems(ActionEvalFilesMetrics.SourceFilesDesc);
+    wSourceFiles.setItems(ActionEvalFilesMetrics.SourceFilesType.getDescriptions());
     wSourceFiles.select(0); // +1: starts at -1
 
     PropsUi.setLook(wSourceFiles);
     FormData fdSourceFiles = new FormData();
     fdSourceFiles.left = new FormAttachment(middle, 0);
-    fdSourceFiles.top = new FormAttachment(wName, margin);
+    fdSourceFiles.top = new FormAttachment(0, margin);
     fdSourceFiles.right = new FormAttachment(100, 0);
     wSourceFiles.setLayoutData(fdSourceFiles);
     wSourceFiles.addSelectionListener(
@@ -338,7 +492,7 @@ public class ActionEvalFilesMetricsDialog extends ActionDialog {
     wlEvaluationType.setLayoutData(fdlEvaluationType);
 
     wEvaluationType = new CCombo(wSettings, SWT.SINGLE | SWT.READ_ONLY | SWT.BORDER);
-    wEvaluationType.setItems(ActionEvalFilesMetrics.EvaluationTypeDesc);
+    wEvaluationType.setItems(ActionEvalFilesMetrics.EvaluationType.getDescriptions());
     wEvaluationType.select(0); // +1: starts at -1
 
     PropsUi.setLook(wEvaluationType);
@@ -358,7 +512,7 @@ public class ActionEvalFilesMetricsDialog extends ActionDialog {
 
     FormData fdSettings = new FormData();
     fdSettings.left = new FormAttachment(0, margin);
-    fdSettings.top = new FormAttachment(wName, margin);
+    fdSettings.top = new FormAttachment(0, margin);
     fdSettings.right = new FormAttachment(100, -margin);
     wSettings.setLayoutData(fdSettings);
 
@@ -373,7 +527,7 @@ public class ActionEvalFilesMetricsDialog extends ActionDialog {
     PropsUi.setLook(wlSourceFileFolder);
     FormData fdlSourceFileFolder = new FormData();
     fdlSourceFileFolder.left = new FormAttachment(0, 0);
-    fdlSourceFileFolder.top = new FormAttachment(wSettings, 2 * margin);
+    fdlSourceFileFolder.top = new FormAttachment(wSettings, margin);
     fdlSourceFileFolder.right = new FormAttachment(middle, -margin);
     wlSourceFileFolder.setLayoutData(fdlSourceFileFolder);
 
@@ -418,7 +572,7 @@ public class ActionEvalFilesMetricsDialog extends ActionDialog {
     wSourceFileFolder.addModifyListener(lsMod);
     FormData fdSourceFileFolder = new FormData();
     fdSourceFileFolder.left = new FormAttachment(middle, 0);
-    fdSourceFileFolder.top = new FormAttachment(wSettings, 2 * margin);
+    fdSourceFileFolder.top = new FormAttachment(wSettings, margin);
     fdSourceFileFolder.right = new FormAttachment(wbaSourceFileFolder, -margin);
     wSourceFileFolder.setLayoutData(fdSourceFileFolder);
 
@@ -484,13 +638,7 @@ public class ActionEvalFilesMetricsDialog extends ActionDialog {
     fdbeSourceFileFolder.top = new FormAttachment(wbdSourceFileFolder, margin);
     wbeSourceFileFolder.setLayoutData(fdbeSourceFileFolder);
 
-    int rows =
-        action.getSourceFileFolder() == null
-            ? 1
-            : (action.getSourceFileFolder().length == 0 ? 0 : action.getSourceFileFolder().length);
-    final int FieldsRows = rows;
-
-    ColumnInfo[] colinf =
+    ColumnInfo[] columnInfos =
         new ColumnInfo[] {
           new ColumnInfo(
               BaseMessages.getString(PKG, "ActionEvalFilesMetrics.Fields.SourceFileFolder.Label"),
@@ -503,14 +651,14 @@ public class ActionEvalFilesMetricsDialog extends ActionDialog {
           new ColumnInfo(
               BaseMessages.getString(PKG, "ActionEvalFilesMetrics.Fields.IncludeSubDirs.Label"),
               ColumnInfo.COLUMN_TYPE_CCOMBO,
-              ActionEvalFilesMetrics.IncludeSubFoldersDesc)
+              ActionEvalFilesMetrics.NO_YES)
         };
 
-    colinf[0].setUsingVariables(true);
-    colinf[0].setToolTip(
+    columnInfos[0].setUsingVariables(true);
+    columnInfos[0].setToolTip(
         BaseMessages.getString(PKG, "ActionEvalFilesMetrics.Fields.SourceFileFolder.Tooltip"));
-    colinf[1].setUsingVariables(true);
-    colinf[1].setToolTip(
+    columnInfos[1].setUsingVariables(true);
+    columnInfos[1].setToolTip(
         BaseMessages.getString(PKG, "ActionEvalFilesMetrics.Fields.Wildcard.Tooltip"));
 
     wFields =
@@ -518,8 +666,8 @@ public class ActionEvalFilesMetricsDialog extends ActionDialog {
             variables,
             wGeneralComp,
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
-            colinf,
-            FieldsRows,
+            columnInfos,
+            1,
             lsMod,
             props);
 
@@ -586,217 +734,12 @@ public class ActionEvalFilesMetricsDialog extends ActionDialog {
     wGeneralComp.layout();
     wGeneralTab.setControl(wGeneralComp);
     PropsUi.setLook(wGeneralComp);
-
-    // ///////////////////////////////////////////////////////////
-    // / END OF GENERAL TAB
-    // ///////////////////////////////////////////////////////////
-
-    // ////////////////////////////////////
-    // START OF ADVANCED TAB ///
-    // ///////////////////////////////////
-
-    CTabItem wAdvancedTab = new CTabItem(wTabFolder, SWT.NONE);
-    wAdvancedTab.setFont(GuiResource.getInstance().getFontDefault());
-    wAdvancedTab.setText(BaseMessages.getString(PKG, "ActionEvalFilesMetrics.Tab.Advanced.Label"));
-
-    FormLayout contentLayout = new FormLayout();
-    contentLayout.marginWidth = 3;
-    contentLayout.marginHeight = 3;
-
-    Composite wAdvancedComp = new Composite(wTabFolder, SWT.NONE);
-    PropsUi.setLook(wAdvancedComp);
-    wAdvancedComp.setLayout(contentLayout);
-
-    // SuccessOngrouping?
-    // ////////////////////////
-    // START OF SUCCESS ON GROUP///
-    // /
-    Group wSuccessOn = new Group(wAdvancedComp, SWT.SHADOW_NONE);
-    PropsUi.setLook(wSuccessOn);
-    wSuccessOn.setText(BaseMessages.getString(PKG, "ActionEvalFilesMetrics.SuccessOn.Group.Label"));
-
-    FormLayout successongroupLayout = new FormLayout();
-    successongroupLayout.marginWidth = 10;
-    successongroupLayout.marginHeight = 10;
-
-    wSuccessOn.setLayout(successongroupLayout);
-
-    // Scale
-    wlScale = new Label(wSuccessOn, SWT.RIGHT);
-    wlScale.setText(BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.Scale.Label"));
-    PropsUi.setLook(wlScale);
-    FormData fdlScale = new FormData();
-    fdlScale.left = new FormAttachment(0, 0);
-    fdlScale.right = new FormAttachment(middle, -margin);
-    fdlScale.top = new FormAttachment(0, margin);
-    wlScale.setLayoutData(fdlScale);
-
-    wScale = new CCombo(wSuccessOn, SWT.SINGLE | SWT.READ_ONLY | SWT.BORDER);
-    wScale.setItems(ActionEvalFilesMetrics.scaleDesc);
-    wScale.select(0); // +1: starts at -1
-
-    PropsUi.setLook(wScale);
-    FormData fdScale = new FormData();
-    fdScale.left = new FormAttachment(middle, 0);
-    fdScale.top = new FormAttachment(0, margin);
-    fdScale.right = new FormAttachment(100, 0);
-    wScale.setLayoutData(fdScale);
-    wScale.addSelectionListener(
-        new SelectionAdapter() {
-          @Override
-          public void widgetSelected(SelectionEvent e) {
-            action.setChanged();
-          }
-        });
-
-    // Success number Condition
-    Label wlSuccessNumberCondition = new Label(wSuccessOn, SWT.RIGHT);
-    wlSuccessNumberCondition.setText(
-        BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.SuccessCondition.Label"));
-    PropsUi.setLook(wlSuccessNumberCondition);
-    FormData fdlSuccessNumberCondition = new FormData();
-    fdlSuccessNumberCondition.left = new FormAttachment(0, 0);
-    fdlSuccessNumberCondition.right = new FormAttachment(middle, -margin);
-    fdlSuccessNumberCondition.top = new FormAttachment(wScale, margin);
-    wlSuccessNumberCondition.setLayoutData(fdlSuccessNumberCondition);
-
-    wSuccessNumberCondition = new CCombo(wSuccessOn, SWT.SINGLE | SWT.READ_ONLY | SWT.BORDER);
-    wSuccessNumberCondition.setItems(ActionEvalFilesMetrics.successNumberConditionDesc);
-    wSuccessNumberCondition.select(0); // +1: starts at -1
-
-    PropsUi.setLook(wSuccessNumberCondition);
-    FormData fdSuccessNumberCondition = new FormData();
-    fdSuccessNumberCondition.left = new FormAttachment(middle, 0);
-    fdSuccessNumberCondition.top = new FormAttachment(wScale, margin);
-    fdSuccessNumberCondition.right = new FormAttachment(100, 0);
-    wSuccessNumberCondition.setLayoutData(fdSuccessNumberCondition);
-    wSuccessNumberCondition.addSelectionListener(
-        new SelectionAdapter() {
-          @Override
-          public void widgetSelected(SelectionEvent e) {
-            refresh();
-            action.setChanged();
-          }
-        });
-
-    // Compare with value
-    wlCompareValue = new Label(wSuccessOn, SWT.RIGHT);
-    wlCompareValue.setText(
-        BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.CompareValue.Label"));
-    PropsUi.setLook(wlCompareValue);
-    FormData fdlCompareValue = new FormData();
-    fdlCompareValue.left = new FormAttachment(0, 0);
-    fdlCompareValue.top = new FormAttachment(wSuccessNumberCondition, margin);
-    fdlCompareValue.right = new FormAttachment(middle, -margin);
-    wlCompareValue.setLayoutData(fdlCompareValue);
-
-    wCompareValue =
-        new TextVar(
-            variables,
-            wSuccessOn,
-            SWT.SINGLE | SWT.LEFT | SWT.BORDER,
-            BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.CompareValue.Tooltip"));
-    PropsUi.setLook(wCompareValue);
-    wCompareValue.addModifyListener(lsMod);
-    FormData fdCompareValue = new FormData();
-    fdCompareValue.left = new FormAttachment(middle, 0);
-    fdCompareValue.top = new FormAttachment(wSuccessNumberCondition, margin);
-    fdCompareValue.right = new FormAttachment(100, -margin);
-    wCompareValue.setLayoutData(fdCompareValue);
-
-    // Min value
-    wlMinValue = new Label(wSuccessOn, SWT.RIGHT);
-    wlMinValue.setText(BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.MinValue.Label"));
-    PropsUi.setLook(wlMinValue);
-    FormData fdlMinValue = new FormData();
-    fdlMinValue.left = new FormAttachment(0, 0);
-    fdlMinValue.top = new FormAttachment(wSuccessNumberCondition, margin);
-    fdlMinValue.right = new FormAttachment(middle, -margin);
-    wlMinValue.setLayoutData(fdlMinValue);
-
-    wMinValue =
-        new TextVar(
-            variables,
-            wSuccessOn,
-            SWT.SINGLE | SWT.LEFT | SWT.BORDER,
-            BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.MinValue.Tooltip"));
-    PropsUi.setLook(wMinValue);
-    wMinValue.addModifyListener(lsMod);
-    FormData fdMinValue = new FormData();
-    fdMinValue.left = new FormAttachment(middle, 0);
-    fdMinValue.top = new FormAttachment(wSuccessNumberCondition, margin);
-    fdMinValue.right = new FormAttachment(100, -margin);
-    wMinValue.setLayoutData(fdMinValue);
-
-    // Maximum value
-    wlMaxValue = new Label(wSuccessOn, SWT.RIGHT);
-    wlMaxValue.setText(BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.MaxValue.Label"));
-    PropsUi.setLook(wlMaxValue);
-    FormData fdlMaxValue = new FormData();
-    fdlMaxValue.left = new FormAttachment(0, 0);
-    fdlMaxValue.top = new FormAttachment(wMinValue, margin);
-    fdlMaxValue.right = new FormAttachment(middle, -margin);
-    wlMaxValue.setLayoutData(fdlMaxValue);
-
-    wMaxValue =
-        new TextVar(
-            variables,
-            wSuccessOn,
-            SWT.SINGLE | SWT.LEFT | SWT.BORDER,
-            BaseMessages.getString(PKG, "ActionEvalFilesMetricsDialog.MaxValue.Tooltip"));
-    PropsUi.setLook(wMaxValue);
-    wMaxValue.addModifyListener(lsMod);
-    FormData fdMaxValue = new FormData();
-    fdMaxValue.left = new FormAttachment(middle, 0);
-    fdMaxValue.top = new FormAttachment(wMinValue, margin);
-    fdMaxValue.right = new FormAttachment(100, -margin);
-    wMaxValue.setLayoutData(fdMaxValue);
-
-    FormData fdSuccessOn = new FormData();
-    fdSuccessOn.left = new FormAttachment(0, margin);
-    fdSuccessOn.top = new FormAttachment(0, margin);
-    fdSuccessOn.right = new FormAttachment(100, -margin);
-    wSuccessOn.setLayoutData(fdSuccessOn);
-    // ///////////////////////////////////////////////////////////
-    // / END OF Success ON GROUP
-    // ///////////////////////////////////////////////////////////
-
-    FormData fdAdvancedComp = new FormData();
-    fdAdvancedComp.left = new FormAttachment(0, 0);
-    fdAdvancedComp.top = new FormAttachment(0, 0);
-    fdAdvancedComp.right = new FormAttachment(100, 0);
-    fdAdvancedComp.bottom = new FormAttachment(100, 0);
-    wAdvancedComp.setLayoutData(wAdvancedComp);
-
-    wAdvancedComp.layout();
-    wAdvancedTab.setControl(wAdvancedComp);
-
-    // ///////////////////////////////////////////////////////////
-    // / END OF ADVANCED TAB
-    // ///////////////////////////////////////////////////////////
-
-    FormData fdTabFolder = new FormData();
-    fdTabFolder.left = new FormAttachment(0, 0);
-    fdTabFolder.top = new FormAttachment(wName, margin);
-    fdTabFolder.right = new FormAttachment(100, 0);
-    fdTabFolder.bottom = new FormAttachment(wOk, -2 * margin);
-    wTabFolder.setLayoutData(fdTabFolder);
-
-    getData();
-    refresh();
-    refreshSize();
-    refreshSourceFiles();
-    wTabFolder.setSelection(0);
-
-    BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
-
-    return action;
   }
 
   private void refreshSourceFiles() {
     boolean useStaticFiles =
-        (ActionEvalFilesMetrics.getSourceFilesByDesc(wSourceFiles.getText())
-            == ActionEvalFilesMetrics.SOURCE_FILES_FILES);
+        (ActionEvalFilesMetrics.SourceFilesType.lookupDescriptions(wSourceFiles.getText())
+            == ActionEvalFilesMetrics.SourceFilesType.FILES);
     wlFields.setEnabled(useStaticFiles);
     wFields.setEnabled(useStaticFiles);
     wbdSourceFileFolder.setEnabled(useStaticFiles);
@@ -811,14 +754,14 @@ public class ActionEvalFilesMetricsDialog extends ActionDialog {
     wbSourceDirectory.setEnabled(useStaticFiles);
 
     boolean setResultWildcard =
-        (ActionEvalFilesMetrics.getSourceFilesByDesc(wSourceFiles.getText())
-            == ActionEvalFilesMetrics.SOURCE_FILES_FILENAMES_RESULT);
+        (ActionEvalFilesMetrics.SourceFilesType.lookupDescriptions(wSourceFiles.getText())
+            == ActionEvalFilesMetrics.SourceFilesType.FILENAMES_RESULT);
     wlResultFilenamesWildcard.setEnabled(setResultWildcard);
     wResultFilenamesWildcard.setEnabled(setResultWildcard);
 
     boolean setResultFields =
-        (ActionEvalFilesMetrics.getSourceFilesByDesc(wSourceFiles.getText())
-            == ActionEvalFilesMetrics.SOURCE_FILES_PREVIOUS_RESULT);
+        (ActionEvalFilesMetrics.SourceFilesType.lookupDescriptions(wSourceFiles.getText())
+            == ActionEvalFilesMetrics.SourceFilesType.PREVIOUS_RESULT);
     wlResultFieldIncludeSubFolders.setEnabled(setResultFields);
     wResultFieldIncludeSubFolders.setEnabled(setResultFields);
     wlResultFieldFile.setEnabled(setResultFields);
@@ -829,68 +772,42 @@ public class ActionEvalFilesMetricsDialog extends ActionDialog {
 
   private void refreshSize() {
     boolean useSize =
-        (ActionEvalFilesMetrics.getEvaluationTypeByDesc(wEvaluationType.getText())
-            == ActionEvalFilesMetrics.EVALUATE_TYPE_SIZE);
+        (ActionEvalFilesMetrics.EvaluationType.lookupDescription(wEvaluationType.getText())
+            == ActionEvalFilesMetrics.EvaluationType.SIZE);
     wlScale.setVisible(useSize);
     wScale.setVisible(useSize);
   }
 
   /** Copy information from the meta-data input to the dialog fields. */
   public void getData() {
-    if (action.getName() != null) {
-      wName.setText(action.getName());
-    }
+    wName.setText(Const.NVL(action.getName(), ""));
 
-    if (action.getSourceFileFolder() != null) {
-      for (int i = 0; i < action.getSourceFileFolder().length; i++) {
-        TableItem ti = wFields.table.getItem(i);
-        if (action.getSourceFileFolder()[i] != null) {
-          ti.setText(1, action.getSourceFileFolder()[i]);
-        }
+    for (ActionEvalFilesMetrics.SourceFile sourceFile : action.getSourceFiles()) {
+      TableItem ti = new TableItem(wFields.table, SWT.NONE);
 
-        if (action.getSourceWildcard()[i] != null) {
-          ti.setText(2, action.getSourceWildcard()[i]);
-        }
+      ti.setText(1, Const.NVL(sourceFile.getSourceFileFolder(), ""));
+      ti.setText(2, Const.NVL(sourceFile.getSourceWildcard(), ""));
+      ti.setText(3, Const.NVL(sourceFile.getSourceIncludeSubfolders(), ""));
+    }
+    wFields.optimizeTableView();
 
-        if (action.getSourceIncludeSubfolders()[i] != null) {
-          ti.setText(
-              3,
-              ActionEvalFilesMetrics.getIncludeSubFoldersDesc(
-                  action.getSourceIncludeSubfolders()[i]));
-        }
-      }
-      wFields.setRowNums();
-      wFields.optWidth(true);
-    }
-    if (action.getResultFilenamesWildcard() != null) {
-      wResultFilenamesWildcard.setText(action.getResultFilenamesWildcard());
-    }
-    if (action.getResultFieldFile() != null) {
-      wResultFieldFile.setText(action.getResultFieldFile());
-    }
-    if (action.getResultFieldWildcard() != null) {
-      wResultFieldWildcard.setText(action.getResultFieldWildcard());
-    }
-    if (action.getResultFieldIncludeSubfolders() != null) {
-      wResultFieldIncludeSubFolders.setText(action.getResultFieldIncludeSubfolders());
-    }
-    wSourceFiles.setText(ActionEvalFilesMetrics.getSourceFilesDesc(action.sourceFiles));
-    wEvaluationType.setText(ActionEvalFilesMetrics.getEvaluationTypeDesc(action.evaluationType));
-    wScale.setText(ActionEvalFilesMetrics.getScaleDesc(action.scale));
-    wSuccessNumberCondition.setText(
-        ActionEvalFilesMetrics.getSuccessNumberConditionDesc(action.getSuccessConditionType()));
-    if (action.getCompareValue() != null) {
-      wCompareValue.setText(action.getCompareValue());
-    }
-    if (action.getMinValue() != null) {
-      wMinValue.setText(action.getMinValue());
-    }
-    if (action.getMaxValue() != null) {
-      wMaxValue.setText(action.getMaxValue());
-    }
+    wResultFilenamesWildcard.setText(Const.NVL(action.getResultFilenamesWildcard(), ""));
+    wResultFieldFile.setText(Const.NVL(action.getResultFieldFile(), ""));
+    wResultFieldWildcard.setText(Const.NVL(action.getResultFieldWildcard(), ""));
+    wResultFieldIncludeSubFolders.setText(Const.NVL(action.getResultFieldIncludeSubFolders(), ""));
 
-    wName.selectAll();
-    wName.setFocus();
+    wSourceFiles.setText(action.getSourceFilesType().getDescription());
+    wEvaluationType.setText(action.getEvaluationType().getDescription());
+    wScale.setText(action.getScale().getDescription());
+    wSuccessNumberCondition.setText(action.getSuccessConditionType().getDescription());
+    wCompareValue.setText(Const.NVL(action.getCompareValue(), ""));
+    wMinValue.setText(Const.NVL(action.getMinValue(), ""));
+    wMaxValue.setText(Const.NVL(action.getMaxValue(), ""));
+  }
+
+  @Override
+  protected void onActionNameModified() {
+    action.setChanged();
   }
 
   private void cancel() {
@@ -911,50 +828,36 @@ public class ActionEvalFilesMetricsDialog extends ActionDialog {
     action.setResultFilenamesWildcard(wResultFilenamesWildcard.getText());
     action.setResultFieldFile(wResultFieldFile.getText());
     action.setResultFieldWildcard(wResultFieldWildcard.getText());
-    action.setResultFieldIncludeSubfolders(wResultFieldIncludeSubFolders.getText());
-    action.sourceFiles = ActionEvalFilesMetrics.getSourceFilesByDesc(wSourceFiles.getText());
-    action.evaluationType =
-        ActionEvalFilesMetrics.getEvaluationTypeByDesc(wEvaluationType.getText());
-    action.scale = ActionEvalFilesMetrics.getScaleByDesc(wScale.getText());
+    action.setResultFieldIncludeSubFolders(wResultFieldIncludeSubFolders.getText());
+    action.setSourceFilesType(
+        ActionEvalFilesMetrics.SourceFilesType.lookupDescriptions(wSourceFiles.getText()));
+    action.setEvaluationType(
+        ActionEvalFilesMetrics.EvaluationType.lookupDescription(wEvaluationType.getText()));
+    action.setScale(ActionEvalFilesMetrics.Scale.lookupDescription(wScale.getText()));
     action.setSuccessConditionType(
-        ActionEvalFilesMetrics.getSuccessNumberConditionByDesc(wSuccessNumberCondition.getText()));
+        ActionEvalFilesMetrics.SuccesConditionType.lookupDescription(
+            wSuccessNumberCondition.getText()));
     action.setCompareValue(wCompareValue.getText());
     action.setMinValue(wMinValue.getText());
     action.setMaxValue(wMaxValue.getText());
-    int nrItems = wFields.nrNonEmpty();
-    int nr = 0;
-    for (int i = 0; i < nrItems; i++) {
-      String arg = wFields.getNonEmpty(i).getText(1);
-      if (!Utils.isEmpty(arg)) {
-        nr++;
-      }
+
+    action.getSourceFiles().clear();
+    for (TableItem item : wFields.getNonEmptyItems()) {
+      ActionEvalFilesMetrics.SourceFile sourceFile = new ActionEvalFilesMetrics.SourceFile();
+      action.getSourceFiles().add(sourceFile);
+
+      sourceFile.setSourceFileFolder(item.getText(1));
+      sourceFile.setSourceWildcard(item.getText(2));
+      sourceFile.setSourceIncludeSubfolders(item.getText(3));
     }
-    String[] sourceFileFolder = new String[nr];
-    String[] sourceWildcard = new String[nr];
-    String[] sourceIncludeSubfolders = new String[nr];
-    nr = 0;
-    for (int i = 0; i < nrItems; i++) {
-      String source = wFields.getNonEmpty(i).getText(1);
-      String wild = wFields.getNonEmpty(i).getText(2);
-      String includeSubFolders = wFields.getNonEmpty(i).getText(3);
-      if (!Utils.isEmpty(source)) {
-        sourceFileFolder[nr] = source;
-        sourceWildcard[nr] = wild;
-        sourceIncludeSubfolders[nr] =
-            ActionEvalFilesMetrics.getIncludeSubFolders(includeSubFolders);
-        nr++;
-      }
-    }
-    action.setSourceFileFolder(sourceFileFolder);
-    action.setSourceWildcard(sourceWildcard);
-    action.setSourceIncludeSubfolders(sourceIncludeSubfolders);
     dispose();
   }
 
   private void refresh() {
     boolean compareValue =
-        (ActionEvalFilesMetrics.getSuccessNumberConditionByDesc(wSuccessNumberCondition.getText())
-            != ActionEvalFilesMetrics.SUCCESS_NUMBER_CONDITION_BETWEEN);
+        (ActionEvalFilesMetrics.SuccesConditionType.lookupDescription(
+                wSuccessNumberCondition.getText())
+            != ActionEvalFilesMetrics.SuccesConditionType.BETWEEN);
     wlCompareValue.setVisible(compareValue);
     wCompareValue.setVisible(compareValue);
     wlMinValue.setVisible(!compareValue);

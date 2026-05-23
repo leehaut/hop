@@ -32,9 +32,7 @@ import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineHopMeta;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransform;
-import org.apache.hop.pipeline.transform.ITransformIOMeta;
 import org.apache.hop.pipeline.transform.TransformMeta;
-import org.apache.hop.pipeline.transform.stream.IStream;
 
 /**
  * Merge rows from 2 sorted streams and output joined rows with matched key fields. Use this instead
@@ -68,34 +66,27 @@ public class MultiMergeJoin extends BaseTransform<MultiMergeJoinMeta, MultiMerge
       throws HopException {
 
     PipelineHopMeta pipelineHopMeta;
-
-    ITransformIOMeta transformIOMeta = meta.getTransformIOMeta();
-    List<IStream> infoStreams = transformIOMeta.getInfoStreams();
-    IStream stream;
     TransformMeta toTransformMeta = meta.getParentTransformMeta();
     TransformMeta fromTransformMeta;
 
     ArrayList<String> inputTransformNameList = new ArrayList<>();
-    String[] inputTransformNames = meta.getInputTransforms();
+    List<String> inputTransformNames = meta.getInputTransforms();
     String inputTransformName;
 
-    for (int i = 0; i < infoStreams.size(); i++) {
-      inputTransformName = inputTransformNames[i];
-      stream = infoStreams.get(i);
-      fromTransformMeta = stream.getTransformMeta();
+    for (int i = 0; i < inputTransformNames.size(); i++) {
+      inputTransformName = inputTransformNames.get(i);
+
+      fromTransformMeta = getPipelineMeta().findTransform(inputTransformName);
       if (fromTransformMeta == null) {
-        // should not arrive here, shoud typically have been caught by init.
         throw new HopException(
             BaseMessages.getString(
                 PKG,
                 CONST_MULTI_MERGE_JOIN_LOG_UNABLE_TO_FIND_REFERENCE_STREAM,
                 inputTransformName));
       }
-      // check the hop
+
       pipelineHopMeta = getPipelineMeta().findPipelineHop(fromTransformMeta, toTransformMeta, true);
-      // there is no hop: this is unexpected.
       if (pipelineHopMeta == null) {
-        // should not arrive here, shoud typically have been caught by init.
         throw new HopException(
             BaseMessages.getString(
                 PKG,
@@ -104,9 +95,11 @@ public class MultiMergeJoin extends BaseTransform<MultiMergeJoinMeta, MultiMerge
       } else if (pipelineHopMeta.isEnabled()) {
         inputTransformNameList.add(inputTransformName);
       } else {
-        logDetailed(
-            BaseMessages.getString(
-                PKG, "MultiMergeJoin.Log.IgnoringTransform", inputTransformName));
+        if (isDetailed()) {
+          logDetailed(
+              BaseMessages.getString(
+                  PKG, "MultiMergeJoin.Log.IgnoringTransform", inputTransformName));
+        }
       }
     }
 
@@ -134,8 +127,8 @@ public class MultiMergeJoin extends BaseTransform<MultiMergeJoinMeta, MultiMerge
 
     IRowMeta rowMeta;
     data.outputRowMeta = new RowMeta();
-    for (int i = 0, j = 0; i < inputTransformNames.length; i++) {
-      inputTransformName = inputTransformNames[i];
+    for (int i = 0, j = 0; i < inputTransformNames.size(); i++) {
+      inputTransformName = inputTransformNames.get(i);
       if (!inputTransformNameList.contains(inputTransformName)) {
         // ignore transform with disabled hop.
         continue;
@@ -166,7 +159,14 @@ public class MultiMergeJoin extends BaseTransform<MultiMergeJoinMeta, MultiMerge
         queueEntry.row = row;
         rowMeta = rowSet.getRowMeta();
 
-        keyField = meta.getKeyFields()[i];
+        List<String> keyFields = meta.getKeyFields();
+        if (keyFields == null || i >= keyFields.size()) {
+          throw new HopException(
+              String.format(
+                  "Key fields configuration missing for input transform '%s' at index %d",
+                  inputTransformName, i));
+        }
+        keyField = keyFields.get(i);
         String[] keyFieldParts = keyField.split(",");
         String keyFieldPart;
         data.keyNrs[j] = new int[keyFieldParts.length];
@@ -207,13 +207,14 @@ public class MultiMergeJoin extends BaseTransform<MultiMergeJoinMeta, MultiMerge
     }
 
     if (isRowLevel()) {
-      String metaString =
-          BaseMessages.getString(
-              PKG, "MultiMergeJoin.Log.DataInfo", data.metas[0].getString(data.rows[0]) + "");
+      StringBuilder metaString =
+          new StringBuilder(
+              BaseMessages.getString(
+                  PKG, "MultiMergeJoin.Log.DataInfo", data.metas[0].getString(data.rows[0])));
       for (int i = 1; i < data.metas.length; i++) {
-        metaString += data.metas[i].getString(data.rows[i]);
+        metaString.append(data.metas[i].getString(data.rows[i]));
       }
-      logRowlevel(metaString);
+      logRowlevel(metaString.toString());
     }
 
     /*
@@ -383,7 +384,7 @@ public class MultiMergeJoin extends BaseTransform<MultiMergeJoinMeta, MultiMerge
         }
       }
     }
-    if (checkFeedback(getLinesRead())) {
+    if (checkFeedback(getLinesRead()) && isBasic()) {
       logBasic(BaseMessages.getString(PKG, "MultiMergeJoin.LineNumber") + getLinesRead());
     }
     return true;
@@ -393,15 +394,16 @@ public class MultiMergeJoin extends BaseTransform<MultiMergeJoinMeta, MultiMerge
   public boolean init() {
 
     if (super.init()) {
-      ITransformIOMeta transformIOMeta = meta.getTransformIOMeta();
-      String[] inputTransformNames = meta.getInputTransforms();
-      String inputTransformName;
-      List<IStream> infoStreams = transformIOMeta.getInfoStreams();
-      IStream stream;
-      for (int i = 0; i < infoStreams.size(); i++) {
-        inputTransformName = inputTransformNames[i];
-        stream = infoStreams.get(i);
-        if (stream.getTransformMeta() == null) {
+      List<String> inputTransformNames = meta.getInputTransforms();
+
+      if (inputTransformNames == null || inputTransformNames.isEmpty()) {
+        logError("No input transforms configured for multiway merge join");
+        return false;
+      }
+
+      for (String inputTransformName : inputTransformNames) {
+        TransformMeta transformMeta = getPipelineMeta().findTransform(inputTransformName);
+        if (transformMeta == null) {
           logError(
               BaseMessages.getString(
                   PKG,
@@ -410,6 +412,7 @@ public class MultiMergeJoin extends BaseTransform<MultiMergeJoinMeta, MultiMerge
           return false;
         }
       }
+
       String joinType = meta.getJoinType();
       for (int i = 0; i < MultiMergeJoinMeta.joinTypes.length; ++i) {
         if (joinType.equalsIgnoreCase(MultiMergeJoinMeta.joinTypes[i])) {
@@ -435,9 +438,9 @@ public class MultiMergeJoin extends BaseTransform<MultiMergeJoinMeta, MultiMerge
   protected boolean isInputLayoutValid(IRowMeta[] rows) {
     if (rows != null) {
       // Compare the key types
-      String[] keyFields = meta.getKeyFields();
+      List<String> keyFields = meta.getKeyFields();
       // check 1 : keys are configured for each stream
-      if (rows.length != keyFields.length) {
+      if (rows.length != keyFields.size()) {
         logError("keys are not configured for all the streams ");
         return false;
       }
@@ -445,8 +448,8 @@ public class MultiMergeJoin extends BaseTransform<MultiMergeJoinMeta, MultiMerge
       int prevCount = 0;
 
       List<String[]> keyList = new ArrayList<>();
-      for (int i = 0; i < keyFields.length; i++) {
-        String[] keys = keyFields[i].split(",");
+      for (int i = 0; i < keyFields.size(); i++) {
+        String[] keys = keyFields.get(i).split(",");
         keyList.add(keys);
         int count = keys.length;
         if (i != 0 && prevCount != count) {

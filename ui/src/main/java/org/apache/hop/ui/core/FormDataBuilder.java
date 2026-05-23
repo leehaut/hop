@@ -17,16 +17,43 @@
 
 package org.apache.hop.ui.core;
 
+import org.eclipse.swt.SWT;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.widgets.Control;
 
+/**
+ * Builder class for creating and configuring {@link FormData} instances using a fluent API.
+ *
+ * <p>Example usage:
+ *
+ * <pre>{@code
+ * FormData fd = FormDataBuilder.builder()
+ *     .left()
+ *     .top()
+ *     .fullWidth()
+ *     .build();
+ * }</pre>
+ */
 public class FormDataBuilder implements Cloneable {
 
-  private final FormAttachment MIN = new FormAttachment(0, 0);
-  private final FormAttachment MAX = new FormAttachment(100, 0);
+  private static final FormAttachment MIN = new FormAttachment(0, 0);
+  private static final FormAttachment MAX = new FormAttachment(100, 0);
 
   protected FormData fd = new FormData();
+
+  /**
+   * Static factory method for creating a new builder instance.
+   *
+   * @return create FormDataBuilder
+   */
+  public static FormDataBuilder builder() {
+    return new FormDataBuilder();
+  }
+
+  public FormData build() {
+    return fd;
+  }
 
   public FormDataBuilder width(int width) {
     fd.width = width;
@@ -100,6 +127,23 @@ public class FormDataBuilder implements Cloneable {
 
   public FormDataBuilder bottom(Control control, int margin) {
     return bottom(new FormAttachment(control, margin));
+  }
+
+  /**
+   * Sets the bottom attachment of this {@code FormDataBuilder} relative to the specified control.
+   *
+   * <p>The bottom edge will be attached to the given {@link Control} with the specified margin and
+   * alignment.
+   *
+   * @param control the reference control to which the bottom edge will be attached; must not be
+   *     {@code null}
+   * @param margin the offset in pixels from the specified control
+   * @param alignment the alignment relative to the control (for example, {@link SWT#TOP}, {@link
+   *     SWT#BOTTOM}, or {@link SWT#CENTER})
+   * @return this {@code FormDataBuilder} instance for method chaining
+   */
+  public FormDataBuilder bottom(Control control, int margin, int alignment) {
+    return bottom(new FormAttachment(control, margin, alignment));
   }
 
   public FormDataBuilder right(Control control, int margin) {

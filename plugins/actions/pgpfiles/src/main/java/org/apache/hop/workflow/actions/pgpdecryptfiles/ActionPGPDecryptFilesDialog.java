@@ -29,9 +29,7 @@ import org.apache.hop.ui.core.gui.GuiResource;
 import org.apache.hop.ui.core.widget.ColumnInfo;
 import org.apache.hop.ui.core.widget.TableView;
 import org.apache.hop.ui.core.widget.TextVar;
-import org.apache.hop.ui.pipeline.transform.BaseTransformDialog;
 import org.apache.hop.ui.workflow.action.ActionDialog;
-import org.apache.hop.ui.workflow.dialog.WorkflowDialog;
 import org.apache.hop.workflow.WorkflowMeta;
 import org.apache.hop.workflow.action.IAction;
 import org.eclipse.swt.SWT;
@@ -50,7 +48,6 @@ import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 /** This dialog allows you to edit the Move Files action settings. */
 public class ActionPGPDecryptFilesDialog extends ActionDialog {
@@ -62,8 +59,6 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
       "ActionPGPDecryptFiles.BrowseFiles.Label";
   public static final String CONST_OVERWRITE_FILE = "overwrite_file";
   public static final String CONST_UNIQUE_NAME = "unique_name";
-
-  private Text wName;
 
   private Label wlSourceFileFolder;
   private Button wbSourceFileFolder;
@@ -166,59 +161,47 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
 
   @Override
   public IAction open() {
-
-    shell = new Shell(getParent(), SWT.DIALOG_TRIM | SWT.MIN | SWT.MAX | SWT.RESIZE);
-    PropsUi.setLook(shell);
-    WorkflowDialog.setShellImage(shell, action);
+    createShell(BaseMessages.getString(PKG, "ActionPGPDecryptFiles.Title"), action);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
     ModifyListener lsMod = e -> action.setChanged();
     changed = action.hasChanged();
 
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "ActionPGPDecryptFiles.Title"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // Buttons go at the very bottom
-    //
-    Button wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    Button wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    BaseTransformDialog.positionBottomButtons(shell, new Button[] {wOk, wCancel}, margin, null);
-
-    // Filename line
-    Label wlName = new Label(shell, SWT.RIGHT);
-    wlName.setText(BaseMessages.getString(PKG, "ActionPGPDecryptFiles.Name.Label"));
-    PropsUi.setLook(wlName);
-    FormData fdlName = new FormData();
-    fdlName.left = new FormAttachment(0, 0);
-    fdlName.right = new FormAttachment(middle, -margin);
-    fdlName.top = new FormAttachment(0, margin);
-    wlName.setLayoutData(fdlName);
-    wName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    PropsUi.setLook(wName);
-    wName.addModifyListener(lsMod);
-    FormData fdName = new FormData();
-    fdName.left = new FormAttachment(middle, 0);
-    fdName.top = new FormAttachment(0, margin);
-    fdName.right = new FormAttachment(100, 0);
-    wName.setLayoutData(fdName);
-
     CTabFolder wTabFolder = new CTabFolder(shell, SWT.BORDER);
     PropsUi.setLook(wTabFolder, Props.WIDGET_STYLE_TAB);
 
-    // ////////////////////////
-    // START OF GENERAL TAB ///
-    // ////////////////////////
+    addGeneralTab(wTabFolder, lsMod);
 
+    addDestinationTab(wTabFolder, lsMod);
+
+    addAdvancedTab(wTabFolder, lsMod);
+
+    FormData fdTabFolder = new FormData();
+    fdTabFolder.left = new FormAttachment(0, 0);
+    fdTabFolder.top = new FormAttachment(wSpacer, margin);
+    fdTabFolder.right = new FormAttachment(100, 0);
+    fdTabFolder.bottom = new FormAttachment(wCancel, -margin);
+    wTabFolder.setLayoutData(fdTabFolder);
+
+    getData();
+    focusActionName();
+    checkIncludeSubFolders();
+    activeSuccessCondition();
+    setDateTimeFormat();
+    activeSuccessCondition();
+
+    activeDestinationFolder();
+    setMovedDateTimeFormat();
+    setAddDateBeforeExtension();
+    setAddMovedDateBeforeExtension();
+    wTabFolder.setSelection(0);
+
+    BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
+
+    return action;
+  }
+
+  private void addGeneralTab(CTabFolder wTabFolder, ModifyListener lsMod) {
     CTabItem wGeneralTab = new CTabItem(wTabFolder, SWT.NONE);
     wGeneralTab.setFont(GuiResource.getInstance().getFontDefault());
     wGeneralTab.setText(BaseMessages.getString(PKG, "ActionPGPDecryptFiles.Tab.General.Label"));
@@ -251,7 +234,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wlGpgExe);
     FormData fdlGpgExe = new FormData();
     fdlGpgExe.left = new FormAttachment(0, 0);
-    fdlGpgExe.top = new FormAttachment(wName, margin);
+    fdlGpgExe.top = new FormAttachment(0, margin);
     fdlGpgExe.right = new FormAttachment(middle, -margin);
     wlGpgExe.setLayoutData(fdlGpgExe);
 
@@ -262,7 +245,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
         BaseMessages.getString(PKG, CONST_ACTION_PGPDECRYPT_FILES_BROWSE_FILES_LABEL));
     FormData fdbbGpgExe = new FormData();
     fdbbGpgExe.right = new FormAttachment(100, -margin);
-    fdbbGpgExe.top = new FormAttachment(wName, margin);
+    fdbbGpgExe.top = new FormAttachment(0, margin);
     wbbGpgExe.setLayoutData(fdbbGpgExe);
 
     wbbGpgExe.addListener(
@@ -277,7 +260,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     wGpgExe.addModifyListener(lsMod);
     FormData fdGpgExe = new FormData();
     fdGpgExe.left = new FormAttachment(middle, 0);
-    fdGpgExe.top = new FormAttachment(wName, margin);
+    fdGpgExe.top = new FormAttachment(0, margin);
     fdGpgExe.right = new FormAttachment(wbbGpgExe, -margin);
     wGpgExe.setLayoutData(fdGpgExe);
 
@@ -314,7 +297,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wlPrevious);
     FormData fdlPrevious = new FormData();
     fdlPrevious.left = new FormAttachment(0, 0);
-    fdlPrevious.top = new FormAttachment(wlIncludeSubfolders, 2 * margin);
+    fdlPrevious.top = new FormAttachment(wlIncludeSubfolders, margin);
     fdlPrevious.right = new FormAttachment(middle, -margin);
     wlPrevious.setLayoutData(fdlPrevious);
     wPrevious = new Button(wSettings, SWT.CHECK);
@@ -326,17 +309,11 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     fdPrevious.top = new FormAttachment(wlPrevious, 0, SWT.CENTER);
     fdPrevious.right = new FormAttachment(100, 0);
     wPrevious.setLayoutData(fdPrevious);
-    wPrevious.addSelectionListener(
-        new SelectionAdapter() {
-          @Override
-          public void widgetSelected(SelectionEvent e) {
+    wPrevious.addListener(SWT.Selection, e -> refreshArgFromPrevious());
 
-            RefreshArgFromPrevious();
-          }
-        });
     FormData fdSettings = new FormData();
     fdSettings.left = new FormAttachment(0, margin);
-    fdSettings.top = new FormAttachment(wName, margin);
+    fdSettings.top = new FormAttachment(0, margin);
     fdSettings.right = new FormAttachment(100, -margin);
     wSettings.setLayoutData(fdSettings);
 
@@ -351,7 +328,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wlSourceFileFolder);
     FormData fdlSourceFileFolder = new FormData();
     fdlSourceFileFolder.left = new FormAttachment(0, 0);
-    fdlSourceFileFolder.top = new FormAttachment(wSettings, 2 * margin);
+    fdlSourceFileFolder.top = new FormAttachment(wSettings, margin);
     fdlSourceFileFolder.right = new FormAttachment(middle, -margin);
     wlSourceFileFolder.setLayoutData(fdlSourceFileFolder);
 
@@ -395,7 +372,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     wSourceFileFolder.addModifyListener(lsMod);
     FormData fdSourceFileFolder = new FormData();
     fdSourceFileFolder.left = new FormAttachment(middle, 0);
-    fdSourceFileFolder.top = new FormAttachment(wSettings, 2 * margin);
+    fdSourceFileFolder.top = new FormAttachment(wSettings, margin);
     fdSourceFileFolder.right = new FormAttachment(wbaSourceFileFolder, -margin);
     wSourceFileFolder.setLayoutData(fdSourceFileFolder);
 
@@ -514,13 +491,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     fdbeSourceFileFolder.top = new FormAttachment(wbdSourceFileFolder, margin);
     wbeSourceFileFolder.setLayoutData(fdbeSourceFileFolder);
 
-    int rows =
-        action.sourceFileFolder == null
-            ? 1
-            : (action.sourceFileFolder.length == 0 ? 0 : action.sourceFileFolder.length);
-    final int FieldsRows = rows;
-
-    ColumnInfo[] colinf =
+    ColumnInfo[] columnInfos =
         new ColumnInfo[] {
           new ColumnInfo(
               BaseMessages.getString(PKG, "ActionPGPDecryptFiles.Fields.SourceFileFolder.Label"),
@@ -541,29 +512,29 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
               false),
         };
 
-    colinf[0].setToolTip(
+    columnInfos[0].setToolTip(
         BaseMessages.getString(PKG, "ActionPGPDecryptFiles.Fields.SourceFileFolder.Tooltip"));
-    colinf[1].setToolTip(
+    columnInfos[1].setToolTip(
         BaseMessages.getString(PKG, "ActionPGPDecryptFiles.Fields.Wildcard.Tooltip"));
-    colinf[2].setToolTip(
+    columnInfos[2].setToolTip(
         BaseMessages.getString(PKG, "ActionPGPDecryptFiles.Fields.PassPhrase.Tooltip"));
-    colinf[3].setToolTip(
+    columnInfos[3].setToolTip(
         BaseMessages.getString(PKG, "ActionPGPDecryptFiles.Fields.DestinationFileFolder.Tooltip"));
 
-    colinf[0].setUsingVariables(true);
-    colinf[1].setUsingVariables(true);
-    colinf[2].setUsingVariables(true);
-    colinf[3].setUsingVariables(true);
+    columnInfos[0].setUsingVariables(true);
+    columnInfos[1].setUsingVariables(true);
+    columnInfos[2].setUsingVariables(true);
+    columnInfos[3].setUsingVariables(true);
 
-    colinf[2].setPasswordField(true);
+    columnInfos[2].setPasswordField(true);
 
     wFields =
         new TableView(
             variables,
             wGeneralComp,
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
-            colinf,
-            FieldsRows,
+            columnInfos,
+            1,
             lsMod,
             props);
 
@@ -574,7 +545,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     fdFields.bottom = new FormAttachment(100, -margin);
     wFields.setLayoutData(fdFields);
 
-    RefreshArgFromPrevious();
+    refreshArgFromPrevious();
 
     // Add the file to the list of files...
     SelectionAdapter selA =
@@ -582,12 +553,10 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
           @Override
           public void widgetSelected(SelectionEvent arg0) {
             wFields.add(
-                new String[] {
-                  wSourceFileFolder.getText(),
-                  wWildcard.getText(),
-                  null,
-                  wDestinationFileFolder.getText()
-                });
+                wSourceFileFolder.getText(),
+                wWildcard.getText(),
+                null,
+                wDestinationFileFolder.getText());
             wSourceFileFolder.setText("");
             wDestinationFileFolder.setText("");
             wWildcard.setText("");
@@ -639,15 +608,9 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     wGeneralComp.layout();
     wGeneralTab.setControl(wGeneralComp);
     PropsUi.setLook(wGeneralComp);
+  }
 
-    // ///////////////////////////////////////////////////////////
-    // / END OF GENERAL TAB
-    // ///////////////////////////////////////////////////////////
-
-    // ////////////////////////////////////
-    // START OF DESTINATION FILE TAB ///
-    // ///////////////////////////////////
-
+  private void addDestinationTab(CTabFolder wTabFolder, ModifyListener lsMod) {
     CTabItem wDestinationFileTab = new CTabItem(wTabFolder, SWT.NONE);
     wDestinationFileTab.setFont(GuiResource.getInstance().getFontDefault());
     wDestinationFileTab.setText(
@@ -710,7 +673,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wlDestinationIsAFile);
     FormData fdlDestinationIsAFile = new FormData();
     fdlDestinationIsAFile.left = new FormAttachment(0, 0);
-    fdlDestinationIsAFile.top = new FormAttachment(wlCreateDestinationFolder, 2 * margin);
+    fdlDestinationIsAFile.top = new FormAttachment(wlCreateDestinationFolder, margin);
     fdlDestinationIsAFile.right = new FormAttachment(middle, -margin);
     wlDestinationIsAFile.setLayoutData(fdlDestinationIsAFile);
     wDestinationIsAFile = new Button(wDestinationFile, SWT.CHECK);
@@ -738,7 +701,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wlDoNotKeepFolderStructure);
     FormData fdlDoNotKeepFolderStructure = new FormData();
     fdlDoNotKeepFolderStructure.left = new FormAttachment(0, 0);
-    fdlDoNotKeepFolderStructure.top = new FormAttachment(wlDestinationIsAFile, 2 * margin);
+    fdlDoNotKeepFolderStructure.top = new FormAttachment(wlDestinationIsAFile, margin);
     fdlDoNotKeepFolderStructure.right = new FormAttachment(middle, -margin);
     wlDoNotKeepFolderStructure.setLayoutData(fdlDoNotKeepFolderStructure);
     wDoNotKeepFolderStructure = new Button(wDestinationFile, SWT.CHECK);
@@ -764,7 +727,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wlAddDate);
     FormData fdlAddDate = new FormData();
     fdlAddDate.left = new FormAttachment(0, 0);
-    fdlAddDate.top = new FormAttachment(wlDoNotKeepFolderStructure, 2 * margin);
+    fdlAddDate.top = new FormAttachment(wlDoNotKeepFolderStructure, margin);
     fdlAddDate.right = new FormAttachment(middle, -margin);
     wlAddDate.setLayoutData(fdlAddDate);
     wAddDate = new Button(wDestinationFile, SWT.CHECK);
@@ -789,7 +752,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wlAddTime);
     FormData fdlAddTime = new FormData();
     fdlAddTime.left = new FormAttachment(0, 0);
-    fdlAddTime.top = new FormAttachment(wlAddDate, 2 * margin);
+    fdlAddTime.top = new FormAttachment(wlAddDate, margin);
     fdlAddTime.right = new FormAttachment(middle, -margin);
     wlAddTime.setLayoutData(fdlAddTime);
     wAddTime = new Button(wDestinationFile, SWT.CHECK);
@@ -816,7 +779,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wlSpecifyFormat);
     FormData fdlSpecifyFormat = new FormData();
     fdlSpecifyFormat.left = new FormAttachment(0, 0);
-    fdlSpecifyFormat.top = new FormAttachment(wlAddTime, 2 * margin);
+    fdlSpecifyFormat.top = new FormAttachment(wlAddTime, margin);
     fdlSpecifyFormat.right = new FormAttachment(middle, -margin);
     wlSpecifyFormat.setLayoutData(fdlSpecifyFormat);
     wSpecifyFormat = new Button(wDestinationFile, SWT.CHECK);
@@ -845,7 +808,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wlDateTimeFormat);
     FormData fdlDateTimeFormat = new FormData();
     fdlDateTimeFormat.left = new FormAttachment(0, 0);
-    fdlDateTimeFormat.top = new FormAttachment(wlSpecifyFormat, 2 * margin);
+    fdlDateTimeFormat.top = new FormAttachment(wlSpecifyFormat, margin);
     fdlDateTimeFormat.right = new FormAttachment(middle, -margin);
     wlDateTimeFormat.setLayoutData(fdlDateTimeFormat);
     wDateTimeFormat = new CCombo(wDestinationFile, SWT.BORDER | SWT.READ_ONLY);
@@ -854,7 +817,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     wDateTimeFormat.addModifyListener(lsMod);
     FormData fdDateTimeFormat = new FormData();
     fdDateTimeFormat.left = new FormAttachment(middle, 0);
-    fdDateTimeFormat.top = new FormAttachment(wlSpecifyFormat, 2 * margin);
+    fdDateTimeFormat.top = new FormAttachment(wlSpecifyFormat, margin);
     fdDateTimeFormat.right = new FormAttachment(100, 0);
     wDateTimeFormat.setLayoutData(fdDateTimeFormat);
     // Prepare a list of possible DateTimeFormats...
@@ -897,7 +860,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     FormData fdlIfFileExists = new FormData();
     fdlIfFileExists.left = new FormAttachment(0, 0);
     fdlIfFileExists.right = new FormAttachment(middle, 0);
-    fdlIfFileExists.top = new FormAttachment(wlAddDateBeforeExtension, 2 * margin);
+    fdlIfFileExists.top = new FormAttachment(wlAddDateBeforeExtension, margin);
     wlIfFileExists.setLayoutData(fdlIfFileExists);
     wIfFileExists = new CCombo(wDestinationFile, SWT.SINGLE | SWT.READ_ONLY | SWT.BORDER);
     wIfFileExists.add(
@@ -916,7 +879,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wIfFileExists);
     FormData fdIfFileExists = new FormData();
     fdIfFileExists.left = new FormAttachment(middle, 0);
-    fdIfFileExists.top = new FormAttachment(wlAddDateBeforeExtension, 2 * margin);
+    fdIfFileExists.top = new FormAttachment(wlAddDateBeforeExtension, margin);
     fdIfFileExists.right = new FormAttachment(100, 0);
     wIfFileExists.setLayoutData(fdIfFileExists);
 
@@ -933,7 +896,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
 
     FormData fdDestinationFile = new FormData();
     fdDestinationFile.left = new FormAttachment(0, margin);
-    fdDestinationFile.top = new FormAttachment(wName, margin);
+    fdDestinationFile.top = new FormAttachment(0, margin);
     fdDestinationFile.right = new FormAttachment(100, -margin);
     wDestinationFile.setLayoutData(fdDestinationFile);
 
@@ -1025,7 +988,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wlAddMovedDate);
     FormData fdlAddMovedDate = new FormData();
     fdlAddMovedDate.left = new FormAttachment(0, 0);
-    fdlAddMovedDate.top = new FormAttachment(wlCreateMoveToFolder, 2 * margin);
+    fdlAddMovedDate.top = new FormAttachment(wlCreateMoveToFolder, margin);
     fdlAddMovedDate.right = new FormAttachment(middle, -margin);
     wlAddMovedDate.setLayoutData(fdlAddMovedDate);
     wAddMovedDate = new Button(wMoveToGroup, SWT.CHECK);
@@ -1051,7 +1014,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wlAddMovedTime);
     FormData fdlAddMovedTime = new FormData();
     fdlAddMovedTime.left = new FormAttachment(0, 0);
-    fdlAddMovedTime.top = new FormAttachment(wlAddMovedDate, 2 * margin);
+    fdlAddMovedTime.top = new FormAttachment(wlAddMovedDate, margin);
     fdlAddMovedTime.right = new FormAttachment(middle, -margin);
     wlAddMovedTime.setLayoutData(fdlAddMovedTime);
     wAddMovedTime = new Button(wMoveToGroup, SWT.CHECK);
@@ -1079,7 +1042,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wlSpecifyMoveFormat);
     FormData fdlSpecifyMoveFormat = new FormData();
     fdlSpecifyMoveFormat.left = new FormAttachment(0, 0);
-    fdlSpecifyMoveFormat.top = new FormAttachment(wlAddMovedTime, 2 * margin);
+    fdlSpecifyMoveFormat.top = new FormAttachment(wlAddMovedTime, margin);
     fdlSpecifyMoveFormat.right = new FormAttachment(middle, -margin);
     wlSpecifyMoveFormat.setLayoutData(fdlSpecifyMoveFormat);
     wSpecifyMoveFormat = new Button(wMoveToGroup, SWT.CHECK);
@@ -1091,14 +1054,12 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     fdSpecifyMoveFormat.top = new FormAttachment(wlSpecifyMoveFormat, 0, SWT.CENTER);
     fdSpecifyMoveFormat.right = new FormAttachment(100, 0);
     wSpecifyMoveFormat.setLayoutData(fdSpecifyMoveFormat);
-    wSpecifyMoveFormat.addSelectionListener(
-        new SelectionAdapter() {
-          @Override
-          public void widgetSelected(SelectionEvent e) {
-            action.setChanged();
-            setMovedDateTimeFormat();
-            setAddMovedDateBeforeExtension();
-          }
+    wSpecifyMoveFormat.addListener(
+        SWT.Selection,
+        e -> {
+          action.setChanged();
+          setMovedDateTimeFormat();
+          setAddMovedDateBeforeExtension();
         });
 
     // Moved DateTimeFormat
@@ -1108,7 +1069,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wlMovedDateTimeFormat);
     FormData fdlMovedDateTimeFormat = new FormData();
     fdlMovedDateTimeFormat.left = new FormAttachment(0, 0);
-    fdlMovedDateTimeFormat.top = new FormAttachment(wlSpecifyMoveFormat, 2 * margin);
+    fdlMovedDateTimeFormat.top = new FormAttachment(wlSpecifyMoveFormat, margin);
     fdlMovedDateTimeFormat.right = new FormAttachment(middle, -margin);
     wlMovedDateTimeFormat.setLayoutData(fdlMovedDateTimeFormat);
     wMovedDateTimeFormat = new CCombo(wMoveToGroup, SWT.BORDER | SWT.READ_ONLY);
@@ -1117,7 +1078,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     wMovedDateTimeFormat.addModifyListener(lsMod);
     FormData fdMovedDateTimeFormat = new FormData();
     fdMovedDateTimeFormat.left = new FormAttachment(middle, 0);
-    fdMovedDateTimeFormat.top = new FormAttachment(wlSpecifyMoveFormat, 2 * margin);
+    fdMovedDateTimeFormat.top = new FormAttachment(wlSpecifyMoveFormat, margin);
     fdMovedDateTimeFormat.right = new FormAttachment(100, 0);
     wMovedDateTimeFormat.setLayoutData(fdMovedDateTimeFormat);
 
@@ -1145,13 +1106,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
         new FormAttachment(wlAddMovedDateBeforeExtension, 0, SWT.CENTER);
     fdAddMovedDateBeforeExtension.right = new FormAttachment(100, 0);
     wAddMovedDateBeforeExtension.setLayoutData(fdAddMovedDateBeforeExtension);
-    wAddMovedDateBeforeExtension.addSelectionListener(
-        new SelectionAdapter() {
-          @Override
-          public void widgetSelected(SelectionEvent e) {
-            action.setChanged();
-          }
-        });
+    wAddMovedDateBeforeExtension.addListener(SWT.Selection, e -> action.setChanged());
 
     // If moved File Exists
     wlIfMovedFileExists = new Label(wMoveToGroup, SWT.RIGHT);
@@ -1161,7 +1116,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     FormData fdlIfMovedFileExists = new FormData();
     fdlIfMovedFileExists.left = new FormAttachment(0, 0);
     fdlIfMovedFileExists.right = new FormAttachment(middle, 0);
-    fdlIfMovedFileExists.top = new FormAttachment(wlAddMovedDateBeforeExtension, 2 * margin);
+    fdlIfMovedFileExists.top = new FormAttachment(wlAddMovedDateBeforeExtension, margin);
     wlIfMovedFileExists.setLayoutData(fdlIfMovedFileExists);
     wIfMovedFileExists = new CCombo(wMoveToGroup, SWT.SINGLE | SWT.READ_ONLY | SWT.BORDER);
     wIfMovedFileExists.add(
@@ -1177,7 +1132,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wIfMovedFileExists);
     FormData fdIfMovedFileExists = new FormData();
     fdIfMovedFileExists.left = new FormAttachment(middle, 0);
-    fdIfMovedFileExists.top = new FormAttachment(wlAddMovedDateBeforeExtension, 2 * margin);
+    fdIfMovedFileExists.top = new FormAttachment(wlAddMovedDateBeforeExtension, margin);
     fdIfMovedFileExists.right = new FormAttachment(100, 0);
     wIfMovedFileExists.setLayoutData(fdIfMovedFileExists);
 
@@ -1196,19 +1151,13 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     fdDestinationFileComp.top = new FormAttachment(0, 0);
     fdDestinationFileComp.right = new FormAttachment(100, 0);
     fdDestinationFileComp.bottom = new FormAttachment(100, 0);
-    wDestinationFileComp.setLayoutData(wDestinationFileComp);
+    wDestinationFileComp.setLayoutData(fdDestinationFileComp);
 
     wDestinationFileComp.layout();
     wDestinationFileTab.setControl(wDestinationFileComp);
+  }
 
-    // ///////////////////////////////////////////////////////////
-    // / END OF DESTINATION FILETAB
-    // ///////////////////////////////////////////////////////////
-
-    // ////////////////////////////////////
-    // START OF ADVANCED TAB ///
-    // ///////////////////////////////////
-
+  private void addAdvancedTab(CTabFolder wTabFolder, ModifyListener lsMod) {
     CTabItem wAdvancedTab = new CTabItem(wTabFolder, SWT.NONE);
     wAdvancedTab.setFont(GuiResource.getInstance().getFontDefault());
     wAdvancedTab.setText(BaseMessages.getString(PKG, "ActionPGPDecryptFiles.Tab.Advanced.Label"));
@@ -1221,7 +1170,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wAdvancedComp);
     wAdvancedComp.setLayout(contentLayout);
 
-    // SuccessOngrouping?
+    // SuccessOnGrouping
     // ////////////////////////
     // START OF SUCCESS ON GROUP///
     // /
@@ -1229,11 +1178,10 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     PropsUi.setLook(wSuccessOn);
     wSuccessOn.setText(BaseMessages.getString(PKG, "ActionPGPDecryptFiles.SuccessOn.Group.Label"));
 
-    FormLayout successongroupLayout = new FormLayout();
-    successongroupLayout.marginWidth = 10;
-    successongroupLayout.marginHeight = 10;
-
-    wSuccessOn.setLayout(successongroupLayout);
+    FormLayout successOnGroupLayout = new FormLayout();
+    successOnGroupLayout.marginWidth = 10;
+    successOnGroupLayout.marginHeight = 10;
+    wSuccessOn.setLayout(successOnGroupLayout);
 
     // Success Condition
     Label wlSuccessCondition = new Label(wSuccessOn, SWT.RIGHT);
@@ -1261,13 +1209,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     fdSuccessCondition.top = new FormAttachment(0, margin);
     fdSuccessCondition.right = new FormAttachment(100, 0);
     wSuccessCondition.setLayoutData(fdSuccessCondition);
-    wSuccessCondition.addSelectionListener(
-        new SelectionAdapter() {
-          @Override
-          public void widgetSelected(SelectionEvent e) {
-            activeSuccessCondition();
-          }
-        });
+    wSuccessCondition.addListener(SWT.Selection, e -> activeSuccessCondition());
 
     // Success when number of errors less than
     wlNrErrorsLessThan = new Label(wSuccessOn, SWT.RIGHT);
@@ -1296,14 +1238,15 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
 
     FormData fdSuccessOn = new FormData();
     fdSuccessOn.left = new FormAttachment(0, margin);
-    fdSuccessOn.top = new FormAttachment(wDestinationFile, margin);
+    fdSuccessOn.top = new FormAttachment(0, margin);
     fdSuccessOn.right = new FormAttachment(100, -margin);
     wSuccessOn.setLayoutData(fdSuccessOn);
+
     // ///////////////////////////////////////////////////////////
     // / END OF Success ON GROUP
     // ///////////////////////////////////////////////////////////
 
-    // fileresult grouping?
+    // fileResult grouping?
     // ////////////////////////
     // START OF LOGGING GROUP///
     // /
@@ -1312,11 +1255,10 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     wFileResult.setText(
         BaseMessages.getString(PKG, "ActionPGPDecryptFiles.FileResult.Group.Label"));
 
-    FormLayout fileresultgroupLayout = new FormLayout();
-    fileresultgroupLayout.marginWidth = 10;
-    fileresultgroupLayout.marginHeight = 10;
-
-    wFileResult.setLayout(fileresultgroupLayout);
+    FormLayout fileResultGroupLayout = new FormLayout();
+    fileResultGroupLayout.marginWidth = 10;
+    fileResultGroupLayout.marginHeight = 10;
+    wFileResult.setLayout(fileResultGroupLayout);
 
     // Add file to result
     Label wlAddFileToResult = new Label(wFileResult, SWT.RIGHT);
@@ -1337,19 +1279,14 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     fdAddFileToResult.top = new FormAttachment(wlAddFileToResult, 0, SWT.CENTER);
     fdAddFileToResult.right = new FormAttachment(100, 0);
     wAddFileToResult.setLayoutData(fdAddFileToResult);
-    wAddFileToResult.addSelectionListener(
-        new SelectionAdapter() {
-          @Override
-          public void widgetSelected(SelectionEvent e) {
-            action.setChanged();
-          }
-        });
+    wAddFileToResult.addListener(SWT.Selection, e -> action.setChanged());
 
     FormData fdFileResult = new FormData();
     fdFileResult.left = new FormAttachment(0, margin);
     fdFileResult.top = new FormAttachment(wSuccessOn, margin);
     fdFileResult.right = new FormAttachment(100, -margin);
     wFileResult.setLayoutData(fdFileResult);
+
     // ///////////////////////////////////////////////////////////
     // / END OF FilesResult GROUP
     // ///////////////////////////////////////////////////////////
@@ -1359,41 +1296,13 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     fdAdvancedComp.top = new FormAttachment(0, 0);
     fdAdvancedComp.right = new FormAttachment(100, 0);
     fdAdvancedComp.bottom = new FormAttachment(100, 0);
-    wAdvancedComp.setLayoutData(wAdvancedComp);
+    wAdvancedComp.setLayoutData(fdAdvancedComp);
 
     wAdvancedComp.layout();
     wAdvancedTab.setControl(wAdvancedComp);
-
-    // ///////////////////////////////////////////////////////////
-    // / END OF ADVANCED TAB
-    // ///////////////////////////////////////////////////////////
-
-    FormData fdTabFolder = new FormData();
-    fdTabFolder.left = new FormAttachment(0, 0);
-    fdTabFolder.top = new FormAttachment(wName, margin);
-    fdTabFolder.right = new FormAttachment(100, 0);
-    fdTabFolder.bottom = new FormAttachment(wOk, -2 * margin);
-    wTabFolder.setLayoutData(fdTabFolder);
-
-    getData();
-    checkIncludeSubFolders();
-    activeSuccessCondition();
-    setDateTimeFormat();
-    activeSuccessCondition();
-
-    activeDestinationFolder();
-    setMovedDateTimeFormat();
-    setAddDateBeforeExtension();
-    setAddMovedDateBeforeExtension();
-    wTabFolder.setSelection(0);
-
-    BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
-
-    return action;
   }
 
   private void activeDestinationFolder() {
-
     wbDestinationFolder.setEnabled(wIfFileExists.getSelectionIndex() == 4);
     wlDestinationFolder.setEnabled(wIfFileExists.getSelectionIndex() == 4);
     wDestinationFolder.setEnabled(wIfFileExists.getSelectionIndex() == 4);
@@ -1468,7 +1377,7 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     wMovedDateTimeFormat.setEnabled(wSpecifyMoveFormat.getSelection());
   }
 
-  private void RefreshArgFromPrevious() {
+  private void refreshArgFromPrevious() {
 
     wlFields.setEnabled(!wPrevious.getSelection());
     wFields.setEnabled(!wPrevious.getSelection());
@@ -1498,28 +1407,17 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
 
   /** Copy information from the meta-data input to the dialog fields. */
   public void getData() {
-    wName.setText(Const.nullToEmpty(action.getName()));
+    wName.setText(Const.NVL(action.getName(), ""));
 
-    if (action.sourceFileFolder != null) {
-      for (int i = 0; i < action.sourceFileFolder.length; i++) {
-        TableItem ti = wFields.table.getItem(i);
-        if (action.sourceFileFolder[i] != null) {
-          ti.setText(1, action.sourceFileFolder[i]);
-        }
-        if (action.wildcard[i] != null) {
-          ti.setText(2, action.wildcard[i]);
-        }
-        if (action.passphrase[i] != null) {
-          ti.setText(3, action.passphrase[i]);
-        }
-
-        if (action.destinationFileFolder[i] != null) {
-          ti.setText(4, action.destinationFileFolder[i]);
-        }
-      }
-      wFields.setRowNums();
-      wFields.optWidth(true);
+    for (ActionPGPDecryptFiles.FileToDecrypt file : action.getFilesToDecrypt()) {
+      TableItem ti = new TableItem(wFields.table, SWT.NONE);
+      ti.setText(1, Const.NVL(file.getSourceFileFolder(), ""));
+      ti.setText(2, Const.NVL(file.getWildcard(), ""));
+      ti.setText(3, Const.NVL(file.getPassphrase(), ""));
+      ti.setText(4, Const.NVL(file.getDestinationFileFolder(), ""));
     }
+    wFields.optimizeTableView();
+
     wPrevious.setSelection(action.argFromPrevious);
     wIncludeSubfolders.setSelection(action.includeSubFolders);
     wDestinationIsAFile.setSelection(action.destinationIsAFile);
@@ -1529,16 +1427,16 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
 
     wCreateMoveToFolder.setSelection(action.createMoveToFolder);
 
-    if (action.getNrErrorsLessThan() != null) {
-      wNrErrorsLessThan.setText(action.getNrErrorsLessThan());
-    } else {
-      wNrErrorsLessThan.setText("10");
-    }
+    wNrErrorsLessThan.setText(Const.NVL(action.getNrErrorsLessThan(), "10"));
 
     if (action.getSuccessCondition() != null) {
-      if (action.getSuccessCondition().equals(action.SUCCESS_IF_AT_LEAST_X_FILES_UN_ZIPPED)) {
+      if (action
+          .getSuccessCondition()
+          .equals(ActionPGPDecryptFiles.SUCCESS_IF_AT_LEAST_X_FILES_UN_ZIPPED)) {
         wSuccessCondition.select(1);
-      } else if (action.getSuccessCondition().equals(action.SUCCESS_IF_ERRORS_LESS)) {
+      } else if (action
+          .getSuccessCondition()
+          .equals(ActionPGPDecryptFiles.SUCCESS_IF_ERRORS_LESS)) {
         wSuccessCondition.select(2);
       } else {
         wSuccessCondition.select(0);
@@ -1548,39 +1446,27 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     }
 
     if (action.getIfFileExists() != null) {
-      if (action.getIfFileExists().equals(CONST_OVERWRITE_FILE)) {
-        wIfFileExists.select(1);
-      } else if (action.getIfFileExists().equals(CONST_UNIQUE_NAME)) {
-        wIfFileExists.select(2);
-      } else if (action.getIfFileExists().equals("delete_file")) {
-        wIfFileExists.select(3);
-      } else if (action.getIfFileExists().equals("move_file")) {
-        wIfFileExists.select(4);
-      } else if (action.getIfFileExists().equals("fail")) {
-        wIfFileExists.select(5);
-      } else {
-        wIfFileExists.select(0);
+      switch (action.getIfFileExists()) {
+        case CONST_OVERWRITE_FILE -> wIfFileExists.select(1);
+        case CONST_UNIQUE_NAME -> wIfFileExists.select(2);
+        case ActionPGPDecryptFiles.CONST_DELETE_FILE -> wIfFileExists.select(3);
+        case ActionPGPDecryptFiles.CONST_MOVE_FILE -> wIfFileExists.select(4);
+        case ActionPGPDecryptFiles.CONST_FAIL -> wIfFileExists.select(5);
+        default -> wIfFileExists.select(0);
       }
-
     } else {
       wIfFileExists.select(0);
     }
 
-    if (action.getDestinationFolder() != null) {
-      wDestinationFolder.setText(action.getDestinationFolder());
-    }
+    wDestinationFolder.setText(Const.NVL(action.getDestinationFolder(), ""));
 
     if (action.getIfMovedFileExists() != null) {
-      if (action.getIfMovedFileExists().equals(CONST_OVERWRITE_FILE)) {
-        wIfMovedFileExists.select(1);
-      } else if (action.getIfMovedFileExists().equals(CONST_UNIQUE_NAME)) {
-        wIfMovedFileExists.select(2);
-      } else if (action.getIfMovedFileExists().equals("fail")) {
-        wIfMovedFileExists.select(3);
-      } else {
-        wIfMovedFileExists.select(0);
+      switch (action.getIfMovedFileExists()) {
+        case CONST_OVERWRITE_FILE -> wIfMovedFileExists.select(1);
+        case CONST_UNIQUE_NAME -> wIfMovedFileExists.select(2);
+        case ActionPGPDecryptFiles.CONST_FAIL -> wIfMovedFileExists.select(3);
+        default -> wIfMovedFileExists.select(0);
       }
-
     } else {
       wIfMovedFileExists.select(0);
     }
@@ -1590,24 +1476,20 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     wAddDate.setSelection(action.isAddDate());
     wAddTime.setSelection(action.isAddTime());
     wSpecifyFormat.setSelection(action.isSpecifyFormat());
-    if (action.getDateTimeFormat() != null) {
-      wDateTimeFormat.setText(action.getDateTimeFormat());
-    }
+    wDateTimeFormat.setText(Const.NVL(action.getDateTimeFormat(), ""));
 
-    if (action.getGpgLocation() != null) {
-      wGpgExe.setText(action.getGpgLocation());
-    }
+    wGpgExe.setText(Const.NVL(action.getGpgLocation(), ""));
 
     wAddMovedDate.setSelection(action.isAddMovedDate());
     wAddMovedTime.setSelection(action.isAddMovedTime());
     wSpecifyMoveFormat.setSelection(action.isSpecifyMoveFormat());
-    if (action.getMovedDateTimeFormat() != null) {
-      wMovedDateTimeFormat.setText(action.getMovedDateTimeFormat());
-    }
+    wMovedDateTimeFormat.setText(Const.NVL(action.getMovedDateTimeFormat(), ""));
     wAddMovedDateBeforeExtension.setSelection(action.isAddMovedDateBeforeExtension());
+  }
 
-    wName.selectAll();
-    wName.setFocus();
+  @Override
+  protected void onActionNameModified() {
+    action.setChanged();
   }
 
   private void cancel() {
@@ -1635,11 +1517,11 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     action.setCreateMoveToFolder(wCreateMoveToFolder.getSelection());
 
     if (wSuccessCondition.getSelectionIndex() == 1) {
-      action.setSuccessCondition(action.SUCCESS_IF_AT_LEAST_X_FILES_UN_ZIPPED);
+      action.setSuccessCondition(ActionPGPDecryptFiles.SUCCESS_IF_AT_LEAST_X_FILES_UN_ZIPPED);
     } else if (wSuccessCondition.getSelectionIndex() == 2) {
-      action.setSuccessCondition(action.SUCCESS_IF_ERRORS_LESS);
+      action.setSuccessCondition(ActionPGPDecryptFiles.SUCCESS_IF_ERRORS_LESS);
     } else {
-      action.setSuccessCondition(action.SUCCESS_IF_NO_ERRORS);
+      action.setSuccessCondition(ActionPGPDecryptFiles.SUCCESS_IF_NO_ERRORS);
     }
 
     if (wIfFileExists.getSelectionIndex() == 1) {
@@ -1665,9 +1547,9 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     } else if (wIfMovedFileExists.getSelectionIndex() == 2) {
       action.setIfMovedFileExists(CONST_UNIQUE_NAME);
     } else if (wIfMovedFileExists.getSelectionIndex() == 3) {
-      action.setIfMovedFileExists("fail");
+      action.setIfMovedFileExists(ActionPGPDecryptFiles.CONST_FAIL);
     } else {
-      action.setIfMovedFileExists("do_nothing");
+      action.setIfMovedFileExists(ActionPGPDecryptFiles.CONST_DO_NOTHING);
     }
 
     action.setDoNotKeepFolderStructure(wDoNotKeepFolderStructure.getSelection());
@@ -1684,32 +1566,15 @@ public class ActionPGPDecryptFilesDialog extends ActionDialog {
     action.setMovedDateTimeFormat(wMovedDateTimeFormat.getText());
     action.setAddMovedDateBeforeExtension(wAddMovedDateBeforeExtension.getSelection());
 
-    int nrItems = wFields.nrNonEmpty();
-    int nr = 0;
-    for (int i = 0; i < nrItems; i++) {
-      String arg = wFields.getNonEmpty(i).getText(1);
-      if (!Utils.isEmpty(arg)) {
-        nr++;
-      }
-    }
-    action.sourceFileFolder = new String[nr];
-    action.passphrase = new String[nr];
-    action.destinationFileFolder = new String[nr];
-    action.wildcard = new String[nr];
-    nr = 0;
-    for (int i = 0; i < nrItems; i++) {
-      String source = wFields.getNonEmpty(i).getText(1);
-      String wild = wFields.getNonEmpty(i).getText(2);
-      String passphrase = wFields.getNonEmpty(i).getText(3);
-      String dest = wFields.getNonEmpty(i).getText(4);
+    action.getFilesToDecrypt().clear();
+    for (TableItem item : wFields.getNonEmptyItems()) {
+      ActionPGPDecryptFiles.FileToDecrypt file = new ActionPGPDecryptFiles.FileToDecrypt();
+      action.getFilesToDecrypt().add(file);
 
-      if (!Utils.isEmpty(source)) {
-        action.sourceFileFolder[nr] = source;
-        action.wildcard[nr] = wild;
-        action.passphrase[nr] = passphrase;
-        action.destinationFileFolder[nr] = dest;
-        nr++;
-      }
+      file.setSourceFileFolder(item.getText(1));
+      file.setWildcard(item.getText(2));
+      file.setPassphrase(item.getText(3));
+      file.setDestinationFileFolder(item.getText(4));
     }
     dispose();
   }

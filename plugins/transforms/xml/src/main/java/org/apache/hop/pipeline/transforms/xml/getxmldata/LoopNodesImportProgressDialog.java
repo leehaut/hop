@@ -110,15 +110,7 @@ public class LoopNodesImportProgressDialog {
     try {
       ProgressMonitorDialog pmd = new ProgressMonitorDialog(shell);
       pmd.run(true, op);
-    } catch (InvocationTargetException e) {
-      new ErrorDialog(
-          shell,
-          BaseMessages.getString(
-              PKG, "GetXMLDateLoopNodesImportProgressDialog.ErrorScanningFile.Title"),
-          BaseMessages.getString(
-              PKG, "GetXMLDateLoopNodesImportProgressDialog.ErrorScanningFile.Message"),
-          e);
-    } catch (InterruptedException e) {
+    } catch (InvocationTargetException | InterruptedException e) {
       new ErrorDialog(
           shell,
           BaseMessages.getString(
@@ -162,7 +154,8 @@ public class LoopNodesImportProgressDialog {
       Document document = null;
       if (!Utils.isEmpty(filename)) {
         is = HopVfs.getInputStream(filename, variables);
-        document = reader.read(is, encoding);
+        reader.setEncoding(encoding);
+        document = reader.read(is);
       } else {
         if (!Utils.isEmpty(xml)) {
           document = reader.read(new StringReader(xml));

@@ -23,10 +23,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
-import org.apache.commons.lang.builder.EqualsBuilder;
+import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.hop.core.HopEnvironment;
 import org.apache.hop.core.exception.HopException;
-import org.apache.hop.core.fileinput.FileInputList;
+import org.apache.hop.core.fileinput.FileTypeFilter;
 import org.apache.hop.core.plugins.PluginRegistry;
 import org.apache.hop.junit.rules.RestoreHopEngineEnvironmentExtension;
 import org.apache.hop.pipeline.transform.ITransformMeta;
@@ -116,12 +116,12 @@ class GetFileNamesMetaTest implements IInitializer<ITransformMeta> {
 
     validatorFactory.registerValidator(
         validatorFactory.getName(FileItem.class),
-        new ObjectValidator<FileItem>(
+        new ObjectValidator<>(
             validatorFactory,
             FileItem.class,
             Arrays.asList(
                 "name", "filemask", "exclude_filemask", "file_required", "include_subfolders"),
-            new HashMap<String, String>() {
+            new HashMap<>() {
               {
                 put("name", "getFileName");
                 put("filemask", "getFileMask");
@@ -130,7 +130,7 @@ class GetFileNamesMetaTest implements IInitializer<ITransformMeta> {
                 put("include_subfolders", "getIncludeSubFolders");
               }
             },
-            new HashMap<String, String>() {
+            new HashMap<>() {
               {
                 put("name", "setFileName");
                 put("filemask", "setFileMask");
@@ -142,20 +142,20 @@ class GetFileNamesMetaTest implements IInitializer<ITransformMeta> {
 
     validatorFactory.registerValidator(
         validatorFactory.getName(List.class, FileItem.class),
-        new ListLoadSaveValidator<FileItem>(new FileItemLoadSaveValidator()));
+        new ListLoadSaveValidator<>(new FileItemLoadSaveValidator()));
 
     validatorFactory.registerValidator(
         validatorFactory.getName(FilterItem.class),
-        new ObjectValidator<FilterItem>(
+        new ObjectValidator<>(
             validatorFactory,
             FilterItem.class,
             Arrays.asList("filterfiletype"),
-            new HashMap<String, String>() {
+            new HashMap<>() {
               {
                 put("filterfiletype", "getFileTypeFilterSelection");
               }
             },
-            new HashMap<String, String>() {
+            new HashMap<>() {
               {
                 put("filterfiletype", "setFileTypeFilterSelection");
               }
@@ -163,7 +163,7 @@ class GetFileNamesMetaTest implements IInitializer<ITransformMeta> {
 
     validatorFactory.registerValidator(
         validatorFactory.getName(List.class, FilterItem.class),
-        new ListLoadSaveValidator<FilterItem>(new FilterItemLoadSaveValidator()));
+        new ListLoadSaveValidator<>(new FilterItemLoadSaveValidator()));
   }
 
   @Test
@@ -198,14 +198,13 @@ class GetFileNamesMetaTest implements IInitializer<ITransformMeta> {
     }
   }
 
-  public class FilterItemLoadSaveValidator implements IFieldLoadSaveValidator<FilterItem> {
+  public static class FilterItemLoadSaveValidator implements IFieldLoadSaveValidator<FilterItem> {
     final Random rand = new Random();
 
     @Override
     public FilterItem getTestObject() {
 
-      return new FilterItem(
-          FileInputList.FileTypeFilter.getByOrdinal(new Random().nextInt(3)).toString());
+      return new FilterItem(FileTypeFilter.getByOrdinal(new Random().nextInt(3)).toString());
     }
 
     @Override
@@ -220,7 +219,7 @@ class GetFileNamesMetaTest implements IInitializer<ITransformMeta> {
     }
   }
 
-  public class FileItemLoadSaveValidator implements IFieldLoadSaveValidator<FileItem> {
+  public static class FileItemLoadSaveValidator implements IFieldLoadSaveValidator<FileItem> {
     final Random rand = new Random();
 
     @Override

@@ -37,10 +37,13 @@ import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.ResultFile;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopFileException;
+import org.apache.hop.core.io.CountingOutputStream;
 import org.apache.hop.core.row.RowDataUtil;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.vfs.HopVfs;
 import org.apache.hop.i18n.BaseMessages;
+import org.apache.hop.lineage.LineageFileIoEmitter;
+import org.apache.hop.lineage.model.FileIoOperation;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransform;
@@ -77,9 +80,9 @@ public class AvroOutput extends BaseTransform<AvroOutputMeta, AvroOutputData> {
     if (inputSchema.getType() == Schema.Type.UNION) {
       unionSchemas = inputSchema.getTypes();
       if (unionSchemas != null) {
-        for (int i = 0; i < unionSchemas.size(); i++) {
-          if (unionSchemas.get(i).getType() == Schema.Type.RECORD) {
-            recordSchema = unionSchemas.get(i);
+        for (Schema unionSchema : unionSchemas) {
+          if (unionSchema.getType() == Type.RECORD) {
+            recordSchema = unionSchema;
             break;
           }
         }
@@ -266,11 +269,8 @@ public class AvroOutput extends BaseTransform<AvroOutputMeta, AvroOutputData> {
           createParentFolder(schemaFileName);
         }
         OutputStream outputStream = getOutputStream(schemaFileName, false);
-
-        if (isDetailed()) {
-          logDetailed("Opening output stream in default encoding");
-        }
-        OutputStream schemaWriter = new BufferedOutputStream(outputStream, 5000);
+        CountingOutputStream countingStream = new CountingOutputStream(outputStream);
+        OutputStream schemaWriter = new BufferedOutputStream(countingStream, 5000);
 
         if (isDetailed()) {
           logDetailed("Opened new file with name [" + schemaFileName + "]");
@@ -278,6 +278,17 @@ public class AvroOutput extends BaseTransform<AvroOutputMeta, AvroOutputData> {
 
         schemaWriter.write(data.avroSchema.toString(true).getBytes());
         schemaWriter.close();
+        long schemaWritten = countingStream.getCount();
+        dataVolumeOut = (dataVolumeOut != null ? dataVolumeOut : 0L) + schemaWritten;
+        if (!data.isBeamContext() && schemaWritten > 0) {
+          try {
+            FileObject schemaFile = HopVfs.getFileObject(schemaFileName, variables);
+            LineageFileIoEmitter.emitTransformFileIo(
+                this, FileIoOperation.WRITE, null, schemaFile, schemaWritten, true, null);
+          } catch (Exception ignored) {
+            // optional lineage
+          }
+        }
         if (isDetailed()) {
           logDetailed("Closed schema file with name [" + schemaFileName + "]");
         }
@@ -362,7 +373,7 @@ public class AvroOutput extends BaseTransform<AvroOutputMeta, AvroOutputData> {
     //
     putRow(data.outputRowMeta, r); // in case we want it to go further...
 
-    if (checkFeedback(getLinesOutput())) {
+    if (checkFeedback(getLinesOutput()) && isBasic()) {
       logBasic("linenr " + getLinesOutput());
     }
 
@@ -372,10 +383,14 @@ public class AvroOutput extends BaseTransform<AvroOutputMeta, AvroOutputData> {
   private void createFileAndSchema() throws HopException {
     try {
       if (meta.isCreateSchemaFile()) {
-        logDetailed("Generating Avro schema.");
+        if (isDetailed()) {
+          logDetailed("Generating Avro schema.");
+        }
         writeSchemaFile();
       } else {
-        logDetailed("Reading Avro schema from file.");
+        if (isDetailed()) {
+          logDetailed("Reading Avro schema from file.");
+        }
         try {
           data.avroSchema = new Schema.Parser().parse(new File(meta.getSchemaFileName()));
         } catch (Exception e) {
@@ -520,11 +535,11 @@ public class AvroOutput extends BaseTransform<AvroOutputMeta, AvroOutputData> {
       }
 
       OutputStream outputStream = getOutputStream(filename, false);
-
+      data.countingOutputStream = new CountingOutputStream(outputStream);
       if (isDetailed()) {
         logDetailed("Opening output stream in default encoding");
       }
-      data.writer = new BufferedOutputStream(outputStream, 5000);
+      data.writer = new BufferedOutputStream(data.countingOutputStream, 5000);
 
       if (isDetailed()) {
         logDetailed("Opened new file with name [" + filename + "]");
@@ -544,6 +559,7 @@ public class AvroOutput extends BaseTransform<AvroOutputMeta, AvroOutputData> {
       resultFile.setComment(BaseMessages.getString(PKG, "AvroOutput.AddResultFile"));
       addResultFile(resultFile);
     }
+    data.outputDataFilename = filename;
   }
 
   private boolean closeFile() {
@@ -553,6 +569,20 @@ public class AvroOutput extends BaseTransform<AvroOutputMeta, AvroOutputData> {
       if (data.writer != null) {
         data.writer.flush();
 
+        if (data.countingOutputStream != null) {
+          long written = data.countingOutputStream.getCount();
+          dataVolumeOut = (dataVolumeOut != null ? dataVolumeOut : 0L) + written;
+          if (!data.isBeamContext() && written > 0 && data.outputDataFilename != null) {
+            try {
+              FileObject outFile = HopVfs.getFileObject(data.outputDataFilename, variables);
+              LineageFileIoEmitter.emitTransformFileIo(
+                  this, FileIoOperation.WRITE, null, outFile, written, true, null);
+            } catch (Exception ignored) {
+              // optional lineage
+            }
+          }
+        }
+        data.outputDataFilename = null;
         if (isDebug()) {
           logDebug("Closing output stream");
         }
@@ -563,6 +593,7 @@ public class AvroOutput extends BaseTransform<AvroOutputMeta, AvroOutputData> {
         // Causes exception trying to close file in Java 8.  I believe the flush closes the file
         // also.
         data.writer = null;
+        data.countingOutputStream = null;
         data.dataFileWriter = null;
         if (isDebug()) {
           logDebug("Closed output stream");

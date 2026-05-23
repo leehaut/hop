@@ -1,24 +1,25 @@
-/*******************************************************************************
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- ******************************************************************************/
+ */
 
 package org.apache.hop.pipeline.transforms.standardizephonenumber;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.row.IRowMeta;
@@ -38,13 +39,10 @@ import org.apache.hop.ui.core.widget.TableView;
 import org.apache.hop.ui.hopgui.HopGui;
 import org.apache.hop.ui.pipeline.transform.BaseTransformDialog;
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.layout.FormLayout;
-import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 public class StandardizePhoneNumberDialog extends BaseTransformDialog {
 
@@ -67,8 +65,7 @@ public class StandardizePhoneNumberDialog extends BaseTransformDialog {
     List<StandardizePhoneField> standardizes = input.getFields();
     if (!standardizes.isEmpty()) {
       Table table = wFields.getTable();
-      for (int i = 0; i < standardizes.size(); i++) {
-        StandardizePhoneField standardize = standardizes.get(i);
+      for (StandardizePhoneField standardize : standardizes) {
         TableItem item = new TableItem(table, SWT.NONE);
         item.setText(1, StringUtils.stripToEmpty(standardize.getInputField()));
         item.setText(2, StringUtils.stripToEmpty(standardize.getOutputField()));
@@ -83,68 +80,17 @@ public class StandardizePhoneNumberDialog extends BaseTransformDialog {
     wFields.removeEmptyRows();
     wFields.setRowNums();
     wFields.optWidth(true);
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   @Override
   public String open() {
-    Shell parent = getParent();
-
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    shell.setText(BaseMessages.getString(PKG, "StandardizePhoneNumberDialog.Shell.Title"));
-    shell.setMinimumSize(650, 350);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-    shell.setLayout(formLayout);
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // The buttons at the bottom of the dialog
-    //
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-
-    setButtonPositions(new Button[] {wOk, wCancel}, margin, null);
-
-    Label hSpacer = new Label(shell, SWT.HORIZONTAL | SWT.SEPARATOR);
-    hSpacer.setLayoutData(
-        new FormDataBuilder().left().right().bottom(wOk, -margin).height(2).result());
-
-    // Transform name line
-    //
-    Label wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "System.TransformName.Label"));
-    wlTransformName.setToolTipText(BaseMessages.getString(PKG, "System.TransformName.Tooltip"));
-    wlTransformName.setLayoutData(new FormDataBuilder().right(middle, -margin).result());
-    PropsUi.setLook(wlTransformName);
-
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    wTransformName.addListener(SWT.Modify, e -> input.setChanged());
-    wTransformName.setLayoutData(
-        new FormDataBuilder()
-            .left(wlTransformName, margin)
-            .top(wlTransformName, 0, SWT.CENTER)
-            .right()
-            .result());
-    PropsUi.setLook(wTransformName);
+    createShell(BaseMessages.getString(PKG, "StandardizePhoneNumberDialog.Shell.Title"));
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
     // Table with fields
     Label lblFields = new Label(shell, SWT.LEFT);
     lblFields.setText(BaseMessages.getString(PKG, "StandardizePhoneNumberDialog.Fields.Label"));
-    lblFields.setLayoutData(new FormDataBuilder().top(wTransformName, margin).fullWidth().result());
+    lblFields.setLayoutData(new FormDataBuilder().top(wSpacer, margin).fullWidth().result());
     PropsUi.setLook(lblFields);
 
     ColumnInfo[] columns =
@@ -230,7 +176,7 @@ public class StandardizePhoneNumberDialog extends BaseTransformDialog {
             .left()
             .fullWidth()
             .top(lblFields, margin)
-            .bottom(hSpacer, -margin)
+            .bottom(wOk, -margin)
             .result());
     wFields.getTable().addListener(SWT.Resize, new ColumnsResizer(2, 20, 20, 10, 12, 12, 12, 8));
 
@@ -261,24 +207,22 @@ public class StandardizePhoneNumberDialog extends BaseTransformDialog {
               HopGui.getInstance()
                   .getDisplay()
                   .asyncExec(
-                      new Runnable() {
-                        public void run() {
-                          if (!wFields.isDisposed()) {
-                            for (int i = 0; i < wFields.table.getItemCount(); i++) {
-                              TableItem item = wFields.table.getItem(i);
+                      () -> {
+                        if (!wFields.isDisposed()) {
+                          for (int i = 0; i < wFields.table.getItemCount(); i++) {
+                            TableItem item = wFields.table.getItem(i);
 
-                              // Input field
-                              if (!Utils.isEmpty(item.getText(1))
-                                  && !inputFields.contains(item.getText(1))) {
-                                item.setBackground(GuiResource.getInstance().getColorRed());
-                              }
+                            // Input field
+                            if (!Utils.isEmpty(item.getText(1))
+                                && !inputFields.contains(item.getText(1))) {
+                              item.setBackground(GuiResource.getInstance().getColorRed());
+                            }
 
-                              // Country field
-                              if (!Utils.isEmpty(item.getText(3))
-                                  && !inputFields.contains(item.getText(3))) {
+                            // Country field
+                            if (!Utils.isEmpty(item.getText(3))
+                                && !inputFields.contains(item.getText(3))) {
 
-                                item.setBackground(GuiResource.getInstance().getColorRed());
-                              }
+                              item.setBackground(GuiResource.getInstance().getColorRed());
                             }
                           }
                         }
@@ -293,6 +237,8 @@ public class StandardizePhoneNumberDialog extends BaseTransformDialog {
 
     getData();
     input.setChanged(changed);
+
+    focusTransformName();
 
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 

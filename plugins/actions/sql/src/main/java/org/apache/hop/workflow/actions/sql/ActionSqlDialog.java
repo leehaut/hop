@@ -17,6 +17,8 @@
 
 package org.apache.hop.workflow.actions.sql;
 
+import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import org.apache.hop.core.Const;
@@ -28,25 +30,24 @@ import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.dialog.BaseDialog;
 import org.apache.hop.ui.core.dialog.MessageBox;
+import org.apache.hop.ui.core.widget.ComboVar;
 import org.apache.hop.ui.core.widget.MetaSelectionLine;
 import org.apache.hop.ui.core.widget.SQLStyledTextComp;
 import org.apache.hop.ui.core.widget.StyledTextComp;
 import org.apache.hop.ui.core.widget.TextComposite;
 import org.apache.hop.ui.core.widget.TextVar;
-import org.apache.hop.ui.pipeline.transform.BaseTransformDialog;
 import org.apache.hop.ui.util.EnvironmentUtils;
 import org.apache.hop.ui.workflow.action.ActionDialog;
-import org.apache.hop.ui.workflow.dialog.WorkflowDialog;
 import org.apache.hop.workflow.WorkflowMeta;
 import org.apache.hop.workflow.action.IAction;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.events.FocusEvent;
+import org.eclipse.swt.events.FocusListener;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
-import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.swt.widgets.Text;
 
 /**
  * This dialog allows you to edit the SQL action settings. (select the connection and the sql script
@@ -61,8 +62,6 @@ public class ActionSqlDialog extends ActionDialog {
         BaseMessages.getString(PKG, "ActionSQL.Filetype.Text"),
         BaseMessages.getString(PKG, "ActionSQL.Filetype.All")
       };
-
-  private Text wName;
 
   private MetaSelectionLine<DatabaseMeta> wConnection;
 
@@ -84,6 +83,9 @@ public class ActionSqlDialog extends ActionDialog {
   private Label wlFilename;
   private Button wbFilename;
   private TextVar wFilename;
+  private Label wlEncoding;
+  private ComboVar wEncoding;
+  private boolean gotEncodings = false;
 
   public ActionSqlDialog(
       Shell parent, ActionSql action, WorkflowMeta workflowMeta, IVariables variables) {
@@ -96,51 +98,12 @@ public class ActionSqlDialog extends ActionDialog {
 
   @Override
   public IAction open() {
-
-    shell = new Shell(getParent(), SWT.DIALOG_TRIM | SWT.MIN | SWT.MAX | SWT.RESIZE);
-    PropsUi.setLook(shell);
-    WorkflowDialog.setShellImage(shell, action);
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "ActionSQL.Title"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // Buttons go at the very bottom
-    //
-    Button wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    Button wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    BaseTransformDialog.positionBottomButtons(shell, new Button[] {wOk, wCancel}, margin, null);
-
-    // Action name line
-    Label wlName = new Label(shell, SWT.RIGHT);
-    wlName.setText(BaseMessages.getString(PKG, "ActionSQL.Name.Label"));
-    PropsUi.setLook(wlName);
-    FormData fdlName = new FormData();
-    fdlName.left = new FormAttachment(0, 0);
-    fdlName.right = new FormAttachment(middle, -margin);
-    fdlName.top = new FormAttachment(0, margin);
-    wlName.setLayoutData(fdlName);
-    wName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    PropsUi.setLook(wName);
-    FormData fdName = new FormData();
-    fdName.left = new FormAttachment(middle, 0);
-    fdName.top = new FormAttachment(0, margin);
-    fdName.right = new FormAttachment(100, 0);
-    wName.setLayoutData(fdName);
+    createShell(BaseMessages.getString(PKG, "ActionSQL.Title"), action);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
     // Connection line
     DatabaseMeta databaseMeta = workflowMeta.findDatabase(action.getConnection(), variables);
-    wConnection = addConnectionLine(shell, wName, databaseMeta, null);
+    wConnection = addConnectionLine(shell, wSpacer, databaseMeta, null);
     wConnection.addListener(SWT.Selection, e -> getSqlReservedWords());
 
     // SQL from file?
@@ -149,7 +112,7 @@ public class ActionSqlDialog extends ActionDialog {
     PropsUi.setLook(wlSqlFromFile);
     FormData fdlSqlFromFile = new FormData();
     fdlSqlFromFile.left = new FormAttachment(0, 0);
-    fdlSqlFromFile.top = new FormAttachment(wConnection, 2 * margin);
+    fdlSqlFromFile.top = new FormAttachment(wConnection, margin);
     fdlSqlFromFile.right = new FormAttachment(middle, -margin);
     wlSqlFromFile.setLayoutData(fdlSqlFromFile);
     wSqlFromFile = new Button(shell, SWT.CHECK);
@@ -173,7 +136,7 @@ public class ActionSqlDialog extends ActionDialog {
     PropsUi.setLook(wlFilename);
     FormData fdlFilename = new FormData();
     fdlFilename.left = new FormAttachment(0, 0);
-    fdlFilename.top = new FormAttachment(wlSqlFromFile, 2 * margin);
+    fdlFilename.top = new FormAttachment(wlSqlFromFile, margin);
     fdlFilename.right = new FormAttachment(middle, -margin);
     wlFilename.setLayoutData(fdlFilename);
 
@@ -209,13 +172,45 @@ public class ActionSqlDialog extends ActionDialog {
                 FILETYPES,
                 true));
 
+    // File encoding (when SQL from file)
+    wlEncoding = new Label(shell, SWT.RIGHT);
+    wlEncoding.setText(BaseMessages.getString(PKG, "ActionSQL.Encoding.Label"));
+    PropsUi.setLook(wlEncoding);
+    FormData fdlEncoding = new FormData();
+    fdlEncoding.left = new FormAttachment(0, 0);
+    fdlEncoding.top = new FormAttachment(wbFilename, margin);
+    fdlEncoding.right = new FormAttachment(middle, -margin);
+    wlEncoding.setLayoutData(fdlEncoding);
+
+    wEncoding = new ComboVar(variables, shell, SWT.BORDER | SWT.READ_ONLY);
+    wEncoding.setEditable(true);
+    PropsUi.setLook(wEncoding);
+    wEncoding.setToolTipText(BaseMessages.getString(PKG, "ActionSQL.Encoding.Tooltip"));
+    FormData fdEncoding = new FormData();
+    fdEncoding.left = new FormAttachment(middle, 0);
+    fdEncoding.top = new FormAttachment(wbFilename, margin);
+    fdEncoding.right = new FormAttachment(100, -margin);
+    wEncoding.setLayoutData(fdEncoding);
+    wEncoding.addFocusListener(
+        new FocusListener() {
+          @Override
+          public void focusLost(FocusEvent e) {
+            // Do nothing
+          }
+
+          @Override
+          public void focusGained(FocusEvent e) {
+            setEncodings();
+          }
+        });
+
     // Send one SQL Statement?
     Label wlUseOneStatement = new Label(shell, SWT.RIGHT);
     wlUseOneStatement.setText(BaseMessages.getString(PKG, "ActionSQL.SendOneStatement.Label"));
     PropsUi.setLook(wlUseOneStatement);
     FormData fdlUseOneStatement = new FormData();
     fdlUseOneStatement.left = new FormAttachment(0, 0);
-    fdlUseOneStatement.top = new FormAttachment(wbFilename, margin);
+    fdlUseOneStatement.top = new FormAttachment(wlEncoding, margin);
     fdlUseOneStatement.right = new FormAttachment(middle, -margin);
     wlUseOneStatement.setLayoutData(fdlUseOneStatement);
     wSendOneStatement = new Button(shell, SWT.CHECK);
@@ -235,7 +230,7 @@ public class ActionSqlDialog extends ActionDialog {
     PropsUi.setLook(wlUseSubs);
     FormData fdlUseSubs = new FormData();
     fdlUseSubs.left = new FormAttachment(0, 0);
-    fdlUseSubs.top = new FormAttachment(wlUseOneStatement, 2 * margin);
+    fdlUseSubs.top = new FormAttachment(wlUseOneStatement, margin);
     fdlUseSubs.right = new FormAttachment(middle, -margin);
     wlUseSubs.setLayoutData(fdlUseSubs);
     wUseSubs = new Button(shell, SWT.CHECK);
@@ -259,7 +254,7 @@ public class ActionSqlDialog extends ActionDialog {
     FormData fdlPosition = new FormData();
     fdlPosition.left = new FormAttachment(0, 0);
     fdlPosition.right = new FormAttachment(100, 0);
-    fdlPosition.bottom = new FormAttachment(wOk, -margin);
+    fdlPosition.bottom = new FormAttachment(wCancel, -margin);
     wlPosition.setLayoutData(fdlPosition);
 
     // Script line
@@ -274,9 +269,9 @@ public class ActionSqlDialog extends ActionDialog {
     wSql =
         EnvironmentUtils.getInstance().isWeb()
             ? new StyledTextComp(
-                action, shell, SWT.MULTI | SWT.LEFT | SWT.BORDER | SWT.H_SCROLL | SWT.V_SCROLL)
+                variables, shell, SWT.MULTI | SWT.LEFT | SWT.BORDER | SWT.H_SCROLL | SWT.V_SCROLL)
             : new SQLStyledTextComp(
-                action, shell, SWT.MULTI | SWT.LEFT | SWT.BORDER | SWT.H_SCROLL | SWT.V_SCROLL);
+                variables, shell, SWT.MULTI | SWT.LEFT | SWT.BORDER | SWT.H_SCROLL | SWT.V_SCROLL);
     wSql.addLineStyleListener(getSqlReservedWords());
     PropsUi.setLook(wSql, Props.WIDGET_STYLE_FIXED);
     FormData fdSql = new FormData();
@@ -284,6 +279,7 @@ public class ActionSqlDialog extends ActionDialog {
     fdSql.top = new FormAttachment(wlSql, margin);
     fdSql.right = new FormAttachment(100, -margin);
     fdSql.bottom = new FormAttachment(wlPosition, -margin);
+    fdSql.height = 200;
     wSql.setLayoutData(fdSql);
     wSql.addListener(SWT.Modify, e -> setPosition());
     wSql.addListener(SWT.KeyDown, e -> setPosition());
@@ -296,6 +292,7 @@ public class ActionSqlDialog extends ActionDialog {
 
     getData();
     activeSqlFromFile();
+    focusActionName();
 
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
@@ -334,18 +331,39 @@ public class ActionSqlDialog extends ActionDialog {
     wSqlFromFile.setSelection(action.isSqlFromFile());
     wSendOneStatement.setSelection(action.isSendOneStatement());
     wFilename.setText(Const.nullToEmpty(action.getSqlFilename()));
+    wEncoding.setText(Const.nullToEmpty(action.getSqlFilenameEncoding()));
+  }
 
-    wName.selectAll();
-    wName.setFocus();
+  @Override
+  protected void onActionNameModified() {
+    action.setChanged();
   }
 
   private void activeSqlFromFile() {
     wlFilename.setEnabled(wSqlFromFile.getSelection());
     wFilename.setEnabled(wSqlFromFile.getSelection());
     wbFilename.setEnabled(wSqlFromFile.getSelection());
+    wlEncoding.setEnabled(wSqlFromFile.getSelection());
+    wEncoding.setEnabled(wSqlFromFile.getSelection());
     wSql.setEnabled(!wSqlFromFile.getSelection());
     wlSql.setEnabled(!wSqlFromFile.getSelection());
     wlPosition.setEnabled(!wSqlFromFile.getSelection());
+  }
+
+  private void setEncodings() {
+    if (!gotEncodings) {
+      gotEncodings = true;
+      wEncoding.removeAll();
+      List<Charset> values = new ArrayList<>(Charset.availableCharsets().values());
+      for (Charset charSet : values) {
+        wEncoding.add(charSet.displayName());
+      }
+      String defEncoding = Const.getEnvironmentVariable("file.encoding", Const.UTF_8);
+      int idx = Const.indexOfString(defEncoding, wEncoding.getItems());
+      if (idx >= 0) {
+        wEncoding.select(idx);
+      }
+    }
   }
 
   private void cancel() {
@@ -367,6 +385,7 @@ public class ActionSqlDialog extends ActionDialog {
     action.setUseVariableSubstitution(wUseSubs.getSelection());
     action.setSqlFromFile(wSqlFromFile.getSelection());
     action.setSqlFilename(wFilename.getText());
+    action.setSqlFilenameEncoding(wEncoding.getText());
     action.setSendOneStatement(wSendOneStatement.getSelection());
     action.setChanged();
 

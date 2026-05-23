@@ -28,12 +28,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.IRowSet;
 import org.apache.hop.core.Result;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.extension.ExtensionPointHandler;
 import org.apache.hop.core.extension.HopExtensionPoint;
 import org.apache.hop.core.json.HopJson;
@@ -468,6 +469,9 @@ public class RemotePipelineEngine extends Variables implements IPipelineEngine<P
         //
         fireExecutionStartedListeners();
 
+        ExtensionPointHandler.callExtensionPoint(
+            logChannel, this, HopExtensionPoint.PipelineStart.id, this);
+
         // So the pipeline has been successfully started.
         // That doesn't mean that the execution itself is without error
         // To know that we need to monitor the execution remotely
@@ -500,7 +504,7 @@ public class RemotePipelineEngine extends Variables implements IPipelineEngine<P
     }
   }
 
-  private synchronized void getPipelineStatus() throws RuntimeException {
+  private synchronized void getPipelineStatus() throws HopRuntimeException {
     try {
       HopServerPipelineStatus pipelineStatus =
           hopServer.getPipelineStatus(this, subject.getName(), containerId, lastLogLineNr);
@@ -552,6 +556,12 @@ public class RemotePipelineEngine extends Variables implements IPipelineEngine<P
           engineMetrics.setComponentMetric(
               component, Pipeline.METRIC_ERROR, transformStatus.getErrors());
           engineMetrics.setComponentMetric(
+              component, Pipeline.METRIC_DATA_VOLUME, transformStatus.getDataVolume());
+          engineMetrics.setComponentMetric(
+              component, Pipeline.METRIC_DATA_VOLUME_IN, transformStatus.getDataVolumeIn());
+          engineMetrics.setComponentMetric(
+              component, Pipeline.METRIC_DATA_VOLUME_OUT, transformStatus.getDataVolumeOut());
+          engineMetrics.setComponentMetric(
               component, Pipeline.METRIC_BUFFER_IN, transformStatus.getInputBufferSize());
           engineMetrics.setComponentMetric(
               component, Pipeline.METRIC_BUFFER_OUT, transformStatus.getOutputBufferSize());
@@ -589,7 +599,7 @@ public class RemotePipelineEngine extends Variables implements IPipelineEngine<P
         }
       }
     } catch (Exception e) {
-      throw new RuntimeException(
+      throw new HopRuntimeException(
           "Error getting the status of pipeline '"
               + subject.getName()
               + "' on hop server '"
@@ -659,7 +669,7 @@ public class RemotePipelineEngine extends Variables implements IPipelineEngine<P
       hopServer.stopPipeline(this, subject.getName(), containerId);
       getPipelineStatus();
     } catch (Exception e) {
-      throw new RuntimeException(
+      throw new HopRuntimeException(
           "Stopping of pipeline '" + subject.getName() + "' with ID " + containerId + " failed", e);
     }
   }
@@ -675,7 +685,7 @@ public class RemotePipelineEngine extends Variables implements IPipelineEngine<P
       hopServer.pauseResumePipeline(this, subject.getName(), containerId);
       getPipelineStatus();
     } catch (Exception e) {
-      throw new RuntimeException(
+      throw new HopRuntimeException(
           "Pause/Resume of pipeline '" + subject.getName() + "' with ID " + containerId + " failed",
           e);
     }
@@ -777,22 +787,18 @@ public class RemotePipelineEngine extends Variables implements IPipelineEngine<P
       // For every transform metric, take the maximum amount
       //
       Long read = engineMetrics.getComponentMetric(component, Pipeline.METRIC_READ);
-      result.setNrLinesRead(Math.max(result.getNrLinesRead(), read == null ? 0 : read.longValue()));
+      result.setNrLinesRead(Math.max(result.getNrLinesRead(), read == null ? 0 : read));
       Long written = engineMetrics.getComponentMetric(component, Pipeline.METRIC_WRITTEN);
-      result.setNrLinesWritten(
-          Math.max(result.getNrLinesWritten(), written == null ? 0 : written.longValue()));
+      result.setNrLinesWritten(Math.max(result.getNrLinesWritten(), written == null ? 0 : written));
       Long input = engineMetrics.getComponentMetric(component, Pipeline.METRIC_INPUT);
-      result.setNrLinesInput(
-          Math.max(result.getNrLinesInput(), input == null ? 0 : input.longValue()));
+      result.setNrLinesInput(Math.max(result.getNrLinesInput(), input == null ? 0 : input));
       Long output = engineMetrics.getComponentMetric(component, Pipeline.METRIC_OUTPUT);
-      result.setNrLinesOutput(
-          Math.max(result.getNrLinesOutput(), output == null ? 0 : output.longValue()));
+      result.setNrLinesOutput(Math.max(result.getNrLinesOutput(), output == null ? 0 : output));
       Long updated = engineMetrics.getComponentMetric(component, Pipeline.METRIC_UPDATED);
-      result.setNrLinesUpdated(
-          Math.max(result.getNrLinesUpdated(), updated == null ? 0 : updated.longValue()));
+      result.setNrLinesUpdated(Math.max(result.getNrLinesUpdated(), updated == null ? 0 : updated));
       Long rejected = engineMetrics.getComponentMetric(component, Pipeline.METRIC_REJECTED);
       result.setNrLinesRejected(
-          Math.max(result.getNrLinesRejected(), rejected == null ? 0 : rejected.longValue()));
+          Math.max(result.getNrLinesRejected(), rejected == null ? 0 : rejected));
     }
 
     result.setStopped(isStopped());
@@ -829,7 +835,7 @@ public class RemotePipelineEngine extends Variables implements IPipelineEngine<P
                 rowsReceived.rowsReceived(RemotePipelineEngine.this, rowBuffer);
               }
             } catch (Exception e) {
-              throw new RuntimeException(
+              throw new HopRuntimeException(
                   "Unable to get output rows from transform '"
                       + componentName
                       + "' in pipeline '"
@@ -1083,6 +1089,9 @@ public class RemotePipelineEngine extends Variables implements IPipelineEngine<P
 
   @Override
   public void fireExecutionFinishedListeners() throws HopException {
+    ExtensionPointHandler.callExtensionPoint(
+        logChannel, this, HopExtensionPoint.PipelineFinish.id, this);
+
     synchronized (executionFinishedListeners) {
       for (IExecutionFinishedListener<IPipelineEngine<PipelineMeta>> listener :
           executionFinishedListeners) {

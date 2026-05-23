@@ -17,13 +17,13 @@
 
 package org.apache.hop.pipeline.transforms.javascript;
 
-import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Vector;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.Props;
 import org.apache.hop.core.exception.HopException;
@@ -46,6 +46,7 @@ import org.apache.hop.ui.core.dialog.BaseDialog;
 import org.apache.hop.ui.core.dialog.EnterTextDialog;
 import org.apache.hop.ui.core.dialog.ErrorDialog;
 import org.apache.hop.ui.core.dialog.MessageBox;
+import org.apache.hop.ui.core.dialog.MessageDialogWithToggle;
 import org.apache.hop.ui.core.dialog.PreviewRowsDialog;
 import org.apache.hop.ui.core.gui.GuiResource;
 import org.apache.hop.ui.core.widget.ColumnInfo;
@@ -70,14 +71,13 @@ import org.eclipse.swt.dnd.DragSourceAdapter;
 import org.eclipse.swt.dnd.DragSourceEvent;
 import org.eclipse.swt.dnd.TextTransfer;
 import org.eclipse.swt.dnd.Transfer;
-import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
-import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Listener;
@@ -121,8 +121,6 @@ public class ScriptValuesDialog extends BaseTransformDialog {
   public static final String CONST_FUNCTION = "Function";
   public static final String CONST_JS_FUNCTION = "jsFunction";
 
-  private ModifyListener lsMod;
-
   private TableView wFields;
 
   private Label wlPosition;
@@ -152,6 +150,8 @@ public class ScriptValuesDialog extends BaseTransformDialog {
   private static final int ADD_COPY = 2;
   private static final int ADD_BLANK = 1;
   private static final int ADD_DEFAULT = 0;
+
+  public static final String WARNING_CLOSE_UNSAVED_PARAMETER = "ScriptValuesCloseWarning";
 
   private String strActiveScript;
   private String strActiveStartScript;
@@ -208,60 +208,22 @@ public class ScriptValuesDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "ScriptValuesDialogMod.Shell.Title"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar()
+        .ok(e -> ok())
+        .custom(
+            BaseMessages.getString(PKG, "ScriptValuesDialogMod.GetVariables.Button"),
+            e -> test(true, true))
+        .custom(
+            BaseMessages.getString(PKG, "ScriptValuesDialogMod.TestScript.Button"), e -> newTest())
+        .cancel(e -> cancel())
+        .build();
 
     lsMod = e -> input.setChanged();
     changed = input.hasChanged();
 
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "ScriptValuesDialogMod.Shell.Title"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // Buttons at the bottom
-    //
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    Button wVars = new Button(shell, SWT.PUSH);
-    wVars.addListener(SWT.Selection, e -> test(true, true));
-    wVars.setText(BaseMessages.getString(PKG, "ScriptValuesDialogMod.GetVariables.Button"));
-    Button wTest = new Button(shell, SWT.PUSH);
-    wTest.setText(BaseMessages.getString(PKG, "ScriptValuesDialogMod.TestScript.Button"));
-    wTest.addListener(SWT.Selection, e -> newTest());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wVars, wTest, wCancel}, margin, null);
-
-    // Filename line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(
-        BaseMessages.getString(PKG, "ScriptValuesDialogMod.TransformName.Label"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
+    Control lastControl = wSpacer;
 
     SashForm wSash = new SashForm(shell, SWT.VERTICAL);
 
@@ -314,7 +276,7 @@ public class ScriptValuesDialog extends BaseTransformDialog {
         BaseMessages.getString(PKG, "ScriptValuesDialogMod.OptimizationLevel.Label"));
     PropsUi.setLook(wlOptimizationLevel);
     FormData fdlOptimizationLevel = new FormData();
-    fdlOptimizationLevel.left = new FormAttachment(wTree, margin * 2);
+    fdlOptimizationLevel.left = new FormAttachment(wTree, margin);
     fdlOptimizationLevel.bottom = new FormAttachment(100, -margin);
     wlOptimizationLevel.setLayoutData(fdlOptimizationLevel);
 
@@ -335,7 +297,7 @@ public class ScriptValuesDialog extends BaseTransformDialog {
     wlPosition.setText(BaseMessages.getString(PKG, "ScriptValuesDialogMod.Position.Label", 1, 1));
     PropsUi.setLook(wlPosition);
     FormData fdlPosition = new FormData();
-    fdlPosition.left = new FormAttachment(wTree, 2 * margin);
+    fdlPosition.left = new FormAttachment(wTree, margin);
     fdlPosition.right = new FormAttachment(100, 0);
     fdlPosition.bottom = new FormAttachment(wOptimizationLevel, -margin);
     wlPosition.setLayoutData(fdlPosition);
@@ -349,6 +311,8 @@ public class ScriptValuesDialog extends BaseTransformDialog {
     fdScript.top = new FormAttachment(wlScript, margin);
     fdScript.right = new FormAttachment(100, -5);
     fdScript.bottom = new FormAttachment(wlPosition, -margin);
+    fdScript.width = 500;
+    fdScript.height = 400;
     folder.setLayoutData(fdScript);
 
     FormData fdTop = new FormData();
@@ -381,9 +345,9 @@ public class ScriptValuesDialog extends BaseTransformDialog {
     fdlFields.top = new FormAttachment(wSeparator, 0);
     wlFields.setLayoutData(fdlFields);
 
-    final int FieldsRows = input.getFieldname().length;
+    final int nrFields = input.getScriptFields().size();
 
-    ColumnInfo[] colinf =
+    ColumnInfo[] colInfos =
         new ColumnInfo[] {
           new ColumnInfo(
               BaseMessages.getString(PKG, "ScriptValuesDialogMod.ColumnInfo.Filename"),
@@ -416,8 +380,8 @@ public class ScriptValuesDialog extends BaseTransformDialog {
             variables,
             wBottom,
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
-            colinf,
-            FieldsRows,
+            colInfos,
+            nrFields,
             lsMod,
             props);
 
@@ -433,16 +397,20 @@ public class ScriptValuesDialog extends BaseTransformDialog {
     fdBottom.top = new FormAttachment(0, 0);
     fdBottom.right = new FormAttachment(100, 0);
     fdBottom.bottom = new FormAttachment(100, 0);
+    fdBottom.width = 500;
+    fdBottom.height = 400;
     wBottom.setLayoutData(fdBottom);
 
     FormData fdSash = new FormData();
     fdSash.left = new FormAttachment(0, 0);
-    fdSash.top = new FormAttachment(wTransformName, 0);
+    fdSash.top = new FormAttachment(lastControl, 0);
     fdSash.right = new FormAttachment(100, 0);
-    fdSash.bottom = new FormAttachment(wOk, -2 * margin);
+    fdSash.bottom = new FormAttachment(wOk, -margin);
+    fdSash.width = 500;
+    fdSash.height = 400;
     wSash.setLayoutData(fdSash);
 
-    wSash.setWeights(new int[] {75, 25});
+    wSash.setWeights(70, 30);
 
     // Add listeners
     wTree.addListener(SWT.MouseDoubleClick, this::treeDblClick);
@@ -575,8 +543,8 @@ public class ScriptValuesDialog extends BaseTransformDialog {
             event.data = wTree.getSelection()[0].getText();
           }
         });
-
-    BaseDialog.defaultShellHandling(shell, c -> ok(), this::cancel);
+    focusTransformName();
+    BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
   }
@@ -795,35 +763,36 @@ public class ScriptValuesDialog extends BaseTransformDialog {
       wOptimizationLevel.setText(ScriptValuesMeta.OPTIMIZATION_LEVEL_DEFAULT);
     }
 
-    for (int i = 0; i < input.getFieldname().length; i++) {
-      if (!Utils.isEmpty(input.getFieldname()[i])) {
+    for (int i = 0; i < input.getScriptFields().size(); i++) {
+      ScriptValuesMeta.ScriptField field = input.getScriptFields().get(i);
+      if (!Utils.isEmpty(field.getName())) {
         TableItem item = wFields.table.getItem(i);
-        item.setText(1, input.getFieldname()[i]);
-        if (input.getRename()[i] != null && !input.getFieldname()[i].equals(input.getRename()[i])) {
-          item.setText(2, input.getRename()[i]);
+        item.setText(1, field.getName());
+        if (field.getRename() != null && !field.getName().equals(field.getRename())) {
+          item.setText(2, field.getRename());
         }
-        item.setText(3, ValueMetaFactory.getValueMetaName(input.getType()[i]));
-        if (input.getLength()[i] >= 0) {
-          item.setText(4, "" + input.getLength()[i]);
+        item.setText(3, ValueMetaFactory.getValueMetaName(field.getType()));
+        if (field.getLength() >= 0) {
+          item.setText(4, "" + field.getLength());
         }
-        if (input.getPrecision()[i] >= 0) {
-          item.setText(5, "" + input.getPrecision()[i]);
+        if (field.getPrecision() >= 0) {
+          item.setText(5, "" + field.getPrecision());
         }
-        item.setText(6, input.getReplace()[i] ? YES_NO_COMBO[1] : YES_NO_COMBO[0]);
+        item.setText(6, field.isReplace() ? YES_NO_COMBO[1] : YES_NO_COMBO[0]);
       }
     }
 
-    ScriptValuesScript[] jsScripts = input.getJSScripts();
-    if (jsScripts.length > 0) {
+    List<ScriptValuesScript> jsScripts = input.getJsScripts();
+    if (!jsScripts.isEmpty()) {
       for (ScriptValuesScript jsScript : jsScripts) {
         if (jsScript.isTransformScript()) {
-          strActiveScript = jsScript.getScriptName();
+          strActiveScript = jsScript.getName();
         } else if (jsScript.isStartScript()) {
-          strActiveStartScript = jsScript.getScriptName();
+          strActiveStartScript = jsScript.getName();
         } else if (jsScript.isEndScript()) {
-          strActiveEndScript = jsScript.getScriptName();
+          strActiveEndScript = jsScript.getName();
         }
-        addCtab(jsScript.getScriptName(), jsScript.getScript(), ADD_DEFAULT);
+        addCtab(jsScript.getName(), jsScript.getScript(), ADD_DEFAULT);
       }
     } else {
       addCtab("", "", ADD_DEFAULT);
@@ -833,9 +802,6 @@ public class ScriptValuesDialog extends BaseTransformDialog {
 
     wFields.setRowNums();
     wFields.optWidth(true);
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   // Setting default active Script
@@ -867,15 +833,28 @@ public class ScriptValuesDialog extends BaseTransformDialog {
 
   private boolean cancel() {
     if (input.hasChanged()) {
-      MessageBox box = new MessageBox(shell, SWT.YES | SWT.NO | SWT.APPLICATION_MODAL | SWT.SHEET);
-      box.setText(BaseMessages.getString(PKG, "ScriptValuesModDialog.WarningDialogChanged.Title"));
-      box.setMessage(
-          BaseMessages.getString(
-              PKG, "ScriptValuesModDialog.WarningDialogChanged.Message", Const.CR));
-      int answer = box.open();
-
-      if (answer == SWT.NO) {
-        return false;
+      if ("Y".equalsIgnoreCase(props.getCustomParameter(WARNING_CLOSE_UNSAVED_PARAMETER, "Y"))) {
+        MessageDialogWithToggle md =
+            new MessageDialogWithToggle(
+                shell,
+                BaseMessages.getString(PKG, "ScriptValuesModDialog.WarningDialogChanged.Title"),
+                BaseMessages.getString(
+                    PKG, "ScriptValuesModDialog.WarningDialogChanged.Message", Const.CR),
+                SWT.ICON_WARNING,
+                new String[] {
+                  BaseMessages.getString(PKG, "ScriptValuesModDialog.WarningDialogChanged.Yes"),
+                  BaseMessages.getString(PKG, "ScriptValuesModDialog.WarningDialogChanged.No")
+                },
+                BaseMessages.getString(
+                    PKG, "ScriptValuesModDialog.WarningDialogChanged.DoNotShowAgain"),
+                "N"
+                    .equalsIgnoreCase(
+                        props.getCustomParameter(WARNING_CLOSE_UNSAVED_PARAMETER, "Y")));
+        int answer = md.open();
+        props.setCustomParameter(WARNING_CLOSE_UNSAVED_PARAMETER, md.getToggleState() ? "N" : "Y");
+        if (answer == 1) {
+          return false;
+        }
       }
     }
     transformName = null;
@@ -886,44 +865,43 @@ public class ScriptValuesDialog extends BaseTransformDialog {
 
   private void getInfo(ScriptValuesMeta meta) {
     meta.setOptimizationLevel(wOptimizationLevel.getText());
-    int nrFields = wFields.nrNonEmpty();
-    meta.allocate(nrFields);
-    for (int i = 0; i < nrFields; i++) {
-      TableItem item = wFields.getNonEmpty(i);
-      meta.getFieldname()[i] = item.getText(1);
-      meta.getRename()[i] = item.getText(2);
-      if (meta.getRename()[i] == null
-          || meta.getRename()[i].isEmpty()
-          || meta.getRename()[i].equalsIgnoreCase(meta.getFieldname()[i])) {
-        meta.getRename()[i] = meta.getFieldname()[i];
+
+    meta.getScriptFields().clear();
+    for (TableItem item : wFields.getNonEmptyItems()) {
+      ScriptValuesMeta.ScriptField field = new ScriptValuesMeta.ScriptField();
+      field.setName(item.getText(1));
+      field.setRename(item.getText(2));
+      if (StringUtils.isEmpty(field.getRename())
+          || field.getRename().equalsIgnoreCase(field.getName())) {
+        field.setRename(field.getName());
       }
-      meta.getType()[i] = ValueMetaFactory.getIdForValueMeta(item.getText(3));
-      String slen = item.getText(4);
-      String sprc = item.getText(5);
-      meta.getLength()[i] = Const.toInt(slen, -1);
-      meta.getPrecision()[i] = Const.toInt(sprc, -1);
-      meta.getReplace()[i] = YES_NO_COMBO[1].equalsIgnoreCase(item.getText(6));
+      field.setType(ValueMetaFactory.getIdForValueMeta(item.getText(3)));
+      String sLength = item.getText(4);
+      String sPrecision = item.getText(5);
+      field.setLength(Const.toInt(sLength, -1));
+      field.setPrecision(Const.toInt(sPrecision, -1));
+      field.setReplace(YES_NO_COMBO[1].equalsIgnoreCase(item.getText(6)));
+      meta.getScriptFields().add(field);
     }
 
     CTabItem[] cTabs = folder.getItems();
+    meta.getJsScripts().clear();
     if (cTabs.length > 0) {
-      ScriptValuesScript[] jsScripts = new ScriptValuesScript[cTabs.length];
       for (int i = 0; i < cTabs.length; i++) {
-        ScriptValuesScript jsScript =
-            new ScriptValuesScript(
-                ScriptValuesScript.NORMAL_SCRIPT,
-                cTabs[i].getText(),
-                getStyledTextComp(cTabs[i]).getText());
+        ScriptValuesScript jsScript = new ScriptValuesScript();
+        jsScript.setType(ScriptValuesScript.NORMAL_SCRIPT);
+        jsScript.setName(cTabs[i].getText());
+        jsScript.setScript(getStyledTextComp(cTabs[i]).getText());
+
         if (cTabs[i].getImage().equals(imageActiveScript)) {
-          jsScript.setScriptType(ScriptValuesScript.TRANSFORM_SCRIPT);
+          jsScript.setType(ScriptValuesScript.TRANSFORM_SCRIPT);
         } else if (cTabs[i].getImage().equals(imageActiveStartScript)) {
-          jsScript.setScriptType(ScriptValuesScript.START_SCRIPT);
+          jsScript.setType(ScriptValuesScript.START_SCRIPT);
         } else if (cTabs[i].getImage().equals(imageActiveEndScript)) {
-          jsScript.setScriptType(ScriptValuesScript.END_SCRIPT);
+          jsScript.setType(ScriptValuesScript.END_SCRIPT);
         }
-        jsScripts[i] = jsScript;
+        meta.getJsScripts().add(jsScript);
       }
-      meta.setJSScripts(jsScripts);
     }
   }
 
@@ -1152,6 +1130,7 @@ public class ScriptValuesDialog extends BaseTransformDialog {
     }
   }
 
+  @SuppressWarnings("deprecation")
   private boolean test(boolean getvars, boolean popup) {
     boolean retval = true;
     TextComposite wScript = getStyledTextComp();
@@ -1187,22 +1166,6 @@ public class ScriptValuesDialog extends BaseTransformDialog {
                 rowMeta, pipelineMeta.getTransformFields(variables, transformName));
         Scriptable jsvalue = Context.toObject(dummyTransform, jsscope);
         jsscope.put("_transform_", jsscope, jsvalue);
-
-        // Modification for Additional Script parsing
-        try {
-          if (input.getAddClasses() != null) {
-            for (int i = 0; i < input.getAddClasses().length; i++) {
-              Object jsOut = Context.javaToJS(input.getAddClasses()[i].getAddObject(), jsscope);
-              ScriptableObject.putProperty(jsscope, input.getAddClasses()[i].getJSName(), jsOut);
-            }
-          }
-        } catch (Exception e) {
-          testException =
-              new HopException(
-                  BaseMessages.getString(
-                      PKG, "ScriptValuesDialogMod.CouldNotAddToContext", e.toString()));
-          retval = false;
-        }
 
         // Adding some default JavaScriptFunctions to the System
         try {
@@ -1375,14 +1338,7 @@ public class ScriptValuesDialog extends BaseTransformDialog {
           }
 
           // End Script!
-        } catch (EvaluatorException e) {
-          String position = "(" + e.lineNumber() + ":" + e.columnNumber() + ")";
-          String message =
-              BaseMessages.getString(
-                  PKG, "ScriptValuesDialogMod.Exception.CouldNotExecuteScript", position);
-          testException = new HopException(message, e);
-          retval = false;
-        } catch (JavaScriptException e) {
+        } catch (EvaluatorException | JavaScriptException e) {
           String position = "(" + e.lineNumber() + ":" + e.columnNumber() + ")";
           String message =
               BaseMessages.getString(
@@ -1504,7 +1460,7 @@ public class ScriptValuesDialog extends BaseTransformDialog {
 
     for (String strFunction : v) {
       String strFunctionType = hatFunctions.get(strFunction);
-      int iFunctionType = Integer.valueOf(strFunctionType);
+      int iFunctionType = Integer.parseInt(strFunctionType);
 
       TreeItem itemFunction = null;
       switch (iFunctionType) {
@@ -1617,63 +1573,6 @@ public class ScriptValuesDialog extends BaseTransformDialog {
     if (wTreeClassesitem != null) {
       wTreeClassesitem.dispose();
     }
-    if (input.getAddClasses() != null) {
-      for (int i = 0; i < input.getAddClasses().length; i++) {
-        try {
-          Method[] methods = input.getAddClasses()[i].getAddClass().getMethods();
-          String strClassType = input.getAddClasses()[i].getAddClass().toString();
-          String strParams;
-          wTreeClassesitem = new TreeItem(wTree, SWT.NULL);
-          wTreeClassesitem.setText(input.getAddClasses()[i].getJSName());
-          for (Method method : methods) {
-            String strDeclaringClass = method.getDeclaringClass().toString();
-            if (strClassType.equals(strDeclaringClass)) {
-              TreeItem item2 = new TreeItem(wTreeClassesitem, SWT.NULL);
-              strParams = buildAddClassFunctionName(method);
-              item2.setText(method.getName() + "(" + strParams + ")");
-              String strData =
-                  input.getAddClasses()[i].getJSName()
-                      + "."
-                      + method.getName()
-                      + "("
-                      + strParams
-                      + ")";
-              item2.setData(strData);
-            }
-          }
-        } catch (Exception e) {
-          // Ignore errors
-        }
-      }
-    }
-  }
-
-  private String buildAddClassFunctionName(Method metForParams) {
-    StringBuilder sbRC = new StringBuilder();
-    String strRC = "";
-    Class<?>[] clsParamType = metForParams.getParameterTypes();
-    String strParam;
-
-    for (Class<?> aClass : clsParamType) {
-      strParam = aClass.getName();
-      if (!strParam.toLowerCase().contains("javascript")) {
-        if (strParam.toLowerCase().contains("object")) {
-          sbRC.append("var");
-          sbRC.append(", ");
-        } else if (strParam.equals("java.lang.String")) {
-          sbRC.append("String");
-          sbRC.append(", ");
-        } else {
-          sbRC.append(strParam);
-          sbRC.append(", ");
-        }
-      }
-    }
-    strRC = sbRC.toString();
-    if (!strRC.isEmpty()) {
-      strRC = strRC.substring(0, sbRC.length() - 2);
-    }
-    return strRC;
   }
 
   private void buildingFolderMenu() {
@@ -1942,6 +1841,7 @@ public class ScriptValuesDialog extends BaseTransformDialog {
   }
 
   // This could be useful for further improvements
+  @SuppressWarnings("deprecation")
   public static ScriptNode parseVariables(
       Context cx,
       Scriptable scope,

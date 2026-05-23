@@ -114,7 +114,7 @@ The `Look & Feel` configuration options allow you to configure various aspects o
 |Show Canvas Grid|show the grid (dotted) for workflows and pipelines in Hop GUI |no
 |Hide the menu bar|Do not show the menu bar. If enabled (default), the menu options are available from the Apache Hop icon in Hop GUI's upper left corner. |yes
 |Show a toolbar above tables|Show a toolbar with options to cut/copy/paste, move lines up/down etc in table views (e.g. in preview dialogs, transform configuration options)|yes
-|Dark mode|use dark mode. This options is read only (can't be changed). Your operating system's theme settings are used by default. |N/A
+|Dark mode|use dark mode. On Hop Web and Windows you can toggle this; on macOS and other desktop platforms it follows the operating system theme. Changing it in Hop Web reloads the page to apply the theme. |N/A
 |Preferred Language
 a|the default language to use in Hop GUI.
 
@@ -129,7 +129,10 @@ The following plugins are available by default:
 
 * xref:vfs/azure-blob-storage-vfs.adoc#_configuration[Azure Blob Storage] VFS configuration options.
 * xref:vfs/dropbox-vfs.adoc#_configuration[Dropbox] VFS configuration options.
-* xref:hop-gui/perspective-file-explorer.adoc[Explorer perspective] configuration options.
+* **Explorer perspective**: Configuration options for the file explorer perspective:
+  ** The initial depth to load not lazily: Controls how many folder levels are loaded immediately when opening folders.
+  ** The maximum file size to load: Sets the maximum file size (in MB) that will be loaded when opening files.
+  ** Show file explorer panel by default: When enabled, the file explorer panel (project tree) is shown by default when opening the explorer perspective. When disabled, the panel starts hidden.
 * xref:technology/google/index.adoc[Google Cloud] configuration options (service account JSON key file).
 * xref:vfs/google-drive-vfs.adoc#_configuration[Google Drive] VFS configuration options.
 * xref:projects/index.adoc[Project] configuration options

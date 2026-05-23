@@ -36,6 +36,7 @@ import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.metadata.api.HopMetadataProperty;
+import org.apache.hop.metadata.api.HopMetadataPropertyType;
 import org.apache.hop.metadata.api.IHopMetadataProvider;
 import org.apache.hop.resource.ResourceEntry;
 import org.apache.hop.resource.ResourceEntry.ResourceType;
@@ -74,7 +75,9 @@ public class ActionEvalTableContent extends ActionBase {
   @HopMetadataProperty(key = "custom_sql")
   private String customSql;
 
-  @HopMetadataProperty(key = "connection")
+  @HopMetadataProperty(
+      key = "connection",
+      hopMetadataPropertyType = HopMetadataPropertyType.RDBMS_CONNECTION)
   private String connection;
 
   @HopMetadataProperty(key = "tablename")
@@ -287,8 +290,8 @@ public class ActionEvalTableContent extends ActionBase {
               IRowMeta rowMeta = db.getQueryFields(countSqlStatement, false);
 
               List<RowMetaAndData> rows = new ArrayList<>();
-              for (int i = 0; i < ar.size(); i++) {
-                rows.add(new RowMetaAndData(rowMeta, ar.get(i)));
+              for (Object[] objects : ar) {
+                rows.add(new RowMetaAndData(rowMeta, objects));
               }
               if (addRowsResult && useCustomSql && rows != null) {
                 result.getRows().addAll(rows);

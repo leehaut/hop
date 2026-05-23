@@ -29,6 +29,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.plugins.IPlugin;
 import org.apache.hop.core.plugins.PluginRegistry;
@@ -119,8 +120,8 @@ public class FunctionLib {
    */
   public String[] getImportPackages() {
     ArrayList<String> importPackages = new ArrayList<>();
-    for (int i = 0; i < functions.size(); i++) {
-      importPackages.add(functions.get(i).getImportPackage());
+    for (FunctionDescription function : functions) {
+      importPackages.add(function.getImportPackage());
     }
     importPackages.sort(Comparator.naturalOrder());
     return importPackages.stream().distinct().toArray(String[]::new);
@@ -175,7 +176,16 @@ public class FunctionLib {
       throws IOException {
     return ClassPath.from(classLoader).getAllClasses().stream()
         .filter(clazz -> clazz.getPackageName().contains(packageName))
-        .map(ClassPath.ClassInfo::load)
+        .flatMap(
+            clazz -> {
+              try {
+                return Stream.of(clazz.load());
+              } catch (Exception | Error e) {
+                // Skip classes that cannot be loaded (e.g. bad path-based class names from
+                // test-classpath entries, missing dependencies, incompatible bytecode).
+                return Stream.empty();
+              }
+            })
         .collect(Collectors.toSet());
   }
 }

@@ -22,8 +22,11 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PushbackInputStream;
+import java.util.ArrayList;
 import java.util.BitSet;
-import org.apache.commons.lang.NotImplementedException;
+import java.util.List;
+import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.FileSystemException;
 import org.apache.hop.core.QueueRowSet;
@@ -31,6 +34,7 @@ import org.apache.hop.core.ResultFile;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopTransformException;
 import org.apache.hop.core.exception.HopValueException;
+import org.apache.hop.core.io.CountingInputStream;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.row.RowDataUtil;
 import org.apache.hop.core.row.RowMeta;
@@ -38,8 +42,14 @@ import org.apache.hop.core.util.StringUtil;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.vfs.HopVfs;
 import org.apache.hop.i18n.BaseMessages;
+import org.apache.hop.lineage.LineageFileIoEmitter;
+import org.apache.hop.lineage.model.FileIoContentSchema;
+import org.apache.hop.lineage.model.FileIoOperation;
+import org.apache.hop.lineage.model.FileIoPathSyntax;
+import org.apache.hop.lineage.model.FileIoTabularColumn;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineMeta;
+import org.apache.hop.pipeline.transform.BaseTransform;
 import org.apache.hop.pipeline.transform.TransformMeta;
 import org.apache.hop.pipeline.transforms.file.BaseFileInputTransform;
 import org.apache.hop.pipeline.transforms.file.IBaseFileInputReader;
@@ -77,12 +87,15 @@ public class JsonInput extends BaseFileInputTransform<JsonInputMeta, JsonInputDa
 
   @Override
   public boolean init() {
+    if (!super.init()) {
+      return false;
+    }
     data.rownr = 1L;
-    data.nrInputFields = meta.getInputFields().length;
+    data.nrInputFields = meta.getInputFields().size();
     data.repeatedFields = new BitSet(data.nrInputFields);
     // Take care of variable substitution
     for (int i = 0; i < data.nrInputFields; i++) {
-      JsonInputField field = meta.getInputFields()[i];
+      JsonInputField field = meta.getInputFields().get(i);
       if (field.isRepeated()) {
         data.repeatedFields.set(i);
       }
@@ -100,9 +113,27 @@ public class JsonInput extends BaseFileInputTransform<JsonInputMeta, JsonInputDa
 
   @Override
   public boolean processRow() throws HopException {
+    beginProcessRowIteration();
+    try {
+      if (!writeOutputRowIfPossible(getOneOutputRow())) {
+        return false;
+      }
+    } catch (JsonInputException e) {
+      if (!handleJsonInputExceptionInProcessRow()) {
+        return false;
+      }
+    } catch (Exception e) {
+      if (!handleUnexpectedExceptionInProcessRow(e)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private void beginProcessRowIteration() throws HopException {
     if (first) {
       first = false;
-      prepareToRowProcessing();
+      prepareToRowProcessing(false);
     } else if (data.indexSourceField == -1 && data.inputRowMeta != null) {
       data.readrow = getRow();
       if (data.readrow != null) {
@@ -110,58 +141,57 @@ public class JsonInput extends BaseFileInputTransform<JsonInputMeta, JsonInputDa
             BaseMessages.getString(PKG, "JsonInput.Log.ReceivingMultiRows"));
       }
     }
+  }
 
-    Object[] outRow;
-    try {
-      // Grab a row
-      outRow = getOneOutputRow();
-      if (outRow == null) {
-        setOutputDone(); // signal end to receiver(s)
-        return false; // end of data or error.
-      }
-
-      if (isRowLevel()) {
-        logRowlevel(
-            BaseMessages.getString(
-                PKG, "JsonInput.Log.ReadRow", data.outputRowMeta.getString(outRow)));
-      }
-      incrementLinesInput();
-      data.rownr++;
-
-      putRow(data.outputRowMeta, outRow); // copy row to output rowset(s)
-
-      if (meta.getRowLimit() > 0 && data.rownr > meta.getRowLimit()) {
-        // limit has been reached: stop now.
-        setOutputDone();
-        return false;
-      }
-
-    } catch (JsonInputException e) {
-      if (!getTransformMeta().isDoingErrorHandling()) {
-        stopErrorExecution(e);
-        return false;
-      }
-    } catch (Exception e) {
-      logError(BaseMessages.getString(PKG, "JsonInput.ErrorInTransformRunning", e.getMessage()));
-      if (getTransformMeta().isDoingErrorHandling()) {
-        sendErrorRow(e.toString());
-      } else {
-        incrementErrors();
-        stopErrorExecution(e);
-        return false;
-      }
+  private boolean writeOutputRowIfPossible(Object[] outRow) throws HopException {
+    if (outRow == null) {
+      setOutputDone();
+      return false;
+    }
+    if (isRowLevel()) {
+      logRowlevel(
+          BaseMessages.getString(
+              PKG, "JsonInput.Log.ReadRow", data.outputRowMeta.getString(outRow)));
+    }
+    incrementLinesInput();
+    data.rownr++;
+    putRow(data.outputRowMeta, outRow);
+    if (meta.getRowLimit() > 0 && data.rownr > meta.getRowLimit()) {
+      setOutputDone();
+      return false;
     }
     return true;
   }
 
-  private void stopErrorExecution(Exception e) {
+  private boolean handleJsonInputExceptionInProcessRow() {
+    if (!getTransformMeta().isDoingErrorHandling()) {
+      stopErrorExecution();
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * @return false if execution must stop
+   */
+  private boolean handleUnexpectedExceptionInProcessRow(Exception e) {
+    logError(BaseMessages.getString(PKG, "JsonInput.ErrorInTransformRunning", e.getMessage()));
+    if (getTransformMeta().isDoingErrorHandling()) {
+      sendErrorRow(e.toString());
+      return true;
+    }
+    incrementErrors();
+    stopErrorExecution();
+    return false;
+  }
+
+  private void stopErrorExecution() {
     stopAll();
     setOutputDone();
   }
 
   @Override
-  protected void prepareToRowProcessing()
-      throws HopException, HopTransformException, HopValueException {
+  protected void prepareToRowProcessing(boolean errorIgnored) throws HopException {
     data.readrow = getRow();
     data.inputRowMeta = getInputRowMeta();
     if (!meta.isInFields() && data.inputRowMeta == null) {
@@ -253,18 +283,20 @@ public class JsonInput extends BaseFileInputTransform<JsonInputMeta, JsonInputDa
       inputError(errMsg);
       return false;
     }
+
+    if (file.getContent().getSize() == 0 && meta.isIgnoringEmptyFile()) {
+      logBasic(BaseMessages.getString(PKG, "JsonInput.Error.FileSizeZero", "" + file.getName()));
+      // Skip opening/parsing this file; InputsReader will advance to the next file.
+      data.skipEmptyFile = true;
+      return false;
+    }
     if (hasAdditionalFileFields()) {
       fillFileAdditionalFields(data, file);
     }
     if (file.getContent().getSize() == 0) {
-      // log only basic as a warning (was before logError)
-      if (meta.isIgnoreEmptyFile()) {
-        logBasic(BaseMessages.getString(PKG, "JsonInput.Error.FileSizeZero", "" + file.getName()));
-      } else {
-        logError(BaseMessages.getString(PKG, "JsonInput.Error.FileSizeZero", "" + file.getName()));
-        incrementErrors();
-        return false;
-      }
+      logError(BaseMessages.getString(PKG, "JsonInput.Error.FileSizeZero", "" + file.getName()));
+      incrementErrors();
+      return false;
     }
     return true;
   }
@@ -282,22 +314,30 @@ public class JsonInput extends BaseFileInputTransform<JsonInputMeta, JsonInputDa
   }
 
   private void parseNextInputToRowSet(InputStream input) throws HopException {
-    try {
-      data.readerRowSet = data.reader.parseStringValue(input);
+    // Large pushback buffer: some streams pre-read; avoids buffer overflow on unread(1).
+    try (PushbackInputStream pb = new PushbackInputStream(input, 8192)) {
+      if (meta.isIgnoringEmptyFile()) {
+        int first = pb.read();
+        if (first < 0) {
+          data.readerRowSet = data.jsonReader.emptyFieldRowSet();
+          return;
+        }
+        pb.unread(first);
+        input = pb;
+      }
+      data.readerRowSet = data.jsonReader.parseStringValue(input);
     } catch (HopException ke) {
       logInputError(ke);
       throw new JsonInputException(ke);
     } catch (Exception e) {
       logInputError(e);
       throw new JsonInputException(e);
-    } finally {
-      closeQuietly(input);
     }
   }
 
   private void parseNextJsonToRowSet(JsonNode node) throws HopException {
     try {
-      data.readerRowSet = data.reader.parseJsonNodeValue(node);
+      data.readerRowSet = data.jsonReader.parseJsonNodeValue(node);
     } catch (Exception e) {
       logInputError(e);
       throw new JsonInputException(e);
@@ -331,8 +371,13 @@ public class JsonInput extends BaseFileInputTransform<JsonInputMeta, JsonInputDa
     }
   }
 
-  private class InputErrorHandler implements InputsReader.ErrorHandler {
+  @Override
+  public boolean failAfterBadFile(String errorMsg, boolean errorIgnored, boolean skipBadFiles) {
+    // Always simply fail on error
+    return true;
+  }
 
+  private class InputErrorHandler implements InputsReader.ErrorHandler {
     @Override
     public void error(Exception e) {
       logError(BaseMessages.getString(PKG, "JsonInput.Log.UnexpectedError", e.toString()));
@@ -358,8 +403,28 @@ public class JsonInput extends BaseFileInputTransform<JsonInputMeta, JsonInputDa
     }
   }
 
+  /** Paths and types configured for JSON file reads (not the transform output row). */
+  private FileIoContentSchema jsonFileReadContentSchema() {
+    if (meta.getInputFields() == null || meta.getInputFields().isEmpty()) {
+      return null;
+    }
+    List<FileIoTabularColumn> cols = new ArrayList<>();
+    for (JsonInputField f : meta.getInputFields()) {
+      cols.add(
+          new FileIoTabularColumn(
+              f.getName(),
+              f.getTypeDesc(),
+              f.getLength(),
+              f.getPrecision(),
+              f.getPath(),
+              FileIoPathSyntax.JSON_PATH,
+              f.isRepeated()));
+    }
+    return FileIoContentSchema.tabularWithMergedTree("json", cols);
+  }
+
   /** get final row for output */
-  private Object[] getOneOutputRow() throws HopException {
+  private Object[] getOneOutputRow() throws HopException, IOException {
     if (meta.isInFields() && !data.hasFirstRow) {
       return null;
     }
@@ -388,17 +453,39 @@ public class JsonInput extends BaseFileInputTransform<JsonInputMeta, JsonInputDa
     } else {
       while ((rawReaderRow = data.readerRowSet.getRow()) == null) {
         if (data.inputs.hasNext() && data.readerRowSet.isDone()) {
-          try (InputStream nextIn = data.inputs.next()) {
-
-            if (nextIn != null) {
-              parseNextInputToRowSet(nextIn);
+          InputStream nextIn = data.inputs.next();
+          if (nextIn != null) {
+            CountingInputStream countingIn = new CountingInputStream(nextIn);
+            try (countingIn) {
+              parseNextInputToRowSet(countingIn);
+            } finally {
+              long bytesRead = countingIn.getCount();
+              dataVolumeIn = (dataVolumeIn != null ? dataVolumeIn : 0L) + bytesRead;
+              if (data.file != null && bytesRead > 0) {
+                try {
+                  LineageFileIoEmitter.emitTransformFileIo(
+                      this,
+                      FileIoOperation.READ,
+                      data.file,
+                      null,
+                      bytesRead,
+                      true,
+                      null,
+                      jsonFileReadContentSchema());
+                } catch (Exception ignored) {
+                  // optional lineage
+                }
+              }
+              BaseTransform.closeQuietly(countingIn);
+            }
+          } else {
+            // Null stream (e.g. null field, iterator error path): do not parse "{}" when ignoring
+            // empty input — that would still run JSONPath and fail if paths are missing.
+            if (meta.isIgnoringEmptyFile()) {
+              data.readerRowSet = data.jsonReader.emptyFieldRowSet();
             } else {
               parseNextInputToRowSet(new ByteArrayInputStream(EMPTY_JSON));
             }
-
-          } catch (IOException e) {
-            logError(BaseMessages.getString(PKG, "JsonInput.Log.UnexpectedError", e.toString()), e);
-            incrementErrors();
           }
         } else {
           if (isDetailed()) {
@@ -466,7 +553,7 @@ public class JsonInput extends BaseFileInputTransform<JsonInputMeta, JsonInputDa
     }
     // See if we need to add the row number to the row...
     if (meta.includeRowNumber() && !Utils.isEmpty(meta.getRowNumberField())) {
-      outputRowData[rowIndex++] = Long.valueOf(data.rownr);
+      outputRowData[rowIndex++] = data.rownr;
     }
     // Possibly add short filename...
     if (!Utils.isEmpty(meta.getShortFileNameField())) {
@@ -499,22 +586,23 @@ public class JsonInput extends BaseFileInputTransform<JsonInputMeta, JsonInputDa
     }
     // Add RootUri
     if (!Utils.isEmpty(meta.getRootUriField())) {
-      outputRowData[rowIndex++] = data.rootUriName;
+      outputRowData[rowIndex] = data.rootUriName;
     }
   }
 
   private void createReader() throws HopException {
     // provide reader input fields with real path
-    // Need to have this run before we create the FastJsonReader, so we can use resolve Json Paths
+    // Need to have this run before we create the FastJsonReader, so we can use resolve JSON paths
     JsonInputField[] inputFields = new JsonInputField[data.nrInputFields];
     for (int i = 0; i < data.nrInputFields; i++) {
-      JsonInputField field = meta.getInputFields()[i].clone();
+      JsonInputField field = new JsonInputField(meta.getInputFields().get(i));
       field.setPath(resolve(field.getPath()));
       inputFields[i] = field;
     }
     // Instead of putting in the meta.inputFields, we put in our json path resolved input fields
-    data.reader = new FastJsonReader(inputFields, meta.isDefaultPathLeafToNull(), getLogChannel());
-    data.reader.setIgnoreMissingPath(meta.isIgnoreMissingPath());
+    data.jsonReader =
+        new FastJsonReader(inputFields, meta.isDefaultPathLeafToNull(), getLogChannel());
+    data.jsonReader.setIgnoreMissingPath(meta.isIgnoringMissingPath());
   }
 
   @Override
@@ -523,7 +611,7 @@ public class JsonInput extends BaseFileInputTransform<JsonInputMeta, JsonInputDa
       closeQuietly(data.file);
     }
     data.inputs = null;
-    data.reader = null;
+    data.jsonReader = null;
     data.readerRowSet = null;
     data.repeatedFields = null;
     super.dispose();

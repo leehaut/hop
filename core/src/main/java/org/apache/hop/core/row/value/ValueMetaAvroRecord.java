@@ -32,7 +32,7 @@ import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.exception.HopEofException;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopFileException;
@@ -98,13 +98,13 @@ public class ValueMetaAvroRecord extends ValueMetaBase {
   public GenericRecord getGenericRecord(Object object) throws HopValueException {
     switch (type) {
       case IValueMeta.TYPE_AVRO:
-        switch (storageType) {
-          case STORAGE_TYPE_NORMAL:
-            return (GenericRecord) object;
-          default:
-            throw new HopValueException(
-                "Only normal storage type is supported for the Avro GenericRecord value : " + this);
-        }
+        return switch (storageType) {
+          case STORAGE_TYPE_NORMAL -> (GenericRecord) object;
+          default ->
+              throw new HopValueException(
+                  "Only normal storage type is supported for the Avro GenericRecord value : "
+                      + this);
+        };
       case TYPE_STRING:
         switch (storageType) {
           case STORAGE_TYPE_NORMAL:
@@ -180,20 +180,18 @@ public class ValueMetaAvroRecord extends ValueMetaBase {
 
       switch (type) {
         case TYPE_STRING:
-          switch (storageType) {
-            case STORAGE_TYPE_NORMAL:
-              string = object == null ? null : convertGenericRecordToString((GenericRecord) object);
-              break;
-            case STORAGE_TYPE_BINARY_STRING:
-              string = (String) convertBinaryStringToNativeType((byte[]) object);
-              break;
-            case STORAGE_TYPE_INDEXED:
-              string = object == null ? null : (String) index[(Integer) object];
-              break;
-            default:
-              throw new HopValueException(
-                  this + CONST_UNKNOWN_STORAGE_TYPE + storageType + CONST_SPECIFIED);
-          }
+          string =
+              switch (storageType) {
+                case STORAGE_TYPE_NORMAL ->
+                    object == null ? null : convertGenericRecordToString((GenericRecord) object);
+                case STORAGE_TYPE_BINARY_STRING ->
+                    (String) convertBinaryStringToNativeType((byte[]) object);
+                case STORAGE_TYPE_INDEXED ->
+                    object == null ? null : (String) index[(Integer) object];
+                default ->
+                    throw new HopValueException(
+                        this + CONST_UNKNOWN_STORAGE_TYPE + storageType + CONST_SPECIFIED);
+              };
           if (string != null) {
             string = trim(string);
           }
@@ -220,51 +218,48 @@ public class ValueMetaAvroRecord extends ValueMetaBase {
               "You can't convert a Boolean to an Avro GenericRecord data type for : " + this);
 
         case TYPE_BINARY:
-          switch (storageType) {
-            case STORAGE_TYPE_NORMAL:
-              string = convertBinaryStringToString((byte[]) object);
-              break;
-            case STORAGE_TYPE_BINARY_STRING:
-              string = convertBinaryStringToString((byte[]) object);
-              break;
-            case STORAGE_TYPE_INDEXED:
-              string =
-                  object == null
-                      ? null
-                      : convertBinaryStringToString((byte[]) index[(Integer) object]);
-              break;
-            default:
-              throw new HopValueException(
-                  this + CONST_UNKNOWN_STORAGE_TYPE + storageType + CONST_SPECIFIED);
-          }
+          string =
+              switch (storageType) {
+                case STORAGE_TYPE_NORMAL -> convertBinaryStringToString((byte[]) object);
+                case STORAGE_TYPE_BINARY_STRING -> convertBinaryStringToString((byte[]) object);
+                case STORAGE_TYPE_INDEXED ->
+                    object == null
+                        ? null
+                        : convertBinaryStringToString((byte[]) index[(Integer) object]);
+                default ->
+                    throw new HopValueException(
+                        this + CONST_UNKNOWN_STORAGE_TYPE + storageType + CONST_SPECIFIED);
+              };
           break;
 
         case TYPE_SERIALIZABLE:
-          switch (storageType) {
-            case STORAGE_TYPE_NORMAL:
-              string = object == null ? null : object.toString();
-              break; // just go for the default toString()
-            case STORAGE_TYPE_BINARY_STRING:
-              string = convertBinaryStringToString((byte[]) object);
-              break;
-            case STORAGE_TYPE_INDEXED:
-              string = object == null ? null : index[((Integer) object).intValue()].toString();
-              break; // just go for the default toString()
-            default:
-              throw new HopValueException(
-                  this + CONST_UNKNOWN_STORAGE_TYPE + storageType + CONST_SPECIFIED);
-          }
+          string =
+              switch (storageType) {
+                case STORAGE_TYPE_NORMAL ->
+                    object == null ? null : object.toString(); // just go for the default toString()
+                case STORAGE_TYPE_BINARY_STRING -> convertBinaryStringToString((byte[]) object);
+                case STORAGE_TYPE_INDEXED ->
+                    object == null
+                        ? null
+                        : index[(Integer) object].toString(); // just go for the default toString()
+                default ->
+                    throw new HopValueException(
+                        this + CONST_UNKNOWN_STORAGE_TYPE + storageType + CONST_SPECIFIED);
+              };
           break;
 
         case IValueMeta.TYPE_AVRO:
-          switch (storageType) {
-            case STORAGE_TYPE_NORMAL:
-              string = object == null ? null : object.toString();
-              break;
-            default:
-              throw new HopValueException(
-                  this + " : Unsupported storage type " + getStorageTypeDesc() + " for " + this);
-          }
+          string =
+              switch (storageType) {
+                case STORAGE_TYPE_NORMAL -> object == null ? null : object.toString();
+                default ->
+                    throw new HopValueException(
+                        this
+                            + " : Unsupported storage type "
+                            + getStorageTypeDesc()
+                            + " for "
+                            + this);
+              };
           break;
 
         default:
@@ -471,10 +466,8 @@ public class ValueMetaAvroRecord extends ValueMetaBase {
 
   @Override
   public String getComments() {
-    if (StringUtils.isEmpty(super.comments)) {
-      if (schema != null) {
-        return schema.toString(false);
-      }
+    if (StringUtils.isEmpty(super.comments) && schema != null) {
+      return schema.toString(false);
     }
     return super.getComments();
   }

@@ -19,7 +19,7 @@ package org.apache.hop.pipeline.transforms.constant;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.CheckResult;
 import org.apache.hop.core.ICheckResult;
 import org.apache.hop.core.annotations.Transform;
@@ -82,8 +82,7 @@ public class ConstantMeta extends BaseTransformMeta<Constant, ConstantData> {
       IVariables variables,
       IHopMetadataProvider metadataProvider)
       throws HopTransformException {
-    for (int i = 0; i < fields.size(); i++) {
-      ConstantField item = fields.get(i);
+    for (ConstantField item : fields) {
       if (!StringUtils.isEmpty(item.getFieldName())) {
         int type = ValueMetaFactory.getIdForValueMeta(item.getFieldType());
         if (type == IValueMeta.TYPE_NONE) {

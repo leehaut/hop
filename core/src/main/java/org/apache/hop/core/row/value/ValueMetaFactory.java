@@ -121,7 +121,7 @@ public class ValueMetaFactory {
     List<String> strings = new ArrayList<>();
     List<IPlugin> plugins = pluginRegistry.getPlugins(ValueMetaPluginType.class);
     for (IPlugin plugin : plugins) {
-      int id = Integer.valueOf(plugin.getIds()[0]);
+      int id = Integer.parseInt(plugin.getIds()[0]);
       if (id > 0 && id != IValueMeta.TYPE_SERIALIZABLE) {
         strings.add(plugin.getName());
       }
@@ -153,7 +153,7 @@ public class ValueMetaFactory {
   public static int getIdForValueMeta(String valueMetaName) {
     for (IPlugin plugin : pluginRegistry.getPlugins(ValueMetaPluginType.class)) {
       if (valueMetaName != null && valueMetaName.equalsIgnoreCase(plugin.getName())) {
-        return Integer.valueOf(plugin.getIds()[0]);
+        return Integer.parseInt(plugin.getIds()[0]);
       }
     }
     return IValueMeta.TYPE_NONE;
@@ -192,33 +192,21 @@ public class ValueMetaFactory {
    * will be found usable this may be implemented later.
    *
    * @param object object to guess applicable IValueMeta.
-   * @return
+   * @return IValueMeta
    * @see IValueMeta if the hop value meta is recognized, null otherwise.
    */
   public static IValueMeta guessValueMetaInterface(Object object) {
-    if (object instanceof Number) {
-      // this is numeric object
-      if (object instanceof BigDecimal) {
-        return new ValueMetaBigNumber();
-      } else if (object instanceof Double) {
-        return new ValueMetaNumber();
-      } else if (object instanceof Long) {
-        return new ValueMetaInteger();
-      }
-    } else if (object instanceof String) {
-      return new ValueMetaString();
-    } else if (object instanceof Date) {
-      return new ValueMetaDate();
-    } else if (object instanceof Boolean) {
-      return new ValueMetaBoolean();
-    } else if (object instanceof byte[]) {
-      return new ValueMetaBinary();
-    } else if (object instanceof JsonNode) {
-      return new ValueMetaJson();
-    }
-
-    // ask someone else
-    return null;
+    return switch (object) {
+      case BigDecimal ignored -> new ValueMetaBigNumber();
+      case Double ignored -> new ValueMetaNumber();
+      case Long ignored -> new ValueMetaInteger();
+      case String ignored -> new ValueMetaString();
+      case Date ignored -> new ValueMetaDate();
+      case Boolean ignored -> new ValueMetaBoolean();
+      case byte[] ignored -> new ValueMetaBinary();
+      case JsonNode ignored -> new ValueMetaJson();
+      case null, default -> null;
+    };
   }
 
   public static IValueMeta loadValueMetaFromJson(JSONObject jValue) throws HopPluginException {

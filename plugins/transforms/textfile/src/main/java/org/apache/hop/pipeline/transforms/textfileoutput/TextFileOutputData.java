@@ -28,6 +28,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.function.Consumer;
 import org.apache.hop.core.compress.CompressionOutputStream;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.IValueMeta;
@@ -57,6 +58,11 @@ public class TextFileOutputData extends BaseTransformData implements ITransformD
     int size();
 
     void add(String filename, FileStream fileStreams);
+
+    void forEachOpenStream(Consumer<FileStream> action);
+
+    /** Iterates each currently-open file as a (filename, stream) pair. */
+    void forEachOpenFile(java.util.function.BiConsumer<String, FileStream> action);
   }
 
   public class FileStreamsCollectionEntry {
@@ -262,6 +268,25 @@ public class TextFileOutputData extends BaseTransformData implements ITransformD
     }
 
     @Override
+    public void forEachOpenStream(Consumer<FileStream> action) {
+      for (FileStream fs : streamsList) {
+        if (fs.isOpen()) {
+          action.accept(fs);
+        }
+      }
+    }
+
+    @Override
+    public void forEachOpenFile(java.util.function.BiConsumer<String, FileStream> action) {
+      for (int i = 0; i < streamsList.size(); i++) {
+        FileStream fs = streamsList.get(i);
+        if (fs.isOpen()) {
+          action.accept(namesList.get(i), fs);
+        }
+      }
+    }
+
+    @Override
     public void add(String filename, FileStream fileStreams) {
       namesList.add(filename);
       streamsList.add(fileStreams);
@@ -326,6 +351,25 @@ public class TextFileOutputData extends BaseTransformData implements ITransformD
     @Override
     public int getNumOpenFiles() {
       return numOpenFiles;
+    }
+
+    @Override
+    public void forEachOpenStream(Consumer<FileStream> action) {
+      for (Map.Entry<Long, FileStreamsCollectionEntry> entry : indexMap.entrySet()) {
+        if (entry.getValue().getFileStream().isOpen()) {
+          action.accept(entry.getValue().getFileStream());
+        }
+      }
+    }
+
+    @Override
+    public void forEachOpenFile(java.util.function.BiConsumer<String, FileStream> action) {
+      for (Map.Entry<Long, FileStreamsCollectionEntry> entry : indexMap.entrySet()) {
+        FileStreamsCollectionEntry e = entry.getValue();
+        if (e.getFileStream().isOpen()) {
+          action.accept(e.getFileName(), e.getFileStream());
+        }
+      }
     }
 
     @Override

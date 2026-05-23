@@ -38,6 +38,8 @@ import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopFileException;
 import org.apache.hop.core.exception.HopPluginException;
 import org.apache.hop.core.exception.HopValueException;
+import org.apache.hop.core.io.CountingInputStream;
+import org.apache.hop.core.io.CountingOutputStream;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.row.RowDataUtil;
@@ -234,7 +236,7 @@ public class GroupBy extends BaseTransform<GroupByMeta, GroupByData> {
           lineNr++;
 
           if (meta.isAddingLineNrInGroup() && !Utils.isEmpty(meta.getLineNrInGroupField())) {
-            Object lineNrValue = Long.valueOf(lineNr);
+            Object lineNrValue = lineNr;
             row = RowDataUtil.addValueData(row, size, lineNrValue);
           }
 
@@ -283,7 +285,7 @@ public class GroupBy extends BaseTransform<GroupByMeta, GroupByData> {
         lineNr++;
 
         if (meta.isAddingLineNrInGroup() && !Utils.isEmpty(meta.getLineNrInGroupField())) {
-          Object lineNrValue = Long.valueOf(lineNr);
+          Object lineNrValue = lineNr;
           row = RowDataUtil.addValueData(row, size, lineNrValue);
         }
 
@@ -391,7 +393,7 @@ public class GroupBy extends BaseTransform<GroupByMeta, GroupByData> {
         if (sum == null) {
           row[targetIndex] = null;
         } else {
-          row[targetIndex] = Double.valueOf(((Long) sum).doubleValue() / data.previousAvgCount[i]);
+          row[targetIndex] = ((Long) sum).doubleValue() / data.previousAvgCount[i];
         }
       } else {
         row[targetIndex] =
@@ -729,10 +731,7 @@ public class GroupBy extends BaseTransform<GroupByMeta, GroupByData> {
         case Aggregation.TYPE_GROUP_AVERAGE:
           ag =
               ValueDataUtil.divide(
-                  data.aggMeta.getValueMeta(i),
-                  ag,
-                  new ValueMetaInteger("c"),
-                  Long.valueOf(data.counts[i]));
+                  data.aggMeta.getValueMeta(i), ag, new ValueMetaInteger("c"), data.counts[i]);
           break;
         case Aggregation.TYPE_GROUP_MEDIAN, Aggregation.TYPE_GROUP_PERCENTILE:
           double percentile = 50.0;
@@ -759,7 +758,7 @@ public class GroupBy extends BaseTransform<GroupByMeta, GroupByData> {
           ag = latencies[index - 1];
           break;
         case Aggregation.TYPE_GROUP_COUNT_ANY, Aggregation.TYPE_GROUP_COUNT_ALL:
-          ag = Long.valueOf(data.counts[i]);
+          ag = data.counts[i];
           break;
         case Aggregation.TYPE_GROUP_COUNT_DISTINCT:
           break;
@@ -830,7 +829,7 @@ public class GroupBy extends BaseTransform<GroupByMeta, GroupByData> {
           pathToTmp = retrieveVfsPath(pathToTmp);
         }
         data.tempFile = File.createTempFile(getMeta().getPrefix(), ".tmp", new File(pathToTmp));
-        data.fosToTempFile = new FileOutputStream(data.tempFile);
+        data.fosToTempFile = new CountingOutputStream(new FileOutputStream(data.tempFile));
         data.dosToTempFile = new DataOutputStream(data.fosToTempFile);
         data.firstRead = true;
       } catch (IOException e) {
@@ -856,7 +855,7 @@ public class GroupBy extends BaseTransform<GroupByMeta, GroupByData> {
       if (data.firstRead) {
         // Open the inputstream first...
         try {
-          data.fisToTmpFile = new FileInputStream(data.tempFile);
+          data.fisToTmpFile = new CountingInputStream(new FileInputStream(data.tempFile));
           data.disToTmpFile = new DataInputStream(data.fisToTmpFile);
           data.firstRead = false;
         } catch (IOException e) {
@@ -894,6 +893,9 @@ public class GroupBy extends BaseTransform<GroupByMeta, GroupByData> {
         data.dosToTempFile = null;
       }
       if (data.fosToTempFile != null) {
+        if (data.fosToTempFile instanceof CountingOutputStream cos) {
+          dataVolumeOut = (dataVolumeOut != null ? dataVolumeOut : 0L) + cos.getCount();
+        }
         data.fosToTempFile.close();
         data.fosToTempFile = null;
       }
@@ -909,6 +911,9 @@ public class GroupBy extends BaseTransform<GroupByMeta, GroupByData> {
   private void closeInput() throws HopFileException {
     try {
       if (data.fisToTmpFile != null) {
+        if (data.fisToTmpFile instanceof CountingInputStream cis) {
+          dataVolumeIn = (dataVolumeIn != null ? dataVolumeIn : 0L) + cis.getCount();
+        }
         data.fisToTmpFile.close();
         data.fisToTmpFile = null;
       }

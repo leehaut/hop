@@ -19,6 +19,7 @@ package org.apache.hop.neo4j.core.data;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -66,7 +67,7 @@ public class GraphData {
     // Same number of nodes, same number of relationships,
     // Same node IDs, same properties
     // TODO:
-    throw new RuntimeException("equals() not yet implemented on GraphData");
+    throw new HopRuntimeException("equals() not yet implemented on GraphData");
   }
 
   public GraphData(GraphData source) {
@@ -126,14 +127,14 @@ public class GraphData {
   public GraphData(JSONObject jGraph) {
     this();
     JSONArray jNodes = (JSONArray) jGraph.get("nodes");
-    for (int i = 0; i < jNodes.size(); i++) {
-      JSONObject jNode = (JSONObject) jNodes.get(i);
+    for (Object node : jNodes) {
+      JSONObject jNode = (JSONObject) node;
       nodes.add(new GraphNodeData(jNode));
     }
 
     JSONArray jRelationships = (JSONArray) jGraph.get("relationships");
-    for (int i = 0; i < jRelationships.size(); i++) {
-      JSONObject jRelationship = (JSONObject) jRelationships.get(i);
+    for (Object relationship : jRelationships) {
+      JSONObject jRelationship = (JSONObject) relationship;
       relationships.add(new GraphRelationshipData(jRelationship));
     }
 
@@ -265,10 +266,8 @@ public class GraphData {
   public GraphNodeData findNodeWithProperty(String propertyId, Object value) {
     for (GraphNodeData node : nodes) {
       GraphPropertyData property = node.findProperty(propertyId);
-      if (property != null) {
-        if (property.getValue() != null && property.getValue().equals(value)) {
-          return node;
-        }
+      if (property != null && property.getValue() != null && property.getValue().equals(value)) {
+        return node;
       }
     }
     return null;
@@ -383,17 +382,16 @@ public class GraphData {
       GraphNodeData currentNode, String mainRelationshipLabel, GraphNodeData excludeNode) {
     List<GraphRelationshipData> rels = findRelationships(currentNode);
     for (GraphRelationshipData rel : rels) {
-      if (mainRelationshipLabel.equals(rel.getLabel())) {
-        if (excludeNode == null
-            || !(rel.getSourceNodeId().equals(excludeNode.getId())
-                || rel.getTargetNodeId().equals(excludeNode.getId()))) {
-          // Don't return the same node, return the other
-          //
-          if (rel.getSourceNodeId().equals(currentNode.getId())) {
-            return findNode(rel.getTargetNodeId());
-          } else {
-            return findNode(rel.getSourceNodeId());
-          }
+      if (mainRelationshipLabel.equals(rel.getLabel())
+          && (excludeNode == null
+              || !(rel.getSourceNodeId().equals(excludeNode.getId())
+                  || rel.getTargetNodeId().equals(excludeNode.getId())))) {
+        // Don't return the same node, return the other
+        //
+        if (rel.getSourceNodeId().equals(currentNode.getId())) {
+          return findNode(rel.getTargetNodeId());
+        } else {
+          return findNode(rel.getSourceNodeId());
         }
       }
     }

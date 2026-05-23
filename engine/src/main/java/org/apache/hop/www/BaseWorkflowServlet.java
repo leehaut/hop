@@ -16,9 +16,10 @@
  */
 package org.apache.hop.www;
 
+import java.io.Serial;
 import java.util.Map;
 import java.util.UUID;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.logging.LogChannelFileWriter;
@@ -45,8 +46,7 @@ import org.apache.hop.workflow.engine.IWorkflowEngine;
 import org.apache.hop.workflow.engine.WorkflowEngineFactory;
 
 public abstract class BaseWorkflowServlet extends BodyHttpServlet {
-
-  private static final long serialVersionUID = 8523062215275251356L;
+  @Serial private static final long serialVersionUID = 8523062215275251356L;
 
   protected IWorkflowEngine<WorkflowMeta> createWorkflow(
       WorkflowConfiguration workflowConfiguration) throws HopException {

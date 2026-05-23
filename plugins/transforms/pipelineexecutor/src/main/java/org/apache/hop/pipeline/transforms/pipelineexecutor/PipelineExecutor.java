@@ -101,8 +101,18 @@ public class PipelineExecutor extends BaseTransform<PipelineExecutorMeta, Pipeli
         String filename = (String) row[pos];
         if (pipelineExecutorData.prevFilename == null
             || !pipelineExecutorData.prevFilename.equals(filename)) {
-          logDetailed("Identified a new pipeline to execute: '" + filename + "'");
-          meta.setFilename(filename);
+          // When grouping by size, flush a partial group before switching child pipeline so each
+          // execution only receives rows for the previous path. Per-copy buffer; shared meta is
+          // not touched (see runtimeMappingFilename).
+          if (pipelineExecutorData.prevFilename != null
+              && pipelineExecutorData.groupSize > 0
+              && !pipelineExecutorData.groupBuffer.isEmpty()) {
+            executePipeline(incomingFieldValues);
+          }
+          if (isDetailed()) {
+            logDetailed("Identified a new pipeline to execute: '" + filename + "'");
+          }
+          pipelineExecutorData.runtimeMappingFilename = filename;
           pipelineExecutorData.prevFilename = filename;
           initPipeline(pipelineExecutorData);
           initOnFirstProcessingIteration();
@@ -123,12 +133,11 @@ public class PipelineExecutor extends BaseTransform<PipelineExecutorMeta, Pipeli
       if (pipelineExecutorData.groupSize < 0) {
         if (pipelineExecutorData.groupFieldIndex >= 0) { // grouping by field
           Object groupFieldData = row[pipelineExecutorData.groupFieldIndex];
-          if (pipelineExecutorData.prevGroupFieldData != null) {
-            if (pipelineExecutorData.groupFieldMeta.compare(
-                    pipelineExecutorData.prevGroupFieldData, groupFieldData)
-                != 0) {
-              executePipeline(getLastIncomingFieldValues());
-            }
+          if (pipelineExecutorData.prevGroupFieldData != null
+              && pipelineExecutorData.groupFieldMeta.compare(
+                      pipelineExecutorData.prevGroupFieldData, groupFieldData)
+                  != 0) {
+            executePipeline(getLastIncomingFieldValues());
           }
           pipelineExecutorData.prevGroupFieldData = groupFieldData;
         } else if (pipelineExecutorData.groupTime > 0) { // grouping by execution time
@@ -146,10 +155,9 @@ public class PipelineExecutor extends BaseTransform<PipelineExecutorMeta, Pipeli
 
       // Grouping by size.
       // If group buffer size exceeds specified limit, then execute pipeline and flush group buffer.
-      if (pipelineExecutorData.groupSize > 0) {
-        if (pipelineExecutorData.groupBuffer.size() >= pipelineExecutorData.groupSize) {
-          executePipeline(incomingFieldValues);
-        }
+      if (pipelineExecutorData.groupSize > 0
+          && pipelineExecutorData.groupBuffer.size() >= pipelineExecutorData.groupSize) {
+        executePipeline(incomingFieldValues);
       }
 
       return true;
@@ -298,7 +306,7 @@ public class PipelineExecutor extends BaseTransform<PipelineExecutorMeta, Pipeli
   }
 
   @VisibleForTesting
-  void passParametersToPipeline(List<String> incomingFieldValues) throws HopException {
+  void passParametersToPipeline(List<String> incomingFieldValues) {
     // The values of the incoming fields from the previous transform.
     if (incomingFieldValues == null) {
       incomingFieldValues = new ArrayList<>();
@@ -326,7 +334,6 @@ public class PipelineExecutor extends BaseTransform<PipelineExecutorMeta, Pipeli
       incomingFields = Arrays.asList(data.getInputRowMeta().getFieldNames());
     }
 
-    /////////////////////////////////////////////
     // For all parameters declared in pipelineExecutor
     for (int i = 0; i < parameters.size(); i++) {
       String currentVariableToUpdate = (String) resolvingValuesMap.keySet().toArray()[i];
@@ -385,7 +392,6 @@ public class PipelineExecutor extends BaseTransform<PipelineExecutorMeta, Pipeli
             resolvingValuesMap.get(parameters.get(i).getVariable()));
       }
     }
-    /////////////////////////////////////////////
 
     // Transform the values of the resolvingValuesMap into a String array "inputFieldValues" to be
     // passed as parameter..
@@ -424,40 +430,40 @@ public class PipelineExecutor extends BaseTransform<PipelineExecutorMeta, Pipeli
       int idx = 0;
 
       if (!Utils.isEmpty(meta.getExecutionTimeField())) {
-        outputRow[idx++] = Long.valueOf(System.currentTimeMillis() - getData().groupTimeStart);
+        outputRow[idx++] = System.currentTimeMillis() - getData().groupTimeStart;
       }
       if (!Utils.isEmpty(meta.getExecutionResultField())) {
-        outputRow[idx++] = Boolean.valueOf(result.isResult());
+        outputRow[idx++] = result.isResult();
       }
       if (!Utils.isEmpty(meta.getExecutionNrErrorsField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrErrors());
+        outputRow[idx++] = result.getNrErrors();
       }
       if (!Utils.isEmpty(meta.getExecutionLinesReadField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrLinesRead());
+        outputRow[idx++] = result.getNrLinesRead();
       }
       if (!Utils.isEmpty(meta.getExecutionLinesWrittenField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrLinesWritten());
+        outputRow[idx++] = result.getNrLinesWritten();
       }
       if (!Utils.isEmpty(meta.getExecutionLinesInputField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrLinesInput());
+        outputRow[idx++] = result.getNrLinesInput();
       }
       if (!Utils.isEmpty(meta.getExecutionLinesOutputField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrLinesOutput());
+        outputRow[idx++] = result.getNrLinesOutput();
       }
       if (!Utils.isEmpty(meta.getExecutionLinesRejectedField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrLinesRejected());
+        outputRow[idx++] = result.getNrLinesRejected();
       }
       if (!Utils.isEmpty(meta.getExecutionLinesUpdatedField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrLinesUpdated());
+        outputRow[idx++] = result.getNrLinesUpdated();
       }
       if (!Utils.isEmpty(meta.getExecutionLinesDeletedField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrLinesDeleted());
+        outputRow[idx++] = result.getNrLinesDeleted();
       }
       if (!Utils.isEmpty(meta.getExecutionFilesRetrievedField())) {
-        outputRow[idx++] = Long.valueOf(result.getNrFilesRetrieved());
+        outputRow[idx++] = result.getNrFilesRetrieved();
       }
       if (!Utils.isEmpty(meta.getExecutionExitStatusField())) {
-        outputRow[idx++] = Long.valueOf(result.getExitStatus());
+        outputRow[idx++] = (long) result.getExitStatus();
       }
       if (!Utils.isEmpty(meta.getExecutionLogTextField())) {
         String channelId = getData().getExecutorPipeline().getLogChannelId();
@@ -561,7 +567,8 @@ public class PipelineExecutor extends BaseTransform<PipelineExecutorMeta, Pipeli
 
   @VisibleForTesting
   PipelineMeta loadExecutorPipelineMeta() throws HopException {
-    return TransformWithMappingMeta.loadMappingMeta(meta, metadataProvider, this);
+    String explicit = meta.isFilenameInField() ? getData().runtimeMappingFilename : null;
+    return TransformWithMappingMeta.loadMappingMeta(meta, explicit, metadataProvider, this);
   }
 
   @Override
@@ -606,8 +613,8 @@ public class PipelineExecutor extends BaseTransform<PipelineExecutorMeta, Pipeli
             Arrays.asList(pipelineExecutorData.groupBuffer.get(lastIncomingFieldIndex).getData()));
     lastGroupBufferData.removeAll(Collections.singleton(null));
 
-    for (int i = 0; i < lastGroupBufferData.size(); i++) {
-      lastIncomingFieldValues.add(lastGroupBufferData.get(i).toString());
+    for (Object lastGroupBufferDatum : lastGroupBufferData) {
+      lastIncomingFieldValues.add(lastGroupBufferDatum.toString());
     }
     return lastIncomingFieldValues;
   }

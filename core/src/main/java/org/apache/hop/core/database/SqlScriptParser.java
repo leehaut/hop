@@ -20,7 +20,7 @@ package org.apache.hop.core.database;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 
 /**
  * This class represents a splitter of SQL script into separate statements. It respects the notion
@@ -91,6 +91,8 @@ public class SqlScriptParser {
               }
               statementStart = i + 1;
               break;
+            default:
+              break;
           }
           break;
         case BLOCK_COMMENT:
@@ -132,6 +134,8 @@ public class SqlScriptParser {
           } else if (ch == currentStringChar) {
             mode = MODE.SQL;
           }
+          break;
+        default:
           break;
       }
     }
@@ -186,6 +190,8 @@ public class SqlScriptParser {
               mode = MODE.STRING;
               currentStringChar = ch;
               break;
+            default:
+              break;
           }
           break;
         case BLOCK_COMMENT:
@@ -226,6 +232,8 @@ public class SqlScriptParser {
           } else if (ch == currentStringChar) {
             mode = MODE.SQL;
           }
+          break;
+        default:
           break;
       }
       if (ch != 0) {

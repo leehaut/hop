@@ -85,6 +85,7 @@
                 <exclude>org.apache.kafka::jar</exclude>
                 <exclude>org.xerial.snappy:snappy-java:jar</exclude>
                 <exclude>org.eclipse.jetty::jar</exclude>
+                <exclude>org.eclipse.jetty.compression::jar</exclude>
                 <exclude>com.google.cloud:google-cloud-storage:jar</exclude>
                 <exclude>io.grpc::jar</exclude>
                 <exclude>com.google.cloud:google-cloud-core-grpc:jar</exclude>
@@ -132,6 +133,42 @@
                 <exclude>com.google.re2j:re2j:jar</exclude>
                 <exclude>org.reactivestreams:reactive-streams:jar</exclude>
                 <exclude>io.projectreactor:reactor-core:jar</exclude>
+                <exclude>org.bouncycastle::jar</exclude>
+                <exclude>com.microsoft.azure:msal4j:jar</exclude>
+                <exclude>com.microsoft.azure:msal4j-persistence-extension:jar</exclude>
+                <exclude>com.amazonaws:aws-java-sdk-core:jar</exclude>
+                <exclude>com.amazonaws:aws-java-sdk-kms:jar</exclude>
+                <exclude>com.amazonaws:aws-java-sdk-s3:jar</exclude>
+                <exclude>com.nimbusds:oauth2-oidc-sdk:jar</exclude>
+                <exclude>com.azure:azure-core:jar</exclude>
+                <exclude>com.azure:azure-identity:jar</exclude>
+                <exclude>com.azure:azure-core-http-netty:jar</exclude>
+                <exclude>com.azure:azure-json:jar</exclude>
+                <exclude>com.microsoft.azure:azure-keyvault-core:jar</exclude>
+                <exclude>com.azure:azure-security-keyvault-secrets:jar</exclude>
+                <exclude>com.azure:azure-storage-blob:jar</exclude>
+                <exclude>com.azure:azure-storage-common:jar</exclude>
+                <exclude>com.azure:azure-storage-internal-avro:jar</exclude>
+                <exclude>com.azure:azure-xml:jar</exclude>
+                <exclude>com.nimbusds:nimbus-jose-jwt:jar</exclude>
+                <exclude>io.confluent::jar</exclude>
+                <exclude>com.google.code.gson:gson:jar</exclude>
+                <exclude>org.apache.commons:commons-collections4:jar</exclude>
+                <exclude>org.jspecify:jspecify:jar</exclude>
+                <exclude>org.apache.commons:commons-lang3:jar</exclude>
+                <exclude>commons-collections:commons-collections:jar</exclude>
+                <exclude>com.fasterxml.woodstox:woodstox-core:jar</exclude>
+                <exclude>com.ibm.icu:icu4j:jar</exclude>
+                <exclude>com.fasterxml.jackson.core:jackson-annotations:jar</exclude>
+                <exclude>software.amazon.awssdk:*:jar</exclude>
+                <exclude>software.amazon.eventstream:eventstream:jar</exclude>
+                <exclude>javax.annotation:javax.annotation-api:jar</exclude>
+                <exclude>javax.inject:javax.inject:jar</exclude>
+                <exclude>org.jctools:jctools-core:jar</exclude>
+                <exclude>com.nimbusds:lang-tag:jar</exclude>
+                <exclude>io.dropwizard.metrics:*:jar</exclude>
+                <exclude>com.eclipsesource.minimal-json:minimal-json:jar</exclude>
+                <exclude>org.slf4j:slf4j-api:jar</exclude>
             </excludes>
             <outputDirectory>lib/beam</outputDirectory>
         </dependencySet>
@@ -209,6 +246,41 @@
                 <include>io.perfmark:perfmark-api:jar</include>
                 <include>com.google.re2j:re2j:jar</include>
                 <include>org.reactivestreams:reactive-streams:jar</include>
+                <include>org.bouncycastle::jar</include>
+                <include>com.microsoft.azure:msal4j:jar</include>
+                <include>com.microsoft.azure:msal4j-persistence-extension:jar</include>
+                <include>com.amazonaws:aws-java-sdk-core:jar</include>
+                <include>com.amazonaws:aws-java-sdk-kms:jar</include>
+                <include>com.amazonaws:aws-java-sdk-s3:jar</include>
+                <include>com.nimbusds:oauth2-oidc-sdk:jar</include>
+                <include>com.azure:azure-core:jar</include>
+                <include>com.azure:azure-identity:jar</include>
+                <include>com.azure:azure-core-http-netty:jar</include>
+                <include>com.azure:azure-json:jar</include>
+                <include>com.microsoft.azure:azure-keyvault-core:jar</include>
+                <include>com.azure:azure-security-keyvault-secrets:jar</include>
+                <include>com.azure:azure-storage-blob:jar</include>
+                <include>com.azure:azure-storage-common:jar</include>
+                <include>com.azure:azure-storage-internal-avro:jar</include>
+                <include>com.azure:azure-xml:jar</include>
+                <include>com.nimbusds:nimbus-jose-jwt:jar</include>
+                <include>io.confluent::jar</include>
+                <include>com.google.code.gson:gson:jar</include>
+                <include>org.apache.commons:commons-collections4:jar</include>
+                <include>org.apache.commons:commons-lang3:jar</include>
+                <include>commons-collections:commons-collections:jar</include>
+                <include>com.fasterxml.woodstox:woodstox-core:jar</include>
+                <include>com.ibm.icu:icu4j:jar</include>
+                <include>com.fasterxml.jackson.core:jackson-annotations:jar</include>
+                <include>software.amazon.awssdk:*:jar</include>
+                <include>software.amazon.eventstream:eventstream:jar</include>
+                <include>javax.annotation:javax.annotation-api:jar</include>
+                <include>javax.inject:javax.inject:jar</include>
+                <include>org.jctools:jctools-core:jar</include>
+                <include>com.nimbusds:lang-tag:jar</include>
+                <include>io.dropwizard.metrics:*:jar</include>
+                <include>com.eclipsesource.minimal-json:minimal-json:jar</include>
+                <include>org.slf4j:slf4j-api:jar</include>
             </includes>
             <outputDirectory>lib/core</outputDirectory>
         </dependencySet>

@@ -43,8 +43,6 @@ import org.eclipse.swt.custom.CCombo;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
 import org.eclipse.swt.custom.SashForm;
-import org.eclipse.swt.events.FocusEvent;
-import org.eclipse.swt.events.FocusListener;
 import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
@@ -59,7 +57,6 @@ import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 public class RegexEvalDialog extends BaseTransformDialog {
   private static final Class<?> PKG = RegexEvalMeta.class;
@@ -95,11 +92,9 @@ public class RegexEvalDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "RegexEvalDialog.Shell.Title"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
     ModifyListener lsMod = e -> input.setChanged();
     SelectionListener lsSel =
@@ -110,45 +105,6 @@ public class RegexEvalDialog extends BaseTransformDialog {
           }
         };
     changed = input.hasChanged();
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "RegexEvalDialog.Shell.Title"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // Buttons at the bottom
-    //
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wCancel}, margin, null);
-
-    // Filename line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "RegexEvalDialog.TransformName.Label"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
 
     SashForm wSash = new SashForm(shell, SWT.VERTICAL);
 
@@ -187,50 +143,33 @@ public class RegexEvalDialog extends BaseTransformDialog {
     wTransformSettings.setLayout(groupLayout);
 
     // fieldevaluate
-    Label wlfieldevaluate = new Label(wTransformSettings, SWT.RIGHT);
-    wlfieldevaluate.setText(BaseMessages.getString(PKG, "RegexEvalDialog.Matcher.Label"));
-    PropsUi.setLook(wlfieldevaluate);
-    FormData fdlfieldevaluate = new FormData();
-    fdlfieldevaluate.left = new FormAttachment(0, 0);
-    fdlfieldevaluate.top = new FormAttachment(wTransformName, margin);
-    fdlfieldevaluate.right = new FormAttachment(middle, -margin);
-    wlfieldevaluate.setLayoutData(fdlfieldevaluate);
+    Label wlFieldEvaluate = new Label(wTransformSettings, SWT.RIGHT);
+    wlFieldEvaluate.setText(BaseMessages.getString(PKG, "RegexEvalDialog.Matcher.Label"));
+    PropsUi.setLook(wlFieldEvaluate);
+    FormData fdlFieldEvaluate = new FormData();
+    fdlFieldEvaluate.left = new FormAttachment(0, 0);
+    fdlFieldEvaluate.top = new FormAttachment(wSpacer, margin);
+    fdlFieldEvaluate.right = new FormAttachment(middle, -margin);
+    wlFieldEvaluate.setLayoutData(fdlFieldEvaluate);
     wFieldEvaluate = new CCombo(wTransformSettings, SWT.BORDER | SWT.READ_ONLY);
     wFieldEvaluate.setEditable(true);
     PropsUi.setLook(wFieldEvaluate);
     wFieldEvaluate.addModifyListener(lsMod);
-    FormData fdfieldevaluate = new FormData();
-    fdfieldevaluate.left = new FormAttachment(middle, 0);
-    fdfieldevaluate.top = new FormAttachment(wTransformName, margin);
-    fdfieldevaluate.right = new FormAttachment(100, -margin);
-    wFieldEvaluate.setLayoutData(fdfieldevaluate);
+    FormData fdFieldEvaluate = new FormData();
+    fdFieldEvaluate.left = new FormAttachment(middle, 0);
+    fdFieldEvaluate.top = new FormAttachment(wSpacer, margin);
+    fdFieldEvaluate.right = new FormAttachment(100, -margin);
+    wFieldEvaluate.setLayoutData(fdFieldEvaluate);
     wFieldEvaluate.addSelectionListener(lsSel);
-    wFieldEvaluate.addFocusListener(
-        new FocusListener() {
-          @Override
-          public void focusLost(FocusEvent e) {
-            // Do nothing
-          }
+    wFieldEvaluate.addListener(SWT.FocusIn, e -> getPreviousFields());
 
-          @Override
-          public void focusGained(FocusEvent e) {
-            Cursor busy = new Cursor(shell.getDisplay(), SWT.CURSOR_WAIT);
-            shell.setCursor(busy);
-            getPreviousFields();
-            shell.setCursor(null);
-            busy.dispose();
-          }
-        });
-
-    // Output Fieldame
-
+    // Output Field name
     wResultField =
         new LabelTextVar(
             variables,
             wTransformSettings,
             BaseMessages.getString(PKG, "RegexEvalDialog.ResultField.Label"),
             BaseMessages.getString(PKG, "RegexEvalDialog.ResultField.Tooltip"));
-
     PropsUi.setLook(wResultField);
     wResultField.addModifyListener(lsMod);
     FormData fdResultField = new FormData();
@@ -258,14 +197,11 @@ public class RegexEvalDialog extends BaseTransformDialog {
     fdAllowCaptureGroups.top = new FormAttachment(wlAllowCaptureGroups, 0, SWT.CENTER);
     fdAllowCaptureGroups.right = new FormAttachment(100, 0);
     wAllowCaptureGroups.setLayoutData(fdAllowCaptureGroups);
-
-    wAllowCaptureGroups.addSelectionListener(
-        new SelectionAdapter() {
-          @Override
-          public void widgetSelected(SelectionEvent e) {
-            setFieldsEnabledStatus();
-            input.setChanged();
-          }
+    wAllowCaptureGroups.addListener(
+        SWT.Selection,
+        e -> {
+          setFieldsEnabledStatus();
+          input.setChanged();
         });
 
     // Replace fields?
@@ -286,19 +222,12 @@ public class RegexEvalDialog extends BaseTransformDialog {
     fdReplaceFields.top = new FormAttachment(wlReplaceFields, 0, SWT.CENTER);
     fdReplaceFields.right = new FormAttachment(100, 0);
     wReplaceFields.setLayoutData(fdReplaceFields);
-
-    wReplaceFields.addSelectionListener(
-        new SelectionAdapter() {
-          @Override
-          public void widgetSelected(SelectionEvent e) {
-            input.setChanged();
-          }
-        });
+    wReplaceFields.addListener(SWT.Selection, e -> input.setChanged());
 
     // settings layout
     FormData fdTransformSettings = new FormData();
     fdTransformSettings.left = new FormAttachment(0, margin);
-    fdTransformSettings.top = new FormAttachment(wTransformName, margin);
+    fdTransformSettings.top = new FormAttachment(wSpacer, margin);
     fdTransformSettings.right = new FormAttachment(100, -margin);
     wTransformSettings.setLayoutData(fdTransformSettings);
 
@@ -355,7 +284,8 @@ public class RegexEvalDialog extends BaseTransformDialog {
     fdScript.left = new FormAttachment(0, 0);
     fdScript.top = new FormAttachment(wbTestRegExScript, margin);
     fdScript.right = new FormAttachment(100, -10);
-    fdScript.bottom = new FormAttachment(wUseVar, -2 * margin);
+    fdScript.bottom = new FormAttachment(wUseVar, -margin);
+    fdScript.height = 200;
     wScript.setLayoutData(fdScript);
 
     FormLayout bottomLayout = new FormLayout();
@@ -379,7 +309,7 @@ public class RegexEvalDialog extends BaseTransformDialog {
     fdlFields.top = new FormAttachment(wSeparator, 0);
     wlFields.setLayoutData(fdlFields);
 
-    final int fieldsRows = input.getFieldName().length;
+    final int fieldsRows = input.getRegexFields().size();
 
     ColumnInfo[] columnInfo =
         new ColumnInfo[] {
@@ -644,7 +574,7 @@ public class RegexEvalDialog extends BaseTransformDialog {
     fdContentComp.top = new FormAttachment(0, 0);
     fdContentComp.right = new FormAttachment(100, 0);
     fdContentComp.bottom = new FormAttachment(100, 0);
-    wContentComp.setLayoutData(wContentComp);
+    wContentComp.setLayoutData(fdContentComp);
 
     wContentComp.layout();
     wContentTab.setControl(wContentComp);
@@ -655,7 +585,7 @@ public class RegexEvalDialog extends BaseTransformDialog {
 
     FormData fdTabFolder = new FormData();
     fdTabFolder.left = new FormAttachment(0, 0);
-    fdTabFolder.top = new FormAttachment(wTransformName, margin);
+    fdTabFolder.top = new FormAttachment(wSpacer, margin);
     fdTabFolder.right = new FormAttachment(100, 0);
     fdTabFolder.bottom = new FormAttachment(100, 0);
     wTabFolder.setLayoutData(fdTabFolder);
@@ -669,35 +599,37 @@ public class RegexEvalDialog extends BaseTransformDialog {
 
     FormData fdSash = new FormData();
     fdSash.left = new FormAttachment(0, 0);
-    fdSash.top = new FormAttachment(wTransformName, 0);
+    fdSash.top = new FormAttachment(wSpacer, 0);
     fdSash.right = new FormAttachment(100, 0);
     fdSash.bottom = new FormAttachment(wOk, -margin);
     wSash.setLayoutData(fdSash);
 
-    wSash.setWeights(new int[] {60, 40});
+    wSash.setWeights(60, 40);
 
     // Add listeners
 
     wTabFolder.setSelection(0);
 
     getData();
-
     setFieldsEnabledStatus();
-
     input.setChanged(changed);
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
   }
 
   private void getPreviousFields() {
+    Cursor busy = new Cursor(shell.getDisplay(), SWT.CURSOR_WAIT);
+
     // Save user-selected value, if applicable
     String selectedValue = wFieldEvaluate.getText();
 
     // Clear the existing list, and reload
     wFieldEvaluate.removeAll();
     try {
+      shell.setCursor(busy);
+
       IRowMeta r = pipelineMeta.getPrevTransformFields(variables, transformName);
       if (r != null) {
         for (String item : r.getFieldNames()) {
@@ -712,69 +644,49 @@ public class RegexEvalDialog extends BaseTransformDialog {
         wFieldEvaluate.select(0);
       }
     } catch (HopException ke) {
+      shell.setCursor(null);
       new ErrorDialog(
           shell,
           BaseMessages.getString(PKG, "RegexEvalDialog.FailedToGetFields.DialogTitle"),
           BaseMessages.getString(PKG, "RegexEvalDialog.FailedToGetFields.DialogMessage"),
           ke);
+    } finally {
+      shell.setCursor(null);
+      busy.dispose();
     }
   }
 
   /** Copy information from the meta-data input to the dialog fields. */
   public void getData() {
-    if (input.getScript() != null) {
-      wScript.setText(input.getScript());
-    }
-    if (input.getResultFieldName() != null) {
-      wResultField.setText(input.getResultFieldName());
-    }
-    if (input.getMatcher() != null) {
-      wFieldEvaluate.setText(input.getMatcher());
-    }
-
-    wUseVar.setSelection(input.isUseVariableInterpolationFlagSet());
-    wReplaceFields.setSelection(input.isReplacefields());
-    wAllowCaptureGroups.setSelection(input.isAllowCaptureGroupsFlagSet());
-    wCanonEq.setSelection(input.isCanonicalEqualityFlagSet());
-    wCaseInsensitive.setSelection(input.isCaseInsensitiveFlagSet());
-    wComment.setSelection(input.isCommentFlagSet());
-    wDotAll.setSelection(input.isDotAllFlagSet());
-    wMultiline.setSelection(input.isMultilineFlagSet());
-    wUnicode.setSelection(input.isUnicodeFlagSet());
-    wUnix.setSelection(input.isUnixLineEndingsFlagSet());
-    for (int i = 0; i < input.getFieldName().length; i++) {
+    wScript.setText(Const.NVL(input.getScript(), ""));
+    wResultField.setText(Const.NVL(input.getResultFieldName(), ""));
+    wFieldEvaluate.setText(Const.NVL(input.getMatcher(), ""));
+    wUseVar.setSelection(input.isUsingVariables());
+    wReplaceFields.setSelection(input.isReplacingFields());
+    wAllowCaptureGroups.setSelection(input.isAllowingCaptureGroups());
+    wCanonEq.setSelection(input.isCanonicalEqualityEnabled());
+    wCaseInsensitive.setSelection(input.isCaseInsensitive());
+    wComment.setSelection(input.isCommentingEnabled());
+    wDotAll.setSelection(input.isDotAllEnabled());
+    wMultiline.setSelection(input.isMultiLine());
+    wUnicode.setSelection(input.isUnicode());
+    wUnix.setSelection(input.isUnixLineEndings());
+    for (int i = 0; i < input.getRegexFields().size(); i++) {
+      RegexEvalMeta.RegexField field = input.getRegexFields().get(i);
       TableItem ti = wFields.table.getItem(i);
-      if (input.getFieldName()[i] != null) {
-        ti.setText(1, input.getFieldName()[i]);
-      }
-      ti.setText(2, ValueMetaFactory.getValueMetaName(input.getFieldType()[i]));
-      ti.setText(3, input.getFieldLength()[i] >= 0 ? "" + input.getFieldLength()[i] : "");
-      ti.setText(4, input.getFieldPrecision()[i] >= 0 ? ("" + input.getFieldPrecision()[i]) : "");
-      if (input.getFieldFormat()[i] != null) {
-        ti.setText(5, input.getFieldFormat()[i]);
-      }
-      if (input.getFieldGroup()[i] != null) {
-        ti.setText(6, input.getFieldGroup()[i]);
-      }
-      if (input.getFieldDecimal()[i] != null) {
-        ti.setText(7, input.getFieldDecimal()[i]);
-      }
-      if (input.getFieldCurrency()[i] != null) {
-        ti.setText(8, input.getFieldCurrency()[i]);
-      }
-      if (input.getFieldNullIf()[i] != null) {
-        ti.setText(9, input.getFieldNullIf()[i]);
-      }
-      if (input.getFieldIfNull()[i] != null) {
-        ti.setText(10, input.getFieldIfNull()[i]);
-      }
-      ti.setText(11, ValueMetaBase.getTrimTypeDesc(input.getFieldTrimType()[i]));
+      ti.setText(1, Const.NVL(field.getFieldName(), ""));
+      ti.setText(2, ValueMetaFactory.getValueMetaName(field.getFieldType()));
+      ti.setText(3, field.getFieldLength() >= 0 ? "" + field.getFieldLength() : "");
+      ti.setText(4, field.getFieldPrecision() >= 0 ? ("" + field.getFieldPrecision()) : "");
+      ti.setText(5, Const.NVL(field.getFieldFormat(), ""));
+      ti.setText(6, Const.NVL(field.getFieldGroup(), ""));
+      ti.setText(7, Const.NVL(field.getFieldDecimal(), ""));
+      ti.setText(8, Const.NVL(field.getFieldCurrency(), ""));
+      ti.setText(9, Const.NVL(field.getFieldNullIf(), ""));
+      ti.setText(10, Const.NVL(field.getFieldIfNull(), ""));
+      ti.setText(11, ValueMetaBase.getTrimTypeDesc(field.getFieldTrimType()));
     }
-    wFields.setRowNums();
-    wFields.optWidth(true);
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
+    wFields.optimizeTableView();
   }
 
   private void cancel() {
@@ -792,23 +704,22 @@ public class RegexEvalDialog extends BaseTransformDialog {
 
     setRegexOptions(input);
 
-    int nrFields = wFields.nrNonEmpty();
+    input.getRegexFields().clear();
+    for (TableItem item : wFields.getNonEmptyItems()) {
+      RegexEvalMeta.RegexField field = new RegexEvalMeta.RegexField();
+      input.getRegexFields().add(field);
 
-    input.allocate(nrFields);
-
-    for (int i = 0; i < input.getFieldName().length; i++) {
-      TableItem ti = wFields.getNonEmpty(i);
-      input.getFieldName()[i] = ti.getText(1);
-      input.getFieldType()[i] = ValueMetaFactory.getIdForValueMeta(ti.getText(2));
-      input.getFieldLength()[i] = Const.toInt(ti.getText(3), -1);
-      input.getFieldPrecision()[i] = Const.toInt(ti.getText(4), -1);
-      input.getFieldFormat()[i] = ti.getText(5);
-      input.getFieldGroup()[i] = ti.getText(6);
-      input.getFieldDecimal()[i] = ti.getText(7);
-      input.getFieldCurrency()[i] = ti.getText(8);
-      input.getFieldNullIf()[i] = ti.getText(9);
-      input.getFieldIfNull()[i] = ti.getText(10);
-      input.getFieldTrimType()[i] = ValueMetaBase.getTrimTypeByDesc(ti.getText(11));
+      field.setFieldName(item.getText(1));
+      field.setFieldType(ValueMetaFactory.getIdForValueMeta(item.getText(2)));
+      field.setFieldLength(Const.toInt(item.getText(3), -1));
+      field.setFieldPrecision(Const.toInt(item.getText(4), -1));
+      field.setFieldFormat(item.getText(5));
+      field.setFieldGroup(item.getText(6));
+      field.setFieldDecimal(item.getText(7));
+      field.setFieldCurrency(item.getText(8));
+      field.setFieldNullIf(item.getText(9));
+      field.setFieldIfNull(item.getText(10));
+      field.setFieldTrimType(ValueMetaBase.getTrimTypeByDesc(item.getText(11)));
     }
 
     dispose();
@@ -825,16 +736,16 @@ public class RegexEvalDialog extends BaseTransformDialog {
     input.setScript(wScript.getText());
     input.setResultFieldName(wResultField.getText());
     input.setMatcher(wFieldEvaluate.getText());
-    input.setUseVariableInterpolationFlag(wUseVar.getSelection());
-    input.setAllowCaptureGroupsFlag(wAllowCaptureGroups.getSelection());
-    input.setReplacefields(wReplaceFields.getSelection());
-    input.setCanonicalEqualityFlag(wCanonEq.getSelection());
-    input.setCaseInsensitiveFlag(wCaseInsensitive.getSelection());
-    input.setCommentFlag(wComment.getSelection());
-    input.setDotAllFlag(wDotAll.getSelection());
-    input.setMultilineFlag(wMultiline.getSelection());
-    input.setUnicodeFlag(wUnicode.getSelection());
-    input.setUnixLineEndingsFlag(wUnix.getSelection());
+    input.setUsingVariables(wUseVar.getSelection());
+    input.setAllowingCaptureGroups(wAllowCaptureGroups.getSelection());
+    input.setReplacingFields(wReplaceFields.getSelection());
+    input.setCanonicalEqualityEnabled(wCanonEq.getSelection());
+    input.setCaseInsensitive(wCaseInsensitive.getSelection());
+    input.setCommentingEnabled(wComment.getSelection());
+    input.setDotAllEnabled(wDotAll.getSelection());
+    input.setMultiLine(wMultiline.getSelection());
+    input.setUnicode(wUnicode.getSelection());
+    input.setUnixLineEndings(wUnix.getSelection());
   }
 
   private void testRegExScript() {
@@ -846,7 +757,7 @@ public class RegexEvalDialog extends BaseTransformDialog {
             new Variables(),
             meta.getScript(),
             meta.getRegexOptions(),
-            meta.isCanonicalEqualityFlagSet());
+            meta.isCanonicalEqualityEnabled());
     wScript.setText(d.open());
   }
 }

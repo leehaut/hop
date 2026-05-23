@@ -23,7 +23,9 @@ import org.apache.hop.core.Const;
 import org.apache.hop.core.Props;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.fileinput.FileInputList;
+import org.apache.hop.core.fileinput.InputFile;
 import org.apache.hop.core.row.IRowMeta;
+import org.apache.hop.core.row.value.ValueMetaBase;
 import org.apache.hop.core.row.value.ValueMetaFactory;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
@@ -50,7 +52,6 @@ import org.eclipse.swt.custom.CCombo;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
 import org.eclipse.swt.events.FocusListener;
-import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.layout.FormAttachment;
@@ -128,7 +129,8 @@ public class LoadFileInputDialog extends BaseTransformDialog {
 
   private boolean gotPreviousFields = false;
 
-  public static final int[] dateLengths = new int[] {23, 19, 14, 10, 10, 10, 10, 8, 8, 8, 8, 6, 6};
+  protected static final int[] dateLengths =
+      new int[] {23, 19, 14, 10, 10, 10, 10, 8, 8, 8, 8, 6, 6};
 
   private TextVar wShortFileFieldName;
   private TextVar wPathFieldName;
@@ -138,11 +140,6 @@ public class LoadFileInputDialog extends BaseTransformDialog {
   private TextVar wUriName;
   private TextVar wRootUriName;
   private TextVar wExtensionFieldName;
-
-  private int middle;
-  private int margin;
-
-  private ModifyListener lsMod;
 
   public LoadFileInputDialog(
       Shell parent,
@@ -155,56 +152,12 @@ public class LoadFileInputDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "LoadFileInputDialog.DialogTitle"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).preview(e -> preview()).cancel(e -> cancel()).build();
 
     lsMod = e -> input.setChanged();
     changed = input.hasChanged();
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "LoadFileInputDialog.DialogTitle"));
-
-    middle = props.getMiddlePct();
-    margin = PropsUi.getMargin();
-
-    // Buttons at the bottom
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wPreview = new Button(shell, SWT.PUSH);
-    wPreview.setText(BaseMessages.getString(PKG, "LoadFileInputDialog.Button.PreviewRows"));
-    wPreview.addListener(SWT.Selection, e -> preview());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wPreview, wCancel}, margin, null);
-
-    // TransformName line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "System.TransformName.Label"));
-    wlTransformName.setToolTipText(BaseMessages.getString(PKG, "System.TransformName.Tooltip"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
 
     wTabFolder = new CTabFolder(shell, SWT.BORDER);
     PropsUi.setLook(wTabFolder, Props.WIDGET_STYLE_TAB);
@@ -245,7 +198,7 @@ public class LoadFileInputDialog extends BaseTransformDialog {
     FormData fdlFilenameInField = new FormData();
     fdlFilenameInField.left = new FormAttachment(0, -margin);
     fdlFilenameInField.top = new FormAttachment(0, margin);
-    fdlFilenameInField.right = new FormAttachment(middle, -2 * margin);
+    fdlFilenameInField.right = new FormAttachment(middle, -margin);
     wlFilenameInField.setLayoutData(fdlFilenameInField);
     wFilenameInField = new Button(wOutputField, SWT.CHECK);
     PropsUi.setLook(wFilenameInField);
@@ -272,7 +225,7 @@ public class LoadFileInputDialog extends BaseTransformDialog {
     FormData fdlFilenameField = new FormData();
     fdlFilenameField.left = new FormAttachment(0, margin);
     fdlFilenameField.top = new FormAttachment(wFilenameInField, margin);
-    fdlFilenameField.right = new FormAttachment(middle, -2 * margin);
+    fdlFilenameField.right = new FormAttachment(middle, -margin);
     wlFilenameField.setLayoutData(fdlFilenameField);
 
     wFilenameField = new CCombo(wOutputField, SWT.BORDER | SWT.READ_ONLY);
@@ -352,7 +305,7 @@ public class LoadFileInputDialog extends BaseTransformDialog {
     PropsUi.setLook(wlFilemask);
     FormData fdlFilemask = new FormData();
     fdlFilemask.left = new FormAttachment(0, 0);
-    fdlFilemask.top = new FormAttachment(wFilename, 2 * margin);
+    fdlFilemask.top = new FormAttachment(wFilename, margin);
     fdlFilemask.right = new FormAttachment(middle, -margin);
     wlFilemask.setLayoutData(fdlFilemask);
     wFilemask = new TextVar(variables, wFileComp, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
@@ -360,7 +313,7 @@ public class LoadFileInputDialog extends BaseTransformDialog {
     wFilemask.addModifyListener(lsMod);
     FormData fdFilemask = new FormData();
     fdFilemask.left = new FormAttachment(middle, 0);
-    fdFilemask.top = new FormAttachment(wFilename, 2 * margin);
+    fdFilemask.top = new FormAttachment(wFilename, margin);
     fdFilemask.right = new FormAttachment(100, 0);
     wFilemask.setLayoutData(fdFilemask);
 
@@ -805,9 +758,9 @@ public class LoadFileInputDialog extends BaseTransformDialog {
     fdGet.bottom = new FormAttachment(100, 0);
     wGet.setLayoutData(fdGet);
 
-    final int FieldsRows = input.getInputFields().length;
+    final int nrFieldsRows = input.getInputFields().size();
 
-    ColumnInfo[] colinf =
+    ColumnInfo[] columnInfos =
         new ColumnInfo[] {
           new ColumnInfo(
               BaseMessages.getString(PKG, "LoadFileInputDialog.FieldsTable.Name.Column"),
@@ -816,7 +769,7 @@ public class LoadFileInputDialog extends BaseTransformDialog {
           new ColumnInfo(
               BaseMessages.getString(PKG, "LoadFileInputDialog.FieldsTable.Element.Column"),
               ColumnInfo.COLUMN_TYPE_CCOMBO,
-              LoadFileInputField.ElementTypeDesc,
+              LoadFileInputField.ElementType.getDescriptions(),
               true),
           new ColumnInfo(
               BaseMessages.getString(PKG, "LoadFileInputDialog.FieldsTable.Type.Column"),
@@ -850,7 +803,7 @@ public class LoadFileInputDialog extends BaseTransformDialog {
           new ColumnInfo(
               BaseMessages.getString(PKG, "LoadFileInputDialog.FieldsTable.TrimType.Column"),
               ColumnInfo.COLUMN_TYPE_CCOMBO,
-              LoadFileInputField.trimTypeDesc,
+              ValueMetaBase.getTrimTypeDescriptions(),
               true),
           new ColumnInfo(
               BaseMessages.getString(PKG, "LoadFileInputDialog.FieldsTable.Repeat.Column"),
@@ -862,8 +815,8 @@ public class LoadFileInputDialog extends BaseTransformDialog {
               true),
         };
 
-    colinf[0].setUsingVariables(true);
-    colinf[0].setToolTip(
+    columnInfos[0].setUsingVariables(true);
+    columnInfos[0].setToolTip(
         BaseMessages.getString(PKG, "LoadFileInputDialog.FieldsTable.Name.Column.Tooltip"));
     colinfo[2] =
         new ColumnInfo(
@@ -884,8 +837,8 @@ public class LoadFileInputDialog extends BaseTransformDialog {
             variables,
             wFieldsComp,
             SWT.FULL_SELECTION | SWT.MULTI,
-            colinf,
-            FieldsRows,
+            columnInfos,
+            nrFieldsRows,
             lsMod,
             props);
 
@@ -910,9 +863,9 @@ public class LoadFileInputDialog extends BaseTransformDialog {
 
     FormData fdTabFolder = new FormData();
     fdTabFolder.left = new FormAttachment(0, 0);
-    fdTabFolder.top = new FormAttachment(wTransformName, margin);
+    fdTabFolder.top = new FormAttachment(wSpacer, margin);
     fdTabFolder.right = new FormAttachment(100, 0);
-    fdTabFolder.bottom = new FormAttachment(wOk, -2 * margin);
+    fdTabFolder.bottom = new FormAttachment(wOk, -margin);
     wTabFolder.setLayoutData(fdTabFolder);
 
     // Add listeners
@@ -927,8 +880,8 @@ public class LoadFileInputDialog extends BaseTransformDialog {
                 wFilename.getText(),
                 wFilemask.getText(),
                 wExcludeFilemask.getText(),
-                LoadFileInputMeta.RequiredFilesCode[0],
-                LoadFileInputMeta.RequiredFilesCode[0]);
+                YES_NO_COMBO[0],
+                YES_NO_COMBO[0]);
             wFilename.setText("");
             wFilemask.setText("");
             wExcludeFilemask.setText("");
@@ -1022,7 +975,7 @@ public class LoadFileInputDialog extends BaseTransformDialog {
         new SelectionAdapter() {
           @Override
           public void widgetSelected(SelectionEvent e) {
-            setIncludeRownum();
+            setIncludeRowNumber();
             input.setChanged();
           }
         });
@@ -1061,7 +1014,7 @@ public class LoadFileInputDialog extends BaseTransformDialog {
     activateXmlStreamField();
     input.setChanged(changed);
     wFields.optWidth(true);
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -1152,13 +1105,13 @@ public class LoadFileInputDialog extends BaseTransformDialog {
     }
 
     TableItem item = new TableItem(wFields.table, SWT.NONE);
-    item.setText(1, LoadFileInputField.ElementTypeDesc[0]);
-    item.setText(2, LoadFileInputField.ElementTypeDesc[0]);
+    item.setText(1, LoadFileInputField.ElementType.FILE_CONTENT.getDescription());
+    item.setText(2, LoadFileInputField.ElementType.FILE_CONTENT.getDescription());
     item.setText(3, "String");
     // file size
     item = new TableItem(wFields.table, SWT.NONE);
-    item.setText(1, LoadFileInputField.ElementTypeDesc[1]);
-    item.setText(2, LoadFileInputField.ElementTypeDesc[1]);
+    item.setText(1, LoadFileInputField.ElementType.FILE_SIZE.getDescription());
+    item.setText(2, LoadFileInputField.ElementType.FILE_SIZE.getDescription());
     item.setText(3, "Integer");
 
     wFields.removeEmptyRows();
@@ -1188,7 +1141,7 @@ public class LoadFileInputDialog extends BaseTransformDialog {
     wInclFilenameField.setEnabled(wInclFilename.getSelection());
   }
 
-  public void setIncludeRownum() {
+  public void setIncludeRowNumber() {
     wlInclRownumField.setEnabled(wInclRownum.getSelection());
     wInclRownumField.setEnabled(wInclRownum.getSelection());
   }
@@ -1199,133 +1152,81 @@ public class LoadFileInputDialog extends BaseTransformDialog {
    * @param in The TextFileInputMeta object to obtain the data from.
    */
   public void getData(LoadFileInputMeta in) {
-    if (in.getFileName() != null) {
-      wFilenameList.removeAll();
-
-      for (int i = 0; i < in.getFileName().length; i++) {
-        wFilenameList.add(
-            new String[] {
-              in.getFileName()[i],
-              in.getFileMask()[i],
-              in.getExcludeFileMask()[i],
-              in.getRequiredFilesDesc(in.getFileRequired()[i]),
-              in.getRequiredFilesDesc(in.getIncludeSubFolders()[i])
-            });
-      }
-
-      wFilenameList.removeEmptyRows();
-      wFilenameList.setRowNums();
-      wFilenameList.optWidth(true);
+    wFilenameList.removeAll();
+    for (InputFile inputFile : in.getInputFiles()) {
+      wFilenameList.add(
+          inputFile.getFileName(),
+          inputFile.getFileMask(),
+          inputFile.getExcludeFileMask(),
+          inputFile.isFileRequired() ? CONST_COMBO_YES : CONST_COMBO_NO,
+          inputFile.isFileRequired() ? CONST_COMBO_YES : CONST_COMBO_NO);
     }
-    wInclFilename.setSelection(in.getIncludeFilename());
-    wInclRownum.setSelection(in.getIncludeRowNumber());
-    wAddResult.setSelection(in.getAddResultFile());
+    wFilenameList.optimizeTableView();
+
+    wInclFilename.setSelection(in.isIncludeFilename());
+    wInclRownum.setSelection(in.isIncludeRowNumber());
+    wAddResult.setSelection(in.isAddingResultFile());
 
     wIgnoreEmptyFile.setSelection(in.isIgnoreEmptyFile());
     wIgnoreMissingPath.setSelection(in.isIgnoreMissingPath());
-    wFilenameInField.setSelection(in.getFileInFields());
+    wFilenameInField.setSelection(in.isFileInField());
 
-    if (in.getDynamicFilenameField() != null) {
-      wFilenameField.setText(in.getDynamicFilenameField());
-    }
+    wFilenameField.setText(Const.NVL(in.getDynamicFilenameField(), ""));
 
-    if (in.getFilenameField() != null) {
-      wInclFilenameField.setText(in.getFilenameField());
-    }
-    if (in.getRowNumberField() != null) {
-      wInclRownumField.setText(in.getRowNumberField());
-    }
+    wInclFilenameField.setText(Const.NVL(in.getFilenameField(), ""));
+    wInclRownumField.setText(Const.NVL(in.getRowNumberField(), ""));
     wLimit.setText("" + in.getRowLimit());
     wEncoding.setText(Const.NVL(in.getEncoding(), ""));
 
-    if (isDebug()) {
-      logDebug(BaseMessages.getString(PKG, "LoadFileInputDialog.Log.GettingFieldsInfo"));
-    }
-    for (int i = 0; i < in.getInputFields().length; i++) {
-      LoadFileInputField field = in.getInputFields()[i];
+    wFields.clearAll();
+    for (LoadFileInputField field : in.getInputFields()) {
+      TableItem item = new TableItem(wFields.table, SWT.NONE);
+      String name = field.getName();
+      String element = field.getElementType().getDescription();
+      String type = ValueMetaBase.getTypeDesc(field.getType());
+      String format = field.getFormat();
+      String length = "" + field.getLength();
+      String precision = "" + field.getPrecision();
+      String curr = field.getCurrencySymbol();
+      String group = field.getGroupSymbol();
+      String decimal = field.getDecimalSymbol();
+      String trim = ValueMetaBase.getTrimTypeDesc(field.getTrimType());
+      String rep =
+          field.isRepeated()
+              ? BaseMessages.getString(PKG, CONST_COMBO_YES)
+              : BaseMessages.getString(PKG, CONST_COMBO_NO);
 
-      if (field != null) {
-        TableItem item = wFields.table.getItem(i);
-        String name = field.getName();
-        String element = field.getElementTypeDesc();
-        String type = field.getTypeDesc();
-        String format = field.getFormat();
-        String length = "" + field.getLength();
-        String prec = "" + field.getPrecision();
-        String curr = field.getCurrencySymbol();
-        String group = field.getGroupSymbol();
-        String decim = field.getDecimalSymbol();
-        String trim = field.getTrimTypeDesc();
-        String rep =
-            field.isRepeated()
-                ? BaseMessages.getString(PKG, CONST_COMBO_YES)
-                : BaseMessages.getString(PKG, CONST_COMBO_NO);
-
-        if (name != null) {
-          item.setText(1, name);
-        }
-        if (element != null) {
-          item.setText(2, element);
-        }
-        if (type != null) {
-          item.setText(3, type);
-        }
-        if (format != null) {
-          item.setText(4, format);
-        }
-        if (length != null && !"-1".equals(length)) {
-          item.setText(5, length);
-        }
-        if (prec != null && !"-1".equals(prec)) {
-          item.setText(6, prec);
-        }
-        if (curr != null) {
-          item.setText(7, curr);
-        }
-        if (decim != null) {
-          item.setText(8, decim);
-        }
-        if (group != null) {
-          item.setText(9, group);
-        }
-        if (trim != null) {
-          item.setText(10, trim);
-        }
-        if (rep != null) {
-          item.setText(11, rep);
-        }
+      item.setText(1, Const.NVL(name, ""));
+      item.setText(2, Const.NVL(element, ""));
+      item.setText(3, Const.NVL(type, ""));
+      item.setText(4, Const.NVL(format, ""));
+      if (!"-1".equals(length)) {
+        item.setText(5, length);
       }
+      if (!"-1".equals(precision)) {
+        item.setText(6, precision);
+      }
+      item.setText(7, Const.NVL(curr, ""));
+      item.setText(8, Const.NVL(decimal, ""));
+      item.setText(9, Const.NVL(group, ""));
+      item.setText(10, Const.NVL(trim, ""));
+      item.setText(11, Const.NVL(rep, ""));
     }
 
     wFields.removeEmptyRows();
     wFields.setRowNums();
     wFields.optWidth(true);
-    if (in.getShortFileNameField() != null) {
-      wShortFileFieldName.setText(in.getShortFileNameField());
-    }
-    if (in.getPathField() != null) {
-      wPathFieldName.setText(in.getPathField());
-    }
-    if (in.isHiddenField() != null) {
-      wIsHiddenName.setText(in.isHiddenField());
-    }
-    if (in.getLastModificationDateField() != null) {
-      wLastModificationTimeName.setText(in.getLastModificationDateField());
-    }
-    if (in.getUriField() != null) {
-      wUriName.setText(in.getUriField());
-    }
-    if (in.getRootUriField() != null) {
-      wRootUriName.setText(in.getRootUriField());
-    }
-    if (in.getExtensionField() != null) {
-      wExtensionFieldName.setText(in.getExtensionField());
-    }
+    wShortFileFieldName.setText(Const.NVL(in.getAdditionalFields().getShortFilenameField(), ""));
+    wPathFieldName.setText(Const.NVL(in.getAdditionalFields().getPathField(), ""));
+    wIsHiddenName.setText(Const.NVL(in.getAdditionalFields().getHiddenField(), ""));
+    wLastModificationTimeName.setText(
+        Const.NVL(in.getAdditionalFields().getLastModificationField(), ""));
+    wUriName.setText(Const.NVL(in.getAdditionalFields().getUriField(), ""));
+    wRootUriName.setText(Const.NVL(in.getAdditionalFields().getRootUriField(), ""));
+    wExtensionFieldName.setText(Const.NVL(in.getAdditionalFields().getExtensionField(), ""));
 
     setIncludeFilename();
-    setIncludeRownum();
-    wTransformName.selectAll();
-    wTransformName.setFocus();
+    setIncludeRowNumber();
   }
 
   private void cancel() {
@@ -1335,26 +1236,18 @@ public class LoadFileInputDialog extends BaseTransformDialog {
   }
 
   private void ok() {
-    try {
-      getInfo(input);
-    } catch (HopException e) {
-      new ErrorDialog(
-          shell,
-          BaseMessages.getString(PKG, "LoadFileInputDialog.ErrorParsingData.DialogTitle"),
-          BaseMessages.getString(PKG, "LoadFileInputDialog.ErrorParsingData.DialogMessage"),
-          e);
-    }
+    getInfo(input);
     dispose();
   }
 
-  private void getInfo(LoadFileInputMeta in) throws HopException {
+  private void getInfo(LoadFileInputMeta in) {
     transformName = wTransformName.getText(); // return value
 
     // copy info to TextFileInputMeta class (input)
     in.setRowLimit(Const.toLong(wLimit.getText(), 0L));
     in.setEncoding(wEncoding.getText());
     in.setRowNumberField(wInclRownumField.getText());
-    in.setAddResultFile(wAddResult.getSelection());
+    in.setAddingResultFile(wAddResult.getSelection());
     in.setIgnoreEmptyFile(wIgnoreEmptyFile.getSelection());
     in.setIgnoreMissingPath(wIgnoreMissingPath.getSelection());
 
@@ -1362,33 +1255,25 @@ public class LoadFileInputDialog extends BaseTransformDialog {
     in.setFilenameField(wInclFilenameField.getText());
     in.setIncludeRowNumber(wInclRownum.getSelection());
 
-    in.setFileInFields(wFilenameInField.getSelection());
+    in.setFileInField(wFilenameInField.getSelection());
     in.setDynamicFilenameField(wFilenameField.getText());
 
-    int nrFields = wFields.nrNonEmpty();
+    in.getInputFiles().clear();
+    for (TableItem item : wFilenameList.getNonEmptyItems()) {
+      InputFile file = new InputFile();
+      in.getInputFiles().add(file);
 
-    if (wFilenameInField.getSelection()) {
-      in.allocate(0, nrFields);
-
-      in.setFileName(new String[0]);
-      in.setFileMask(new String[0]);
-      in.setExcludeFileMask(new String[0]);
-      in.setFileRequired(new String[0]);
-      in.setIncludeSubFolders(new String[0]);
-    } else {
-      in.allocate(wFilenameList.getItemCount(), nrFields);
-
-      in.setFileName(wFilenameList.getItems(0));
-      in.setFileMask(wFilenameList.getItems(1));
-      in.setExcludeFileMask(wFilenameList.getItems(2));
-      in.setFileRequired(wFilenameList.getItems(3));
-      in.setIncludeSubFolders(wFilenameList.getItems(4));
+      file.setFileName(item.getText(1));
+      file.setFileMask(item.getText(2));
+      file.setExcludeFileMask(item.getText(3));
+      file.setFileRequired(YES_NO_COMBO[1].equalsIgnoreCase(item.getText(4)));
+      file.setIncludeSubFolders(YES_NO_COMBO[1].equalsIgnoreCase(item.getText(5)));
     }
 
-    for (int i = 0; i < nrFields; i++) {
+    in.getInputFields().clear();
+    for (TableItem item : wFields.getNonEmptyItems()) {
       LoadFileInputField field = new LoadFileInputField();
-
-      TableItem item = wFields.getNonEmpty(i);
+      in.getInputFields().add(field);
 
       field.setName(item.getText(1));
       field.setElementType(LoadFileInputField.getElementTypeByDesc(item.getText(2)));
@@ -1402,82 +1287,72 @@ public class LoadFileInputDialog extends BaseTransformDialog {
       field.setTrimType(LoadFileInputField.getTrimTypeByDesc(item.getText(10)));
       field.setRepeated(
           BaseMessages.getString(PKG, CONST_COMBO_YES).equalsIgnoreCase(item.getText(11)));
-
-      in.getInputFields()[i] = field;
     }
-    in.setShortFileNameField(wShortFileFieldName.getText());
-    in.setPathField(wPathFieldName.getText());
-    in.setIsHiddenField(wIsHiddenName.getText());
-    in.setLastModificationDateField(wLastModificationTimeName.getText());
-    in.setUriField(wUriName.getText());
-    in.setRootUriField(wRootUriName.getText());
-    in.setExtensionField(wExtensionFieldName.getText());
+    in.getAdditionalFields().setShortFilenameField(wShortFileFieldName.getText());
+    in.getAdditionalFields().setPathField(wPathFieldName.getText());
+    in.getAdditionalFields().setHiddenField(wIsHiddenName.getText());
+    in.getAdditionalFields().setLastModificationField(wLastModificationTimeName.getText());
+    in.getAdditionalFields().setUriField(wUriName.getText());
+    in.getAdditionalFields().setRootUriField(wRootUriName.getText());
+    in.getAdditionalFields().setExtensionField(wExtensionFieldName.getText());
   }
 
   // Preview the data
   private void preview() {
-    try {
-      // Create the XML input transform
-      LoadFileInputMeta oneMeta = new LoadFileInputMeta();
-      getInfo(oneMeta);
+    // Create the XML input transform
+    LoadFileInputMeta oneMeta = new LoadFileInputMeta();
+    getInfo(oneMeta);
 
-      EnterNumberDialog numberDialog =
-          new EnterNumberDialog(
+    EnterNumberDialog numberDialog =
+        new EnterNumberDialog(
+            shell,
+            props.getDefaultPreviewSize(),
+            BaseMessages.getString(PKG, "LoadFileInputDialog.NumberRows.DialogTitle"),
+            BaseMessages.getString(PKG, "LoadFileInputDialog.NumberRows.DialogMessage"));
+
+    int previewSize = numberDialog.open();
+    if (previewSize > 0) {
+      oneMeta.setRowLimit(previewSize);
+      PipelineMeta previewMeta =
+          PipelinePreviewFactory.generatePreviewPipeline(
+              pipelineMeta.getMetadataProvider(), oneMeta, wTransformName.getText());
+
+      PipelinePreviewProgressDialog progressDialog =
+          new PipelinePreviewProgressDialog(
               shell,
-              props.getDefaultPreviewSize(),
-              BaseMessages.getString(PKG, "LoadFileInputDialog.NumberRows.DialogTitle"),
-              BaseMessages.getString(PKG, "LoadFileInputDialog.NumberRows.DialogMessage"));
+              variables,
+              previewMeta,
+              new String[] {wTransformName.getText()},
+              new int[] {previewSize});
+      progressDialog.open();
 
-      int previewSize = numberDialog.open();
-      if (previewSize > 0) {
-        oneMeta.setRowLimit(previewSize);
-        PipelineMeta previewMeta =
-            PipelinePreviewFactory.generatePreviewPipeline(
-                pipelineMeta.getMetadataProvider(), oneMeta, wTransformName.getText());
+      if (!progressDialog.isCancelled()) {
+        Pipeline pipeline = progressDialog.getPipeline();
+        String loggingText = progressDialog.getLoggingText();
 
-        PipelinePreviewProgressDialog progressDialog =
-            new PipelinePreviewProgressDialog(
+        if (pipeline.getResult() != null && pipeline.getResult().getNrErrors() > 0) {
+          EnterTextDialog etd =
+              new EnterTextDialog(
+                  shell,
+                  BaseMessages.getString(PKG, "System.Dialog.PreviewError.Title"),
+                  BaseMessages.getString(PKG, "System.Dialog.PreviewError.Message"),
+                  loggingText,
+                  true);
+          etd.setReadOnly();
+          etd.open();
+        }
+
+        PreviewRowsDialog prd =
+            new PreviewRowsDialog(
                 shell,
                 variables,
-                previewMeta,
-                new String[] {wTransformName.getText()},
-                new int[] {previewSize});
-        progressDialog.open();
-
-        if (!progressDialog.isCancelled()) {
-          Pipeline pipeline = progressDialog.getPipeline();
-          String loggingText = progressDialog.getLoggingText();
-
-          if (pipeline.getResult() != null && pipeline.getResult().getNrErrors() > 0) {
-            EnterTextDialog etd =
-                new EnterTextDialog(
-                    shell,
-                    BaseMessages.getString(PKG, "System.Dialog.PreviewError.Title"),
-                    BaseMessages.getString(PKG, "System.Dialog.PreviewError.Message"),
-                    loggingText,
-                    true);
-            etd.setReadOnly();
-            etd.open();
-          }
-
-          PreviewRowsDialog prd =
-              new PreviewRowsDialog(
-                  shell,
-                  variables,
-                  SWT.NONE,
-                  wTransformName.getText(),
-                  progressDialog.getPreviewRowsMeta(wTransformName.getText()),
-                  progressDialog.getPreviewRows(wTransformName.getText()),
-                  loggingText);
-          prd.open();
-        }
+                SWT.NONE,
+                wTransformName.getText(),
+                progressDialog.getPreviewRowsMeta(wTransformName.getText()),
+                progressDialog.getPreviewRows(wTransformName.getText()),
+                loggingText);
+        prd.open();
       }
-    } catch (HopException e) {
-      new ErrorDialog(
-          shell,
-          BaseMessages.getString(PKG, "LoadFileInputDialog.ErrorPreviewingData.DialogTitle"),
-          BaseMessages.getString(PKG, "LoadFileInputDialog.ErrorPreviewingData.DialogMessage"),
-          e);
     }
   }
 
@@ -1641,7 +1516,7 @@ public class LoadFileInputDialog extends BaseTransformDialog {
 
     FormData fdAdditionalFieldsComp = new FormData();
     fdAdditionalFieldsComp.left = new FormAttachment(0, 0);
-    fdAdditionalFieldsComp.top = new FormAttachment(wTransformName, margin);
+    fdAdditionalFieldsComp.top = new FormAttachment(wSpacer, margin);
     fdAdditionalFieldsComp.right = new FormAttachment(100, 0);
     fdAdditionalFieldsComp.bottom = new FormAttachment(100, 0);
     wAdditionalFieldsComp.setLayoutData(fdAdditionalFieldsComp);

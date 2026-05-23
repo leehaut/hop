@@ -28,6 +28,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopFileException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.RowMeta;
 import org.apache.hop.core.xml.XmlHandler;
@@ -36,8 +37,6 @@ import org.w3c.dom.Node;
 /**
  * Describes the result of the execution of a Pipeline or a Job. The information available includes
  * the following:
- *
- * <p>
  *
  * <ul>
  *   <li>Number of errors the workflow or pipeline encountered
@@ -116,6 +115,18 @@ public class Result implements Cloneable {
 
   /** The number of lines rejected. */
   private long nrLinesRejected;
+
+  /**
+   * Bytes read by the current action only (when HOP_METRIC_DATA_VOLUME=Y). Workflow copies to
+   * ActionResult then clears.
+   */
+  private long bytesReadThisAction;
+
+  /**
+   * Bytes written by the current action only (when HOP_METRIC_DATA_VOLUME=Y). Workflow copies to
+   * ActionResult then clears.
+   */
+  private long bytesWrittenThisAction;
 
   /** The log channel id. */
   private String logChannelId;
@@ -245,7 +256,7 @@ public class Result implements Cloneable {
    * @return a List of rows associated with the result of execution of a workflow or pipeline
    */
   public List<RowMetaAndData> getRows() {
-    return new ArrayList<>(rows);
+    return rows;
   }
 
   /**
@@ -254,10 +265,14 @@ public class Result implements Cloneable {
    * @param rows The List of rows to set.
    */
   public void setRows(List<RowMetaAndData> rows) {
-    if (rows == null) {
-      this.rows = new ArrayList<>();
+    if (rows != null) {
+      this.rows = rows;
     } else {
-      this.rows = new ArrayList<>(rows);
+      // When setting to null (this happens for example every time a parallel
+      // branches in workflow starts), we empty rows' list because in
+      // this case it is needed a Result without any row to start the execution
+      // from a clean rows' state
+      this.rows = new ArrayList<>();
     }
   }
 
@@ -283,6 +298,8 @@ public class Result implements Cloneable {
     nrLinesDeleted = 0;
     nrErrors = 0;
     nrFilesRetrieved = 0;
+    bytesReadThisAction = 0;
+    bytesWrittenThisAction = 0;
     logText = null;
   }
 
@@ -352,7 +369,7 @@ public class Result implements Cloneable {
 
       return xml.toString();
     } catch (IOException e) {
-      throw new RuntimeException("Unexpected error encoding workflow result as XML", e);
+      throw new HopRuntimeException("Unexpected error encoding workflow result as XML", e);
     }
   }
 
@@ -538,6 +555,22 @@ public class Result implements Cloneable {
    */
   public void increaseErrors(long incr) {
     nrErrors += incr;
+  }
+
+  public long getBytesReadThisAction() {
+    return bytesReadThisAction;
+  }
+
+  public void setBytesReadThisAction(long bytesReadThisAction) {
+    this.bytesReadThisAction = bytesReadThisAction;
+  }
+
+  public long getBytesWrittenThisAction() {
+    return bytesWrittenThisAction;
+  }
+
+  public void setBytesWrittenThisAction(long bytesWrittenThisAction) {
+    this.bytesWrittenThisAction = bytesWrittenThisAction;
   }
 
   @Deprecated(since = "2.16")

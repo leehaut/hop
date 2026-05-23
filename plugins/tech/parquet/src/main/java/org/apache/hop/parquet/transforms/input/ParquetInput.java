@@ -19,12 +19,18 @@ package org.apache.hop.parquet.transforms.input;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.RowMetaAndData;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.row.IRowMeta;
+import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.row.RowDataUtil;
 import org.apache.hop.core.vfs.HopVfs;
+import org.apache.hop.lineage.LineageFileIoEmitter;
+import org.apache.hop.lineage.model.FileIoOperation;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransform;
@@ -43,25 +49,33 @@ public class ParquetInput extends BaseTransform<ParquetInputMeta, ParquetInputDa
 
   @Override
   public boolean processRow() throws HopException {
-
     Object[] row = getRow();
     if (row == null) {
       // No more files, we're done.
       closeFile();
+
+      // Do we need the file metadata and the file was empty?
+      //
+      if (meta.isSendingNullsRowWhenEmpty() && getLinesInput() == 0) {
+        Object[] outputRow = RowDataUtil.allocateRowData(getInputRowMeta().size());
+        putRow(data.outputRowMeta, outputRow);
+      }
+
       setOutputDone();
       return false;
     }
 
     if (first) {
       first = false;
-      data.outputRowMeta = getInputRowMeta().clone();
-      meta.getFields(data.outputRowMeta, getTransformName(), null, null, this, metadataProvider);
 
       data.filenameFieldIndex = getInputRowMeta().indexOfValue(resolve(meta.getFilenameField()));
       if (data.filenameFieldIndex < 0) {
         throw new HopException(
             "Unable to find filename field " + meta.getFilenameField() + " in the input");
       }
+
+      data.outputRowMeta = getInputRowMeta().clone();
+      meta.getFields(data.outputRowMeta, getTransformName(), null, null, this, metadataProvider);
     }
 
     // Skip null values for file names
@@ -74,7 +88,36 @@ public class ParquetInput extends BaseTransform<ParquetInputMeta, ParquetInputDa
     FileObject fileObject = HopVfs.getFileObject(filename, variables);
 
     try {
+      List<ParquetField> fields = new ArrayList<>(meta.getFields());
+
+      // If we don't have any fields specified, we read them all.
+      //
+      if (fields.isEmpty()) {
+        //
+        IRowMeta parquetRowMeta = ParquetInputMeta.extractRowMeta(this, filename);
+        for (int i = 0; i < parquetRowMeta.size(); i++) {
+          IValueMeta parquetValueMeta = parquetRowMeta.getValueMeta(i);
+          fields.add(
+              new ParquetField(
+                  parquetValueMeta.getName(),
+                  parquetValueMeta.getName(),
+                  parquetValueMeta.getTypeDesc(),
+                  parquetValueMeta.getFormatMask(),
+                  Integer.toString(parquetValueMeta.getLength()),
+                  Integer.toString(parquetValueMeta.getPrecision())));
+        }
+      }
+
       long size = fileObject.getContent().getSize();
+      dataVolumeIn = (dataVolumeIn != null ? dataVolumeIn : 0L) + size;
+      if (size > 0) {
+        try {
+          LineageFileIoEmitter.emitTransformFileIo(
+              this, FileIoOperation.READ, fileObject, null, size, true, null);
+        } catch (Exception ignored) {
+          // optional lineage
+        }
+      }
       data.inputStream = HopVfs.getInputStream(fileObject);
 
       // Reads the whole file into memory...
@@ -83,11 +126,12 @@ public class ParquetInput extends BaseTransform<ParquetInputMeta, ParquetInputDa
       IOUtils.copy(data.inputStream, outputStream);
       ParquetStream inputFile = new ParquetStream(outputStream.toByteArray(), filename);
 
-      ParquetReadSupport readSupport = new ParquetReadSupport(meta.getFields());
+      ParquetReadSupport readSupport = new ParquetReadSupport(fields);
       data.reader = new ParquetReaderBuilder<>(readSupport, inputFile).build();
 
       RowMetaAndData r = data.reader.read();
       while (r != null && !isStopped()) {
+        incrementLinesInput();
         // Add r to the input rows...
         //
         Object[] outputRow = RowDataUtil.addRowData(row, getInputRowMeta().size(), r.getData());

@@ -17,11 +17,12 @@
 
 package org.apache.hop.www;
 
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import java.io.Serial;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.annotations.HopServerServlet;
 import org.apache.hop.core.logging.HopLogStore;
@@ -35,8 +36,7 @@ import org.owasp.encoder.Encode;
 @HopServerServlet(id = "removePipeline", name = "Remove a pipeline")
 public class RemovePipelineServlet extends BaseHttpServlet implements IHopServerPlugin {
   private static final Class<?> PKG = RemovePipelineServlet.class;
-
-  private static final long serialVersionUID = 6618979989596401783L;
+  @Serial private static final long serialVersionUID = 6618979989596401783L;
 
   public static final String CONTEXT_PATH = "/hop/removePipeline";
 
@@ -60,19 +60,15 @@ public class RemovePipelineServlet extends BaseHttpServlet implements IHopServer
     String pipelineName = request.getParameter("name");
     String id = request.getParameter("id");
     boolean useXML = "Y".equalsIgnoreCase(request.getParameter("xml"));
+    boolean useJson = isJsonRequest(request);
 
     response.setStatus(HttpServletResponse.SC_OK);
+    setResponseFormat(response, useXML, useJson);
 
-    if (useXML) {
-      response.setContentType("text/xml");
-      response.setCharacterEncoding(Const.XML_ENCODING);
-    } else {
-      response.setContentType("text/html;charset=UTF-8");
+    PrintWriter out = getSafeWriter(response);
+    if (out == null) {
+      return;
     }
-
-    response.setCharacterEncoding("UTF-8");
-
-    PrintWriter out = response.getWriter();
 
     // ID is optional...
     //
@@ -101,13 +97,11 @@ public class RemovePipelineServlet extends BaseHttpServlet implements IHopServer
       getPipelineMap().removePipeline(entry);
 
       if (useXML) {
-        response.setContentType("text/xml");
-        response.setCharacterEncoding(Const.XML_ENCODING);
-        out.print(XmlHandler.getXmlHeader(Const.XML_ENCODING));
+        out.print(XmlHandler.getXmlHeader(Const.UTF_8));
         out.print(WebResult.OK.getXml());
+      } else if (useJson) {
+        out.println(WebResult.OK.getJson());
       } else {
-        response.setContentType("text/html;charset=UTF-8");
-
         out.println("<HTML>");
         out.println("<HEAD>");
         out.println(
@@ -136,12 +130,13 @@ public class RemovePipelineServlet extends BaseHttpServlet implements IHopServer
         out.println("</HTML>");
       }
     } else {
+      String notFoundMsg =
+          BaseMessages.getString(
+              PKG, "PipelineStatusServlet.Log.CoundNotFindSpecPipeline", pipelineName);
       if (useXML) {
-        out.println(
-            new WebResult(
-                WebResult.STRING_ERROR,
-                BaseMessages.getString(
-                    PKG, "PipelineStatusServlet.Log.CoundNotFindSpecPipeline", pipelineName)));
+        out.println(new WebResult(WebResult.STRING_ERROR, notFoundMsg).getXml());
+      } else if (useJson) {
+        out.println(new WebResult(WebResult.STRING_ERROR, notFoundMsg).getJson());
       } else {
         out.println(
             "<H1>"

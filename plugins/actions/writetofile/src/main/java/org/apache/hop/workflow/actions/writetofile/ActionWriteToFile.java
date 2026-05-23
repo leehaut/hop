@@ -25,10 +25,13 @@ import org.apache.hop.core.ICheckResult;
 import org.apache.hop.core.Result;
 import org.apache.hop.core.annotations.Action;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.io.CountingOutputStream;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.core.vfs.HopVfs;
 import org.apache.hop.i18n.BaseMessages;
+import org.apache.hop.lineage.LineageFileIoEmitter;
+import org.apache.hop.lineage.model.FileIoOperation;
 import org.apache.hop.metadata.api.HopMetadataProperty;
 import org.apache.hop.metadata.api.IHopMetadataProvider;
 import org.apache.hop.resource.ResourceEntry;
@@ -39,6 +42,7 @@ import org.apache.hop.workflow.action.ActionBase;
 import org.apache.hop.workflow.action.IAction;
 import org.apache.hop.workflow.action.validator.ActionValidatorUtils;
 import org.apache.hop.workflow.action.validator.AndValidator;
+import org.apache.hop.workflow.engine.IWorkflowEngine;
 
 /**
  * This defines a 'write to file' action. Its main use would be to create empty trigger files that
@@ -132,6 +136,7 @@ public class ActionWriteToFile extends ActionBase implements Cloneable, IAction 
       String encoding = resolve(getEncoding());
 
       OutputStreamWriter osw = null;
+      CountingOutputStream counting = null;
       OutputStream os = null;
       try {
 
@@ -140,13 +145,14 @@ public class ActionWriteToFile extends ActionBase implements Cloneable, IAction 
 
         // Create / open file for writing
         os = HopVfs.getOutputStream(realFilename, isAppendFile(), getVariables());
+        counting = new CountingOutputStream(os);
 
         if (Utils.isEmpty(encoding)) {
           if (isDebug()) {
             logDebug(
                 BaseMessages.getString(PKG, "ActionWriteToFile.Log.WritingToFile", realFilename));
           }
-          osw = new OutputStreamWriter(os);
+          osw = new OutputStreamWriter(counting);
         } else {
           if (isDebug()) {
             logDebug(
@@ -156,9 +162,23 @@ public class ActionWriteToFile extends ActionBase implements Cloneable, IAction 
                     realFilename,
                     encoding));
           }
-          osw = new OutputStreamWriter(os, encoding);
+          osw = new OutputStreamWriter(counting, encoding);
         }
         osw.write(content);
+        osw.flush();
+
+        long written = counting.getCount();
+        result.setBytesWrittenThisAction(result.getBytesWrittenThisAction() + written);
+
+        IWorkflowEngine<WorkflowMeta> wf = getParentWorkflow();
+        if (wf != null && written > 0) {
+          try (FileObject out = HopVfs.getFileObject(realFilename, getVariables())) {
+            LineageFileIoEmitter.emitWorkflowActionFileIo(
+                wf, this, FileIoOperation.WRITE, null, out, written, true, null);
+          } catch (Exception ignored) {
+            // lineage is best-effort
+          }
+        }
 
         result.setResult(true);
         result.setNrErrors(0);
@@ -170,15 +190,20 @@ public class ActionWriteToFile extends ActionBase implements Cloneable, IAction 
       } finally {
         if (osw != null) {
           try {
-            osw.flush();
             osw.close();
+          } catch (Exception ex) {
+            /* Ignore */
+          }
+        }
+        if (counting != null) {
+          try {
+            counting.close();
           } catch (Exception ex) {
             /* Ignore */
           }
         }
         if (os != null) {
           try {
-            os.flush();
             os.close();
           } catch (Exception ex) {
             /* Ignore */

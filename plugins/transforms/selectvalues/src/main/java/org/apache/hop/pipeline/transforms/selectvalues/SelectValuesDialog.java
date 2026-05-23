@@ -21,33 +21,29 @@ import static org.apache.hop.core.row.IValueMeta.storageTypeCodes;
 
 import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.Props;
-import org.apache.hop.core.SourceToTargetMapping;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.row.RowMeta;
 import org.apache.hop.core.row.value.ValueMetaBase;
 import org.apache.hop.core.row.value.ValueMetaFactory;
-import org.apache.hop.core.row.value.ValueMetaNumber;
 import org.apache.hop.core.util.EnvUtil;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.pipeline.PipelineMeta;
-import org.apache.hop.pipeline.transform.ITransformMeta;
 import org.apache.hop.pipeline.transform.TransformMeta;
+import org.apache.hop.ui.core.FormDataBuilder;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.dialog.BaseDialog;
-import org.apache.hop.ui.core.dialog.EnterMappingDialog;
 import org.apache.hop.ui.core.dialog.ErrorDialog;
 import org.apache.hop.ui.core.gui.GuiResource;
 import org.apache.hop.ui.core.widget.ColumnInfo;
@@ -60,15 +56,12 @@ import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.events.SelectionListener;
-import org.eclipse.swt.layout.FormAttachment;
-import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 public class SelectValuesDialog extends BaseTransformDialog {
   private static final Class<?> PKG = SelectValuesMeta.class;
@@ -92,6 +85,13 @@ public class SelectValuesDialog extends BaseTransformDialog {
   private final SelectValuesMeta input;
 
   private final List<ColumnInfo> fieldColumns = new ArrayList<>();
+
+  // Separate lists for different tabs to show appropriate fields at each stage
+  private ColumnInfo selectFieldColumn; // Select & Alter: shows original input fields
+  private final List<ColumnInfo> removeFieldColumns =
+      new ArrayList<>(); // Remove: shows output of Select & Alter
+  private final List<ColumnInfo> metaFieldColumns =
+      new ArrayList<>(); // Metadata: shows output of Select & Alter minus Remove
 
   private String[] charsets = null;
 
@@ -118,11 +118,9 @@ public class SelectValuesDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "SelectValuesDialog.Shell.Label"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
     SelectionListener lsSel =
         new SelectionAdapter() {
@@ -131,49 +129,8 @@ public class SelectValuesDialog extends BaseTransformDialog {
             input.setChanged();
           }
         };
-
     ModifyListener lsMod = e -> input.setChanged();
     changed = input.hasChanged();
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "SelectValuesDialog.Shell.Label"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // TransformName line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "SelectValuesDialog.TransformName.Label"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
-
-    // Buttons go at the bottom.  The tabs in between
-    //
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-
-    setButtonPositions(new Button[] {wOk, wCancel}, margin, null); // null means bottom of dialog
 
     // The folders!
     wTabFolder = new CTabFolder(shell, SWT.BORDER);
@@ -195,31 +152,37 @@ public class SelectValuesDialog extends BaseTransformDialog {
     selectLayout.marginHeight = margin;
     wSelectComp.setLayout(selectLayout);
 
+    // Include unspecified fields (at bottom of tab)
     Label wlUnspecified = new Label(wSelectComp, SWT.RIGHT);
     wlUnspecified.setText(BaseMessages.getString(PKG, "SelectValuesDialog.Unspecified.Label"));
     PropsUi.setLook(wlUnspecified);
-    FormData fdlUnspecified = new FormData();
-    fdlUnspecified.left = new FormAttachment(0, 0);
-    fdlUnspecified.right = new FormAttachment(middle, 0);
-    fdlUnspecified.bottom = new FormAttachment(100, 0);
-    wlUnspecified.setLayoutData(fdlUnspecified);
 
     wUnspecified = new Button(wSelectComp, SWT.CHECK);
     PropsUi.setLook(wUnspecified);
-    FormData fdUnspecified = new FormData();
-    fdUnspecified.left = new FormAttachment(middle, margin);
-    fdUnspecified.right = new FormAttachment(100, 0);
-    fdUnspecified.bottom = new FormAttachment(wlUnspecified, 0, SWT.CENTER);
-    wUnspecified.setLayoutData(fdUnspecified);
     wUnspecified.addSelectionListener(lsSel);
+    // Update combo boxes when "Include unspecified fields" checkbox is toggled
+    wUnspecified.addSelectionListener(
+        new SelectionAdapter() {
+          @Override
+          public void widgetSelected(SelectionEvent e) {
+            if (bPreviousFieldsLoaded) {
+              shell
+                  .getDisplay()
+                  .asyncExec(
+                      () -> {
+                        if (!shell.isDisposed() && bPreviousFieldsLoaded) {
+                          setComboBoxes();
+                        }
+                      });
+            }
+          }
+        });
 
+    // Row 1: Label "Select & Alter"
     Label wlFields = new Label(wSelectComp, SWT.NONE);
     wlFields.setText(BaseMessages.getString(PKG, "SelectValuesDialog.Fields.Label"));
     PropsUi.setLook(wlFields);
-    FormData fdlFields = new FormData();
-    fdlFields.left = new FormAttachment(0, 0);
-    fdlFields.top = new FormAttachment(0, 0);
-    wlFields.setLayoutData(fdlFields);
+    wlFields.setLayoutData(FormDataBuilder.builder().top().left().build());
 
     final int fieldsCols = 4;
     final int fieldsRows = input.getSelectOption().getSelectFields().size();
@@ -250,6 +213,8 @@ public class SelectValuesDialog extends BaseTransformDialog {
             false);
 
     fieldColumns.add(colinf[0]);
+    selectFieldColumn =
+        colinf[0]; // Save reference to Select & Alter column (should always show original fields)
     wFields =
         new TableView(
             variables,
@@ -260,37 +225,29 @@ public class SelectValuesDialog extends BaseTransformDialog {
             lsMod,
             props);
 
+    // Row 2: Get fields button (below table, above "Include unspecified fields")
     Button wGetSelect = new Button(wSelectComp, SWT.PUSH);
     wGetSelect.setText(BaseMessages.getString(PKG, "SelectValuesDialog.GetSelect.Button"));
     wGetSelect.addListener(SWT.Selection, e -> get());
-    FormData fdGetSelect = new FormData();
-    fdGetSelect.right = new FormAttachment(100, 0);
-    fdGetSelect.top = new FormAttachment(wlFields, margin);
-    wGetSelect.setLayoutData(fdGetSelect);
 
-    Button wDoMapping = new Button(wSelectComp, SWT.PUSH);
-    wDoMapping.setText(BaseMessages.getString(PKG, "SelectValuesDialog.DoMapping.Button"));
+    // Layout bottom-up: checkbox pinned to bottom, button above it, table fills remaining space.
+    wlUnspecified.setLayoutData(FormDataBuilder.builder().left().bottom(100, 0).build());
+    wUnspecified.setLayoutData(
+        FormDataBuilder.builder().left(wlUnspecified, margin).bottom(100, 0).build());
 
-    wDoMapping.addListener(SWT.Selection, arg0 -> generateMappings());
+    wGetSelect.setLayoutData(
+        FormDataBuilder.builder().left().bottom(wlUnspecified, -margin).build());
 
-    fdGetSelect = new FormData();
-    fdGetSelect.right = new FormAttachment(100, 0);
-    fdGetSelect.top = new FormAttachment(wGetSelect, 0);
-    wDoMapping.setLayoutData(fdGetSelect);
+    wFields.setLayoutData(
+        FormDataBuilder.builder()
+            .top(wlFields, margin)
+            .left()
+            .right()
+            .bottom(wGetSelect, -margin)
+            .build());
 
-    FormData fdFields = new FormData();
-    fdFields.left = new FormAttachment(0, 0);
-    fdFields.top = new FormAttachment(wlFields, margin);
-    fdFields.right = new FormAttachment(wGetSelect, -margin);
-    fdFields.bottom = new FormAttachment(wlUnspecified, -2 * margin);
-    wFields.setLayoutData(fdFields);
-
-    FormData fdSelectComp = new FormData();
-    fdSelectComp.left = new FormAttachment(0, 0);
-    fdSelectComp.top = new FormAttachment(0, 0);
-    fdSelectComp.right = new FormAttachment(100, 0);
-    fdSelectComp.bottom = new FormAttachment(100, 0);
-    wSelectComp.setLayoutData(fdSelectComp);
+    wSelectComp.setLayoutData(
+        FormDataBuilder.builder().top().left().right().bottom(100, 0).build());
 
     wSelectComp.layout();
     wSelectTab.setControl(wSelectComp);
@@ -317,10 +274,7 @@ public class SelectValuesDialog extends BaseTransformDialog {
     Label wlRemove = new Label(wRemoveComp, SWT.NONE);
     wlRemove.setText(BaseMessages.getString(PKG, "SelectValuesDialog.Remove.Label"));
     PropsUi.setLook(wlRemove);
-    FormData fdlRemove = new FormData();
-    fdlRemove.left = new FormAttachment(0, 0);
-    fdlRemove.top = new FormAttachment(0, 0);
-    wlRemove.setLayoutData(fdlRemove);
+    wlRemove.setLayoutData(FormDataBuilder.builder().top().left().build());
 
     final int RemoveCols = 1;
     final int RemoveRows = input.getSelectOption().getDeleteName().size();
@@ -335,6 +289,7 @@ public class SelectValuesDialog extends BaseTransformDialog {
             },
             false);
     fieldColumns.add(colrem[0]);
+    removeFieldColumns.add(colrem[0]); // Remove tab should show renamed fields from Select & Alter
     wRemove =
         new TableView(
             variables,
@@ -348,24 +303,17 @@ public class SelectValuesDialog extends BaseTransformDialog {
     Button wGetRemove = new Button(wRemoveComp, SWT.PUSH);
     wGetRemove.setText(BaseMessages.getString(PKG, "SelectValuesDialog.GetRemove.Button"));
     wGetRemove.addListener(SWT.Selection, e -> get());
-    FormData fdGetRemove = new FormData();
-    fdGetRemove.right = new FormAttachment(100, 0);
-    fdGetRemove.top = new FormAttachment(50, 0);
-    wGetRemove.setLayoutData(fdGetRemove);
 
-    FormData fdRemove = new FormData();
-    fdRemove.left = new FormAttachment(0, 0);
-    fdRemove.top = new FormAttachment(wlRemove, margin);
-    fdRemove.right = new FormAttachment(wGetRemove, -margin);
-    fdRemove.bottom = new FormAttachment(100, 0);
-    wRemove.setLayoutData(fdRemove);
-
-    FormData fdRemoveComp = new FormData();
-    fdRemoveComp.left = new FormAttachment(0, 0);
-    fdRemoveComp.top = new FormAttachment(0, 0);
-    fdRemoveComp.right = new FormAttachment(100, 0);
-    fdRemoveComp.bottom = new FormAttachment(100, 0);
-    wRemoveComp.setLayoutData(fdRemoveComp);
+    wGetRemove.setLayoutData(FormDataBuilder.builder().left().bottom(100, 0).build());
+    wRemove.setLayoutData(
+        FormDataBuilder.builder()
+            .top(wlRemove, margin)
+            .left()
+            .right()
+            .bottom(wGetRemove, -margin)
+            .build());
+    wRemoveComp.setLayoutData(
+        FormDataBuilder.builder().top().left().right().bottom(100, 0).build());
 
     wRemoveComp.layout();
     wRemoveTab.setControl(wRemoveComp);
@@ -393,10 +341,7 @@ public class SelectValuesDialog extends BaseTransformDialog {
     Label wlMeta = new Label(wMetaComp, SWT.NONE);
     wlMeta.setText(BaseMessages.getString(PKG, "SelectValuesDialog.Meta.Label"));
     PropsUi.setLook(wlMeta);
-    FormData fdlMeta = new FormData();
-    fdlMeta.left = new FormAttachment(0, 0);
-    fdlMeta.top = new FormAttachment(0, 0);
-    wlMeta.setLayoutData(fdlMeta);
+    wlMeta.setLayoutData(FormDataBuilder.builder().top().left().build());
 
     final int MetaRows = input.getSelectOption().getMeta().size();
 
@@ -429,10 +374,8 @@ public class SelectValuesDialog extends BaseTransformDialog {
           new ColumnInfo(
               BaseMessages.getString(PKG, "SelectValuesDialog.ColumnInfo.Storage.Label"),
               ColumnInfo.COLUMN_TYPE_CCOMBO,
-              new String[] {
-                BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_YES),
-                BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_NO),
-              }),
+              BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_YES),
+              BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_NO)),
           new ColumnInfo(
               BaseMessages.getString(PKG, "SelectValuesDialog.ColumnInfo.Format"),
               ColumnInfo.COLUMN_TYPE_FORMAT,
@@ -440,10 +383,8 @@ public class SelectValuesDialog extends BaseTransformDialog {
           new ColumnInfo(
               BaseMessages.getString(PKG, "SelectValuesDialog.ColumnInfo.DateLenient"),
               ColumnInfo.COLUMN_TYPE_CCOMBO,
-              new String[] {
-                BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_YES),
-                BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_NO),
-              }),
+              BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_YES),
+              BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_NO)),
           new ColumnInfo(
               BaseMessages.getString(PKG, "SelectValuesDialog.ColumnInfo.DateFormatLocale"),
               ColumnInfo.COLUMN_TYPE_CCOMBO,
@@ -455,10 +396,8 @@ public class SelectValuesDialog extends BaseTransformDialog {
           new ColumnInfo(
               BaseMessages.getString(PKG, "SelectValuesDialog.ColumnInfo.LenientStringToNumber"),
               ColumnInfo.COLUMN_TYPE_CCOMBO,
-              new String[] {
-                BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_YES),
-                BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_NO),
-              }),
+              BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_YES),
+              BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_NO)),
           new ColumnInfo(
               BaseMessages.getString(PKG, "SelectValuesDialog.ColumnInfo.Encoding"),
               ColumnInfo.COLUMN_TYPE_CCOMBO,
@@ -479,11 +418,13 @@ public class SelectValuesDialog extends BaseTransformDialog {
           new ColumnInfo(
               BaseMessages.getString(PKG, "SelectValuesDialog.ColumnInfo.RoundingType"),
               ColumnInfo.COLUMN_TYPE_CCOMBO,
-              ValueMetaNumber.roundingTypeDesc),
+              ValueMetaBase.roundingTypeDesc),
         };
     colmeta[5].setToolTip(
         BaseMessages.getString(PKG, "SelectValuesDialog.ColumnInfo.Storage.Tooltip"));
     fieldColumns.add(colmeta[0]);
+    // Metadata tab should show fields remaining after Remove
+    metaFieldColumns.add(colmeta[0]);
     wMeta =
         new TableView(
             variables,
@@ -497,24 +438,17 @@ public class SelectValuesDialog extends BaseTransformDialog {
     Button wGetMeta = new Button(wMetaComp, SWT.PUSH);
     wGetMeta.setText(BaseMessages.getString(PKG, "SelectValuesDialog.GetMeta.Button"));
     wGetMeta.addListener(SWT.Selection, e -> get());
-    FormData fdGetMeta = new FormData();
-    fdGetMeta.right = new FormAttachment(100, 0);
-    fdGetMeta.top = new FormAttachment(50, 0);
-    wGetMeta.setLayoutData(fdGetMeta);
 
-    FormData fdMeta = new FormData();
-    fdMeta.left = new FormAttachment(0, 0);
-    fdMeta.top = new FormAttachment(wlMeta, margin);
-    fdMeta.right = new FormAttachment(wGetMeta, -margin);
-    fdMeta.bottom = new FormAttachment(100, 0);
-    wMeta.setLayoutData(fdMeta);
-
-    FormData fdMetaComp = new FormData();
-    fdMetaComp.left = new FormAttachment(0, 0);
-    fdMetaComp.top = new FormAttachment(0, 0);
-    fdMetaComp.right = new FormAttachment(100, 0);
-    fdMetaComp.bottom = new FormAttachment(100, 0);
-    wMetaComp.setLayoutData(fdMetaComp);
+    wGetMeta.setLayoutData(FormDataBuilder.builder().left().bottom(100, 0).build());
+    wMeta.setLayoutData(
+        FormDataBuilder.builder()
+            .top(wlMeta, margin)
+            .left()
+            .right()
+            .bottom(wGetMeta, -margin)
+            .build());
+    wMetaComp.setLayoutData(
+        FormDataBuilder.builder().top().left().right(100, 0).bottom(100, 0).build());
 
     wMetaComp.layout();
     wMetaTab.setControl(wMetaComp);
@@ -522,13 +456,35 @@ public class SelectValuesDialog extends BaseTransformDialog {
     // ///////////////////////////////////////////////////////////
     // / END OF META TAB
     // ///////////////////////////////////////////////////////////
+    wTabFolder.setLayoutData(
+        FormDataBuilder.builder()
+            .top(wTransformName, margin)
+            .left()
+            .right(100, 0)
+            .bottom(wOk, -2 * margin)
+            .build());
 
-    FormData fdTabFolder = new FormData();
-    fdTabFolder.left = new FormAttachment(0, 0);
-    fdTabFolder.top = new FormAttachment(wTransformName, margin);
-    fdTabFolder.right = new FormAttachment(100, 0);
-    fdTabFolder.bottom = new FormAttachment(wOk, -2 * margin);
-    wTabFolder.setLayoutData(fdTabFolder);
+    // Add a listener to update combo boxes when switching tabs
+    // This ensures Remove and Metadata tabs see any field renamings from Select & Alter tab
+    wTabFolder.addSelectionListener(
+        new SelectionAdapter() {
+          @Override
+          public void widgetSelected(SelectionEvent e) {
+            int tabIndex = wTabFolder.getSelectionIndex();
+            // Update combo boxes when switching to Remove (1) or Metadata (2) tabs
+            if (bPreviousFieldsLoaded && (tabIndex == 1 || tabIndex == 2)) {
+              // Use asyncExec to ensure update happens after tab switch completes
+              shell
+                  .getDisplay()
+                  .asyncExec(
+                      () -> {
+                        if (!shell.isDisposed() && bPreviousFieldsLoaded) {
+                          setComboBoxes();
+                        }
+                      });
+            }
+          }
+        });
 
     // ///////////////////////////////////////////////////////////
     // / END OF TAB FOLDER
@@ -548,7 +504,15 @@ public class SelectValuesDialog extends BaseTransformDialog {
               for (int i = 0; i < row.size(); i++) {
                 inputFields.put(row.getValueMeta(i).getName(), i);
               }
-              setComboBoxes();
+              // Must use asyncExec to access SWT widgets from background thread
+              shell
+                  .getDisplay()
+                  .asyncExec(
+                      () -> {
+                        if (!shell.isDisposed()) {
+                          setComboBoxes();
+                        }
+                      });
             } catch (HopException e) {
               logError(BaseMessages.getString(PKG, "System.Dialog.GetFieldsFailed.Message"));
             }
@@ -560,6 +524,17 @@ public class SelectValuesDialog extends BaseTransformDialog {
     input.setChanged(changed);
     setComboValues();
 
+    // After getData() sets the initial tab, ensure combo boxes are updated for that tab
+    // This handles the case where the dialog opens on Remove or Metadata tab
+    shell
+        .getDisplay()
+        .asyncExec(
+            () -> {
+              if (!shell.isDisposed() && bPreviousFieldsLoaded) {
+                setComboBoxes();
+              }
+            });
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -570,34 +545,37 @@ public class SelectValuesDialog extends BaseTransformDialog {
         () -> {
           try {
             prevFields = pipelineMeta.getPrevTransformFields(variables, transformName);
+            // Populate inputFields map if not already done by the background thread
+            if (inputFields.isEmpty() && prevFields != null) {
+              for (int i = 0; i < prevFields.size(); i++) {
+                inputFields.put(prevFields.getValueMeta(i).getName(), i);
+              }
+            }
           } catch (HopException e) {
             prevFields = new RowMeta();
             String msg =
                 BaseMessages.getString(PKG, "SelectValuesDialog.DoMapping.UnableToFindInput");
             logError(msg);
           }
-          String[] prevTransformFieldNames =
-              prevFields != null ? prevFields.getFieldNames() : new String[0];
-          Arrays.sort(prevTransformFieldNames);
           bPreviousFieldsLoaded = true;
-          for (ColumnInfo colInfo : fieldColumns) {
-            colInfo.setComboValues(prevTransformFieldNames);
-          }
+          // Use setComboBoxes() to properly set values for each tab
+          // (Select & Alter gets original fields, Remove/Metadata get renamed/filtered fields)
+          setComboBoxes();
         };
     shell.getDisplay().asyncExec(fieldLoader);
   }
 
   /** Copy information from the meta-data input to the dialog fields. */
   public void getData() {
-    wTabFolder.setSelection(0); // Default
+    wTabFolder.setSelection(0);
 
     /*
      * Select fields
      */
-    if (input.getSelectOption().getSelectFields() != null
-        && !input.getSelectOption().getSelectFields().isEmpty()) {
-      for (int i = 0; i < input.getSelectOption().getSelectFields().size(); i++) {
-        SelectField selectField = input.getSelectOption().getSelectFields().get(i);
+    List<SelectField> fields = input.getSelectOption().getSelectFields();
+    if (!Utils.isEmpty(fields)) {
+      for (int i = 0; i < fields.size(); i++) {
+        SelectField selectField = fields.get(i);
         TableItem item = wFields.table.getItem(i);
         if (selectField.getName() != null) {
           item.setText(1, selectField.getName());
@@ -611,17 +589,16 @@ public class SelectValuesDialog extends BaseTransformDialog {
       }
       wFields.setRowNums();
       wFields.optWidth(true);
-      wTabFolder.setSelection(0);
     }
     wUnspecified.setSelection(input.getSelectOption().isSelectingAndSortingUnspecifiedFields());
 
     /*
      * Remove certain fields...
      */
-    if (input.getSelectOption().getDeleteName() != null
-        && !input.getSelectOption().getDeleteName().isEmpty()) {
-      for (int i = 0; i < input.getSelectOption().getDeleteName().size(); i++) {
-        DeleteField deleteName = input.getSelectOption().getDeleteName().get(i);
+    List<DeleteField> deleteFields = input.getSelectOption().getDeleteName();
+    if (!Utils.isEmpty(deleteFields)) {
+      for (int i = 0; i < deleteFields.size(); i++) {
+        DeleteField deleteName = deleteFields.get(i);
         TableItem item = wRemove.table.getItem(i);
         if (deleteName != null) {
           item.setText(1, deleteName.getName());
@@ -629,15 +606,15 @@ public class SelectValuesDialog extends BaseTransformDialog {
       }
       wRemove.setRowNums();
       wRemove.optWidth(true);
-      wTabFolder.setSelection(1);
     }
 
     /*
      * Change the meta-data of certain fields
      */
-    if (!Utils.isEmpty(input.getSelectOption().getMeta())) {
-      for (int i = 0; i < input.getSelectOption().getMeta().size(); i++) {
-        SelectMetadataChange change = input.getSelectOption().getMeta().get(i);
+    List<SelectMetadataChange> meta = input.getSelectOption().getMeta();
+    if (!Utils.isEmpty(meta)) {
+      for (int i = 0; i < meta.size(); i++) {
+        SelectMetadataChange change = meta.get(i);
 
         TableItem item = wMeta.table.getItem(i);
         int index = 1;
@@ -662,13 +639,9 @@ public class SelectValuesDialog extends BaseTransformDialog {
                 ? BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_YES)
                 : BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_NO));
         item.setText(
-            index++,
-            change.getDateFormatLocale() == null ? "" : change.getDateFormatLocale().toString());
+            index++, change.getDateFormatLocale() == null ? "" : change.getDateFormatLocale());
         item.setText(
-            index++,
-            change.getDateFormatTimeZone() == null
-                ? ""
-                : change.getDateFormatTimeZone().toString());
+            index++, change.getDateFormatTimeZone() == null ? "" : change.getDateFormatTimeZone());
         item.setText(
             index++,
             change.isLenientStringToNumber()
@@ -686,11 +659,7 @@ public class SelectValuesDialog extends BaseTransformDialog {
       }
       wMeta.setRowNums();
       wMeta.optWidth(true);
-      wTabFolder.setSelection(2);
     }
-
-    wTransformName.setFocus();
-    wTransformName.selectAll();
   }
 
   private String[] getCharsets() {
@@ -786,16 +755,12 @@ public class SelectValuesDialog extends BaseTransformDialog {
       // If DateFormatLenient is anything but Yes (including blank) then it is false
       change.setDateFormatLenient(
           item.getText(index++)
-                  .equalsIgnoreCase(BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_YES))
-              ? true
-              : false);
+              .equalsIgnoreCase(BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_YES)));
       change.setDateFormatLocale(item.getText(index++));
       change.setDateFormatTimeZone(item.getText(index++));
       change.setLenientStringToNumber(
           item.getText(index++)
-                  .equalsIgnoreCase(BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_YES))
-              ? true
-              : false);
+              .equalsIgnoreCase(BaseMessages.getString(PKG, CONST_SYSTEM_COMBO_YES)));
       change.setEncoding(item.getText(index++));
       change.setDecimalSymbol(item.getText(index++));
       change.setGroupingSymbol(item.getText(index++));
@@ -843,164 +808,157 @@ public class SelectValuesDialog extends BaseTransformDialog {
     }
   }
 
-  /**
-   * Reads in the fields from the previous transforms and from the ONE next transform and opens an
-   * EnterMappingDialog with this information. After the user did the mapping, those information is
-   * put into the Select/Rename table.
-   */
-  private void generateMappings() {
-    if (!bPreviousFieldsLoaded) {
-      BaseDialog.openMessageBox(
-          shell,
-          BaseMessages.getString(PKG, CONST_SELECT_VALUES_DIALOG_COLUMN_INFO_LOADING),
-          BaseMessages.getString(PKG, CONST_SELECT_VALUES_DIALOG_COLUMN_INFO_LOADING),
-          SWT.ICON_ERROR | SWT.OK);
-      return;
-    }
-    if ((wRemove.getItemCount() > 0) || (wMeta.getItemCount() > 0)) {
-      for (int i = 0; i < wRemove.getItemCount(); i++) {
-        String[] columns = wRemove.getItem(i);
-        for (String column : columns) {
-          if (!column.isEmpty()) {
-            BaseDialog.openMessageBox(
-                shell,
-                BaseMessages.getString(PKG, "SelectValuesDialog.DoMapping.NoDeletOrMetaTitle"),
-                BaseMessages.getString(PKG, "SelectValuesDialog.DoMapping.NoDeletOrMeta"),
-                SWT.ICON_ERROR | SWT.OK);
-            return;
-          }
-        }
-      }
-      for (int i = 0; i < wMeta.getItemCount(); i++) {
-        String[] columns = wMeta.getItem(i);
-        for (String col : columns) {
-          if (!col.isEmpty()) {
-            BaseDialog.openMessageBox(
-                shell,
-                BaseMessages.getString(PKG, "SelectValuesDialog.DoMapping.NoDeletOrMetaTitle"),
-                BaseMessages.getString(PKG, "SelectValuesDialog.DoMapping.NoDeletOrMeta"),
-                SWT.ICON_ERROR | SWT.OK);
-            return;
-          }
-        }
-      }
-    }
-
-    IRowMeta nextTransformRequiredFields = null;
-
-    TransformMeta transformMeta = new TransformMeta(transformName, input);
-    List<TransformMeta> nextTransforms = pipelineMeta.findNextTransforms(transformMeta);
-    if (nextTransforms.isEmpty() || nextTransforms.size() > 1) {
-      BaseDialog.openMessageBox(
-          shell,
-          BaseMessages.getString(PKG, "SelectValuesDialog.DoMapping.NoNextTransformTitle"),
-          BaseMessages.getString(PKG, "SelectValuesDialog.DoMapping.NoNextTransform"),
-          SWT.ICON_ERROR | SWT.OK);
-      return;
-    }
-    TransformMeta outputTransformMeta = nextTransforms.get(0);
-    ITransformMeta transformMetaInterface = outputTransformMeta.getTransform();
-    try {
-      nextTransformRequiredFields = transformMetaInterface.getRequiredFields(variables);
-    } catch (HopException e) {
-      logError(BaseMessages.getString(PKG, "SelectValuesDialog.DoMapping.UnableToFindOutput"));
-      nextTransformRequiredFields = new RowMeta();
-    }
-
-    String[] inputNames = new String[prevFields.size()];
-    for (int i = 0; i < prevFields.size(); i++) {
-      IValueMeta value = prevFields.getValueMeta(i);
-      inputNames[i] = value.getName();
-    }
-
-    String[] outputNames = new String[nextTransformRequiredFields.size()];
-    for (int i = 0; i < nextTransformRequiredFields.size(); i++) {
-      outputNames[i] = nextTransformRequiredFields.getValueMeta(i).getName();
-    }
-
-    String[] selectName = new String[wFields.getItemCount()];
-    String[] selectRename = new String[wFields.getItemCount()];
-    for (int i = 0; i < wFields.getItemCount(); i++) {
-      selectName[i] = wFields.getItem(i, 1);
-      selectRename[i] = wFields.getItem(i, 2);
-    }
-
-    List<SourceToTargetMapping> mappings = new ArrayList<>();
-    StringBuilder missingFields = new StringBuilder();
-    for (int i = 0; i < selectName.length; i++) {
-      String valueName = selectName[i];
-      String valueRename = selectRename[i];
-      int inIndex = prevFields.indexOfValue(valueName);
-      if (inIndex < 0) {
-        missingFields.append(Const.CR + "   " + valueName + " --> " + valueRename);
-        continue;
-      }
-      if (null == valueRename || valueRename.equals("")) {
-        valueRename = valueName;
-      }
-      int outIndex = nextTransformRequiredFields.indexOfValue(valueRename);
-      if (outIndex < 0) {
-        missingFields.append(Const.CR + "   " + valueName + " --> " + valueRename);
-        continue;
-      }
-      SourceToTargetMapping mapping = new SourceToTargetMapping(inIndex, outIndex);
-      mappings.add(mapping);
-    }
-    // show a confirm dialog if some misconfiguration was found
-    if (!missingFields.isEmpty()) {
-      int answer =
-          BaseDialog.openMessageBox(
-              shell,
-              BaseMessages.getString(PKG, "SelectValuesDialog.DoMapping.SomeFieldsNotFoundTitle"),
-              BaseMessages.getString(
-                  PKG, "SelectValuesDialog.DoMapping.SomeFieldsNotFound", missingFields.toString()),
-              SWT.ICON_QUESTION | SWT.YES | SWT.NO);
-      boolean goOn = (answer & SWT.YES) != 0;
-      if (!goOn) {
-        return;
-      }
-    }
-    EnterMappingDialog d =
-        new EnterMappingDialog(SelectValuesDialog.this.shell, inputNames, outputNames, mappings);
-    mappings = d.open();
-
-    // mappings == null if the user pressed cancel
-    //
-    if (mappings != null) {
-      wFields.table.removeAll();
-      wFields.table.setItemCount(mappings.size());
-      for (int i = 0; i < mappings.size(); i++) {
-        SourceToTargetMapping mapping = mappings.get(i);
-        TableItem item = wFields.table.getItem(i);
-        item.setText(1, prevFields.getValueMeta(mapping.getSourcePosition()).getName());
-        item.setText(2, outputNames[mapping.getTargetPosition()]);
-      }
-      wFields.setRowNums();
-      wFields.optWidth(true);
-      wTabFolder.setSelection(0);
-    }
-  }
-
   protected void setComboBoxes() {
     // Something was changed in the row.
     //
-    final Map<String, Integer> fields = new HashMap<>();
+    final Map<String, Integer> inputFieldsMap = new HashMap<>();
 
-    // Add the currentMeta fields...
-    fields.putAll(inputFields);
+    // Add the currentMeta fields (original input fields from previous transform)
+    inputFieldsMap.putAll(inputFields);
 
-    Set<String> keySet = fields.keySet();
-    List<String> entries = new ArrayList<>(keySet);
-
-    String[] fieldNames = entries.toArray(new String[entries.size()]);
+    // Prepare field names for Select & Alter tab (always shows ALL original input fields)
+    Set<String> inputKeySet = inputFieldsMap.keySet();
+    List<String> inputEntries = new ArrayList<>(inputKeySet);
+    String[] inputFieldNames = inputEntries.toArray(new String[inputEntries.size()]);
 
     if (PropsUi.getInstance().isSortFieldByName()) {
-      Const.sortStrings(fieldNames);
+      Const.sortStrings(inputFieldNames);
+    }
+
+    // Update Select & Alter tab combo box with original input fields
+    if (selectFieldColumn != null) {
+      selectFieldColumn.setComboValues(inputFieldNames);
+    }
+
+    // Now prepare field names for Remove and Metadata tabs
+    // These tabs should see the output of Select & Alter (with renaming and filtering)
+    final Map<String, Integer> outputFields = new HashMap<>();
+    outputFields.putAll(inputFieldsMap);
+
+    if (wFields != null) {
+      int nrFields = wFields.nrNonEmpty();
+
+      // If there are fields specified in Select & Alter tab
+      if (nrFields > 0) {
+        Map<String, Integer> selectedFields = new HashMap<>();
+
+        for (int i = 0; i < nrFields; i++) {
+          TableItem item = wFields.getNonEmpty(i);
+          String originalName = item.getText(1);
+          String renamedName = item.getText(2);
+
+          // Skip if no field name is specified
+          if (originalName == null || originalName.trim().isEmpty()) {
+            continue;
+          }
+
+          // Determine the output field name (renamed or original)
+          String outputName =
+              (renamedName != null
+                      && !renamedName.trim().isEmpty()
+                      && !renamedName.equals(originalName))
+                  ? renamedName
+                  : originalName;
+
+          // Add the output field name to the available fields for Remove/Metadata tabs
+          if (inputFieldsMap.containsKey(originalName)) {
+            selectedFields.put(outputName, inputFieldsMap.get(originalName));
+          } else {
+            // Field might not exist in input, but add it anyway for combo box
+            selectedFields.put(outputName, i);
+          }
+        }
+
+        // If "Include unspecified fields" is checked, also include non-selected fields
+        if (wUnspecified != null && wUnspecified.getSelection()) {
+          // Add any fields that weren't explicitly selected
+          for (Map.Entry<String, Integer> entry : inputFieldsMap.entrySet()) {
+            boolean alreadySelected = false;
+            for (int i = 0; i < nrFields; i++) {
+              TableItem item = wFields.getNonEmpty(i);
+              String originalName = item.getText(1);
+              if (originalName != null
+                  && !originalName.trim().isEmpty()
+                  && entry.getKey().equals(originalName)) {
+                alreadySelected = true;
+                break;
+              }
+            }
+            if (!alreadySelected) {
+              selectedFields.put(entry.getKey(), entry.getValue());
+            }
+          }
+        }
+
+        // Replace output fields with the selected/renamed fields
+        outputFields.clear();
+        outputFields.putAll(selectedFields);
+      }
+    }
+
+    // Prepare field names for Remove tab (output of Select & Alter)
+    Set<String> outputKeySet = outputFields.keySet();
+    List<String> outputEntries = new ArrayList<>(outputKeySet);
+    String[] outputFieldNames = outputEntries.toArray(new String[outputEntries.size()]);
+
+    if (PropsUi.getInstance().isSortFieldByName()) {
+      Const.sortStrings(outputFieldNames);
+    }
+
+    // Update Remove tab combo boxes with output fields from Select & Alter
+    for (ColumnInfo colInfo : removeFieldColumns) {
+      colInfo.setComboValues(outputFieldNames);
+    }
+
+    // Now prepare field names for Metadata tab (output of Select & Alter minus Remove)
+    final Map<String, Integer> metadataFields = new HashMap<>();
+    metadataFields.putAll(outputFields);
+
+    // Remove any fields that are specified in the Remove tab
+    if (wRemove != null) {
+      int nrRemove = wRemove.nrNonEmpty();
+      for (int i = 0; i < nrRemove; i++) {
+        TableItem item = wRemove.getNonEmpty(i);
+        String removedFieldName = item.getText(1);
+        if (removedFieldName != null && !removedFieldName.trim().isEmpty()) {
+          metadataFields.remove(removedFieldName);
+        }
+      }
+    }
+
+    // Prepare field names for Metadata tab
+    Set<String> metadataKeySet = metadataFields.keySet();
+    List<String> metadataEntries = new ArrayList<>(metadataKeySet);
+    String[] metadataFieldNames = metadataEntries.toArray(new String[metadataEntries.size()]);
+
+    if (PropsUi.getInstance().isSortFieldByName()) {
+      Const.sortStrings(metadataFieldNames);
+    }
+
+    // Update Metadata tab combo boxes with fields remaining after Remove
+    for (ColumnInfo colInfo : metaFieldColumns) {
+      colInfo.setComboValues(metadataFieldNames);
     }
 
     bPreviousFieldsLoaded = true;
-    for (ColumnInfo colInfo : fieldColumns) {
-      colInfo.setComboValues(fieldNames);
+
+    // Force a refresh of the table widgets to ensure combo boxes display updated values
+    // Just redrawing isn't enough - we need to dispose any cached combo editors
+    if (wRemove != null
+        && !wRemove.isDisposed()
+        && wRemove.getEditor() != null
+        && wRemove.getEditor().getEditor() != null
+        && !wRemove.getEditor().getEditor().isDisposed()) {
+      // Dispose the active editor (if any) to force recreation with new values
+      wRemove.getEditor().getEditor().dispose();
+    }
+    if (wMeta != null
+        && !wMeta.isDisposed()
+        && wMeta.getEditor() != null
+        && wMeta.getEditor().getEditor() != null
+        && !wMeta.getEditor().getEditor().isDisposed()) {
+      // Dispose the active editor (if any) to force recreation with new values
+      wMeta.getEditor().getEditor().dispose();
     }
   }
 }

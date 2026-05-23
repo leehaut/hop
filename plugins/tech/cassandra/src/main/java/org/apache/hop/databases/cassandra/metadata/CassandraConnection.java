@@ -20,7 +20,7 @@ package org.apache.hop.databases.cassandra.metadata;
 
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.gui.plugin.GuiElementType;
 import org.apache.hop.core.gui.plugin.GuiPlugin;
@@ -43,7 +43,8 @@ import org.apache.hop.metadata.api.IHopMetadata;
     description = "i18n::CassandraConnection.description",
     image = "Cassandra_logo.svg",
     documentationUrl = "/metadata-types/cassandra/cassandra-connection.html",
-    hopMetadataPropertyType = HopMetadataPropertyType.CASSANDRA_CONNECTION)
+    hopMetadataPropertyType = HopMetadataPropertyType.CASSANDRA_CONNECTION,
+    supportsGlobalReplace = true)
 public class CassandraConnection extends HopMetadataBase implements IHopMetadata {
 
   public static final String WIDGET_ID_HOSTNAME = "10000-hostname";

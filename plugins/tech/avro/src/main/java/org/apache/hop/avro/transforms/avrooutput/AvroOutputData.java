@@ -28,6 +28,7 @@ import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonEncoder;
+import org.apache.hop.core.io.CountingOutputStream;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.pipeline.transform.BaseTransformData;
 import org.apache.hop.pipeline.transform.ITransformData;
@@ -40,6 +41,11 @@ public class AvroOutputData extends BaseTransformData implements ITransformData 
 
   public SimpleDateFormat daf;
   public DateFormatSymbols dafs;
+
+  public CountingOutputStream countingOutputStream;
+
+  /** Resolved data file path for the open Avro output (lineage). */
+  public String outputDataFilename;
 
   public OutputStream writer;
 

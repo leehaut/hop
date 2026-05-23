@@ -19,11 +19,11 @@ package org.apache.hop.ui.testing;
 
 import java.util.Collections;
 import java.util.List;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.database.DatabaseMeta;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.logging.LogChannel;
-import org.apache.hop.core.variables.Variables;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.metadata.api.IHopMetadataProvider;
 import org.apache.hop.testing.PipelineUnitTest;
@@ -31,6 +31,7 @@ import org.apache.hop.testing.PipelineUnitTestDatabaseReplacement;
 import org.apache.hop.testing.VariableValue;
 import org.apache.hop.testing.util.DataSetConst;
 import org.apache.hop.ui.core.PropsUi;
+import org.apache.hop.ui.core.dialog.BaseDialog;
 import org.apache.hop.ui.core.metadata.MetadataEditor;
 import org.apache.hop.ui.core.metadata.MetadataManager;
 import org.apache.hop.ui.core.widget.ColumnInfo;
@@ -45,6 +46,7 @@ import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
+import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Listener;
 import org.eclipse.swt.widgets.TableItem;
@@ -96,7 +98,7 @@ public class PipelineUnitTestEditor extends MetadataEditor<PipelineUnitTest> {
     wName = new Text(parent, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wName);
     FormData fdName = new FormData();
-    fdName.top = new FormAttachment(wlName, 0, SWT.CENTER);
+    fdName.top = new FormAttachment(0, margin);
     fdName.left = new FormAttachment(middle, 0);
     fdName.right = new FormAttachment(100, 0);
     wName.setLayoutData(fdName);
@@ -115,7 +117,7 @@ public class PipelineUnitTestEditor extends MetadataEditor<PipelineUnitTest> {
     wDescription = new Text(parent, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wDescription);
     FormData fdDescription = new FormData();
-    fdDescription.top = new FormAttachment(wlDescription, 0, SWT.CENTER);
+    fdDescription.top = new FormAttachment(lastControl, margin);
     fdDescription.left = new FormAttachment(middle, 0);
     fdDescription.right = new FormAttachment(100, 0);
     wDescription.setLayoutData(fdDescription);
@@ -134,7 +136,7 @@ public class PipelineUnitTestEditor extends MetadataEditor<PipelineUnitTest> {
     wTestType = new Combo(parent, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wTestType);
     FormData fdTestType = new FormData();
-    fdTestType.top = new FormAttachment(wlTestType, 0, SWT.CENTER);
+    fdTestType.top = new FormAttachment(lastControl, margin);
     fdTestType.left = new FormAttachment(middle, 0);
     fdTestType.right = new FormAttachment(100, 0);
     wTestType.setLayoutData(fdTestType);
@@ -152,14 +154,23 @@ public class PipelineUnitTestEditor extends MetadataEditor<PipelineUnitTest> {
     fdlPipelineFilename.left = new FormAttachment(0, 0);
     fdlPipelineFilename.right = new FormAttachment(middle, -margin);
     wlPipelineFilename.setLayoutData(fdlPipelineFilename);
+
+    Button wbPipelineFilename = new Button(parent, SWT.PUSH);
+    PropsUi.setLook(wbPipelineFilename);
+    wbPipelineFilename.setText(BaseMessages.getString(PKG, "PipelineUnitTestDialog.Button.Browse"));
+    FormData fdbPipelineFilename = new FormData();
+    fdbPipelineFilename.right = new FormAttachment(100, 0);
+    fdbPipelineFilename.top = new FormAttachment(lastControl, margin);
+    wbPipelineFilename.setLayoutData(fdbPipelineFilename);
+    wbPipelineFilename.addListener(SWT.Selection, this::browsePipelineFilename);
     wPipelineFilename = new Text(parent, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wPipelineFilename);
     FormData fdPipelineFilename = new FormData();
-    fdPipelineFilename.top = new FormAttachment(wlPipelineFilename, 0, SWT.CENTER);
+    fdPipelineFilename.top = new FormAttachment(lastControl, margin);
     fdPipelineFilename.left = new FormAttachment(middle, 0);
-    fdPipelineFilename.right = new FormAttachment(100, 0);
+    fdPipelineFilename.right = new FormAttachment(wbPipelineFilename, -margin);
     wPipelineFilename.setLayoutData(fdPipelineFilename);
-    lastControl = wPipelineFilename;
+    lastControl = wbPipelineFilename;
 
     // The optional filename of the test result...
     //
@@ -174,7 +185,7 @@ public class PipelineUnitTestEditor extends MetadataEditor<PipelineUnitTest> {
     wFilename = new TextVar(manager.getVariables(), parent, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wFilename);
     FormData fdFilename = new FormData();
-    fdFilename.top = new FormAttachment(wlFilename, 0, SWT.CENTER);
+    fdFilename.top = new FormAttachment(lastControl, margin);
     fdFilename.left = new FormAttachment(middle, 0);
     fdFilename.right = new FormAttachment(100, 0);
     wFilename.setLayoutData(fdFilename);
@@ -190,16 +201,26 @@ public class PipelineUnitTestEditor extends MetadataEditor<PipelineUnitTest> {
     fdlBasePath.left = new FormAttachment(0, 0);
     fdlBasePath.right = new FormAttachment(middle, -margin);
     wlBasePath.setLayoutData(fdlBasePath);
+
+    Button wbBasePath = new Button(parent, SWT.PUSH);
+    PropsUi.setLook(wbBasePath);
+    wbBasePath.setText(BaseMessages.getString(PKG, "PipelineUnitTestDialog.Button.Browse"));
+    FormData fdbBasePath = new FormData();
+    fdbBasePath.right = new FormAttachment(100, 0);
+    fdbBasePath.top = new FormAttachment(lastControl, margin);
+    wbBasePath.setLayoutData(fdbBasePath);
+    wbBasePath.addListener(SWT.Selection, this::browseTestPathDir);
+
     wBasePath = new TextVar(manager.getVariables(), parent, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wBasePath);
     FormData fdBasePath = new FormData();
-    fdBasePath.top = new FormAttachment(wlBasePath, 0, SWT.CENTER);
+    fdBasePath.top = new FormAttachment(lastControl, margin);
     fdBasePath.left = new FormAttachment(middle, 0);
-    fdBasePath.right = new FormAttachment(100, 0);
+    fdBasePath.right = new FormAttachment(wbBasePath, -margin);
     wBasePath.setLayoutData(fdBasePath);
-    lastControl = wBasePath;
+    lastControl = wbBasePath;
 
-    // The base path for relative test path resolution
+    // Auto-open checkbox
     //
     Label wlAutoOpen = new Label(parent, SWT.RIGHT);
     PropsUi.setLook(wlAutoOpen);
@@ -214,21 +235,20 @@ public class PipelineUnitTestEditor extends MetadataEditor<PipelineUnitTest> {
     FormData fdAutoOpen = new FormData();
     fdAutoOpen.top = new FormAttachment(wlAutoOpen, 0, SWT.CENTER);
     fdAutoOpen.left = new FormAttachment(middle, 0);
-    fdAutoOpen.right = new FormAttachment(100, 0);
     wAutoOpen.setLayoutData(fdAutoOpen);
     lastControl = wAutoOpen;
 
     // The list of database replacements in the unit test pipeline
     //
-    Label wlFieldMapping = new Label(parent, SWT.NONE);
-    wlFieldMapping.setText(
+    Label wlDbReplacements = new Label(parent, SWT.NONE);
+    wlDbReplacements.setText(
         BaseMessages.getString(PKG, "PipelineUnitTestDialog.DbReplacements.Label"));
-    PropsUi.setLook(wlFieldMapping);
-    FormData fdlUpIns = new FormData();
-    fdlUpIns.left = new FormAttachment(0, 0);
-    fdlUpIns.top = new FormAttachment(lastControl, 3 * margin);
-    wlFieldMapping.setLayoutData(fdlUpIns);
-    lastControl = wlFieldMapping;
+    PropsUi.setLook(wlDbReplacements);
+    FormData fdlDbReplacements = new FormData();
+    fdlDbReplacements.left = new FormAttachment(0, 0);
+    fdlDbReplacements.top = new FormAttachment(lastControl, 2 * margin);
+    wlDbReplacements.setLayoutData(fdlDbReplacements);
+    lastControl = wlDbReplacements;
 
     // the database replacements
     //
@@ -260,7 +280,7 @@ public class PipelineUnitTestEditor extends MetadataEditor<PipelineUnitTest> {
 
     wDbReplacements =
         new TableView(
-            new Variables(),
+            manager.getVariables(),
             parent,
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI | SWT.V_SCROLL | SWT.H_SCROLL,
             columns,
@@ -272,7 +292,7 @@ public class PipelineUnitTestEditor extends MetadataEditor<PipelineUnitTest> {
     fdDbReplacements.left = new FormAttachment(0, 0);
     fdDbReplacements.top = new FormAttachment(lastControl, margin);
     fdDbReplacements.right = new FormAttachment(100, 0);
-    fdDbReplacements.bottom = new FormAttachment(lastControl, 250);
+    fdDbReplacements.bottom = new FormAttachment(50, -margin);
     wDbReplacements.setLayoutData(fdDbReplacements);
     lastControl = wDbReplacements;
 
@@ -282,7 +302,7 @@ public class PipelineUnitTestEditor extends MetadataEditor<PipelineUnitTest> {
     PropsUi.setLook(wlVariableValues);
     FormData fdlVariableValues = new FormData();
     fdlVariableValues.left = new FormAttachment(0, 0);
-    fdlVariableValues.top = new FormAttachment(lastControl, margin);
+    fdlVariableValues.top = new FormAttachment(lastControl, 2 * margin);
     wlVariableValues.setLayoutData(fdlVariableValues);
     lastControl = wlVariableValues;
 
@@ -304,7 +324,7 @@ public class PipelineUnitTestEditor extends MetadataEditor<PipelineUnitTest> {
 
     wVariableValues =
         new TableView(
-            new Variables(),
+            manager.getVariables(),
             parent,
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI | SWT.V_SCROLL | SWT.H_SCROLL,
             varValColumns,
@@ -318,6 +338,7 @@ public class PipelineUnitTestEditor extends MetadataEditor<PipelineUnitTest> {
     fdVariableValues.right = new FormAttachment(100, 0);
     fdVariableValues.bottom = new FormAttachment(100, -2 * margin);
     wVariableValues.setLayoutData(fdVariableValues);
+    lastControl = wVariableValues;
 
     setWidgetsContent();
 
@@ -333,6 +354,40 @@ public class PipelineUnitTestEditor extends MetadataEditor<PipelineUnitTest> {
     wAutoOpen.addListener(SWT.Selection, listener);
     wDbReplacements.addModifyListener(modifyListener);
     wVariableValues.addModifyListener(modifyListener);
+  }
+
+  private void browsePipelineFilename(Event event) {
+
+    String pipelineFilename = BaseDialog.presentFileDialog(this.getShell(), null, null, false);
+
+    // Set the name to the base folder if the name is empty
+    //
+    try {
+      if (pipelineFilename != null && StringUtils.isEmpty(wPipelineFilename.getText())) {
+        PipelineUnitTest pipelineUnitTest = this.getMetadata();
+        pipelineUnitTest.setRelativeFilename(manager.getVariables(), pipelineFilename);
+        wPipelineFilename.setText(Const.NVL(pipelineUnitTest.getPipelineFilename(), ""));
+      }
+    } catch (Exception e) {
+      LogChannel.UI.logError("Error getting pipelineFilename", e);
+      // Don't change the name
+    }
+  }
+
+  private void browseTestPathDir(Event event) {
+
+    String testPathDir = BaseDialog.presentFileDialog(this.getShell(), null, null, true);
+
+    // Set the name to the base folder if the name is empty
+    //
+    try {
+      if (testPathDir != null && StringUtils.isEmpty(wPipelineFilename.getText())) {
+        wBasePath.setText(Const.NVL(testPathDir, ""));
+      }
+    } catch (Exception e) {
+      LogChannel.UI.logError("Error getting testPathDir", e);
+      // Don't change the name
+    }
   }
 
   @Override

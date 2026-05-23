@@ -16,26 +16,27 @@
  */
 package org.apache.hop.pipeline.transforms.ldapoutput;
 
+import java.util.ArrayList;
 import java.util.List;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.hop.core.CheckResult;
-import org.apache.hop.core.Const;
 import org.apache.hop.core.ICheckResult;
 import org.apache.hop.core.annotations.Transform;
-import org.apache.hop.core.encryption.Encr;
-import org.apache.hop.core.exception.HopXmlException;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
-import org.apache.hop.core.xml.XmlHandler;
 import org.apache.hop.i18n.BaseMessages;
+import org.apache.hop.metadata.api.HopMetadataProperty;
 import org.apache.hop.metadata.api.IHopMetadataProvider;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransformMeta;
 import org.apache.hop.pipeline.transform.TransformMeta;
 import org.apache.hop.pipeline.transforms.ldapinput.ILdapMeta;
 import org.apache.hop.pipeline.transforms.ldapinput.LdapProtocolFactory;
-import org.w3c.dom.Node;
 
+@Getter
+@Setter
 @Transform(
     id = "LDAPOutput",
     name = "i18n::LdapOutput.Name",
@@ -47,48 +48,120 @@ import org.w3c.dom.Node;
 public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData>
     implements ILdapMeta {
   private static final Class<?> PKG = LdapOutputMeta.class;
-  public static final String CONST_SPACES = "        ";
-  public static final String CONST_FIELD = "field";
 
-  /** Flag indicating that we use authentication for connection */
+  /**
+   * Flag indicating that we use authentication for connection
+   *
+   * @return Returns the input useAuthentication.
+   * @param useAuthentication The useAuthentication to set.
+   */
+  @HopMetadataProperty(key = "useauthentication")
   private boolean useAuthentication;
 
-  /** The Host name */
+  /**
+   * The Host name
+   *
+   * @param host The host to set.
+   */
+  @HopMetadataProperty(key = "host")
   private String host;
 
-  /** The User name */
+  /**
+   * The User name
+   *
+   * @return Returns the user name.
+   * @param userName The username to set.
+   */
+  @HopMetadataProperty(key = "username")
   private String userName;
 
-  /** The Password to use in LDAP authentication */
+  /**
+   * The Password to use in LDAP authentication
+   *
+   * @param password The password to set.
+   * @return Returns the password.
+   */
+  @HopMetadataProperty(key = "password", password = true)
   private String password;
 
-  /** The Port */
+  /**
+   * The Port
+   *
+   * @param port The port to set.
+   */
+  @HopMetadataProperty(key = "port")
+  @Getter
   private String port;
 
   /** The name of DN field */
+  @HopMetadataProperty(key = "dnFieldName")
+  @Getter
+  @Setter
   private String dnFieldName;
 
+  /**
+   * @return Returns the failIfNotExist.
+   * @param failIfNotExist The failIfNotExist to set.
+   */
+  @HopMetadataProperty(key = "failIfNotExist")
   private boolean failIfNotExist;
 
-  /** Field value to update */
-  private String[] updateLookup;
+  /** Fields array - replaces String[] updateLookup, updateStream, Boolean[] update */
+  @HopMetadataProperty(groupKey = "fields", key = "field")
+  private List<LdapOutputField> fields;
 
-  /** Stream name to update value with */
-  private String[] updateStream;
+  /** For metadata serialization: get the fields list. */
+  public List<LdapOutputField> getFields() {
+    return fields != null ? fields : new ArrayList<>();
+  }
 
-  /** boolean indicating if field needs to be updated */
-  private Boolean[] update;
+  /** For metadata serialization: set the fields list. */
+  public void setFields(List<LdapOutputField> fields) {
+    this.fields = fields != null ? new ArrayList<>(fields) : new ArrayList<>();
+  }
 
-  /** Operations type */
+  /**
+   * Operations type
+   *
+   * @param searchBase The searchBase filed.
+   * @return Returns the searchBase.
+   */
+  @HopMetadataProperty(key = "searchBase")
   private String searchBase;
 
-  /** Multi valued separator */
+  /**
+   * Multi valued separator
+   *
+   * @param multiValuedSeparator The multi-valued separator filed.
+   * @return Returns the multi valued separator.
+   */
+  @HopMetadataProperty(key = "multivaluedseparator")
   private String multiValuedSeparator;
 
+  @HopMetadataProperty(
+      key = "operationType",
+      intCodeConverter = LdapOutputOperationTypeConverter.class)
   private int operationType;
 
+  /**
+   * @param value The oldDnFieldName filed.
+   * @return Returns the oldDnFieldName.
+   */
+  @HopMetadataProperty(key = "oldDnFieldName")
   private String oldDnFieldName;
+
+  /**
+   * @param value The newDnFieldName filed.
+   * @return Returns the newDnFieldName.
+   */
+  @HopMetadataProperty(key = "newDnFieldName")
   private String newDnFieldName;
+
+  /**
+   * @param value The deleteRDN filed.
+   * @return Returns the deleteRDN.
+   */
+  @HopMetadataProperty(key = "deleteRDN")
   private boolean deleteRDN;
 
   /** The operations description */
@@ -98,14 +171,15 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
     BaseMessages.getString(PKG, "LdapOutputMeta.operationType.Update"),
     BaseMessages.getString(PKG, "LdapOutputMeta.operationType.Add"),
     BaseMessages.getString(PKG, "LdapOutputMeta.operationType.Delete"),
-    BaseMessages.getString(PKG, "LdapOutputMeta.operationType.Rename")
+    BaseMessages.getString(PKG, "LdapOutputMeta.operationType.Rename"),
+    BaseMessages.getString(PKG, "LdapOutputMeta.operationType.RemoveAttribute")
   };
 
   public static final String CONST_UPDATE = "update";
 
   /** The operations type codes */
   static final String[] operationTypeCode = {
-    "insert", "upsert", CONST_UPDATE, "add", "delete", "rename"
+    "insert", "upsert", CONST_UPDATE, "add", "delete", "rename", "remove_attribute"
   };
 
   public static final int OPERATION_TYPE_INSERT = 0;
@@ -120,6 +194,11 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
 
   public static final int OPERATION_TYPE_RENAME = 5;
 
+  public static final int OPERATION_TYPE_REMOVE_ATTRIBUTE = 6;
+
+  @HopMetadataProperty(
+      key = "referralType",
+      intCodeConverter = LdapOutputReferralTypeConverter.class)
   private int referralType;
 
   /** The referrals description */
@@ -135,6 +214,9 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
 
   public static final int REFERRAL_TYPE_IGNORE = 1;
 
+  @HopMetadataProperty(
+      key = "derefAliasesType",
+      intCodeConverter = LdapOutputDerefAliasesTypeConverter.class)
   private int derefAliasesType;
 
   /** The derefAliasess description */
@@ -150,24 +232,32 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
 
   public static final int DEREFALIASES_TYPE_ALWAYS = 0;
 
-  public static final int DEREFALIASES_TYPE_NEVER = 1;
-
-  public static final int DEREFALIASES_TYPE_SEARCHING = 2;
-
-  public static final int DEREFALIASES_TYPE_FINDING = 3;
-
   /** Protocol */
+  @HopMetadataProperty(key = "protocol")
   private String protocol;
 
   /** Trust store */
+  @HopMetadataProperty(key = "useCertificate")
   private boolean useCertificate;
 
+  /**
+   * @param value the trustStorePath to set.
+   */
+  @HopMetadataProperty(key = "trustStorePath")
   private String trustStorePath;
+
+  /**
+   * @param value the trustStorePassword to set.
+   */
+  @HopMetadataProperty(key = "trustStorePassword", password = true)
   private String trustStorePassword;
+
+  @HopMetadataProperty(key = "trustAllCertificates")
   private boolean trustAllCertificates;
 
   public LdapOutputMeta() {
     super(); // allocate BaseTransformMeta
+    this.fields = new ArrayList<>();
   }
 
   /**
@@ -178,20 +268,12 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
     return useCertificate;
   }
 
-  public void setUseCertificate(boolean value) {
-    this.useCertificate = value;
-  }
-
   /**
    * @return Returns the input trustAllCertificates.
    */
   @Override
   public boolean isTrustAllCertificates() {
     return trustAllCertificates;
-  }
-
-  public void setTrustAllCertificates(boolean value) {
-    this.trustAllCertificates = value;
   }
 
   /**
@@ -203,25 +285,11 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
   }
 
   /**
-   * @param value the trustStorePassword to set.
-   */
-  public void setTrustStorePassword(String value) {
-    this.trustStorePassword = value;
-  }
-
-  /**
    * @return Returns the trustStorePath.
    */
   @Override
   public String getTrustStorePath() {
     return trustStorePath;
-  }
-
-  /**
-   * @param value the trustStorePath to set.
-   */
-  public void setTrustStorePath(String value) {
-    this.trustStorePath = value;
   }
 
   /**
@@ -232,31 +300,22 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
     return protocol;
   }
 
-  /**
-   * @param value the protocol to set.
-   */
-  public void setProtocol(String value) {
-    this.protocol = value;
-  }
-
   public Boolean[] getUpdate() {
-    return update;
+    if (fields == null) return new Boolean[0];
+    return fields.stream().map(LdapOutputField::isUpdate).toArray(Boolean[]::new);
   }
 
   public void setUpdate(Boolean[] update) {
-    this.update = update;
-  }
-
-  public int getOperationType() {
-    return operationType;
-  }
-
-  public int getReferralType() {
-    return referralType;
-  }
-
-  public int getDerefAliasesType() {
-    return derefAliasesType;
+    if (fields == null) {
+      allocate(update != null ? update.length : 0);
+    }
+    for (int i = 0; i < update.length; i++) {
+      if (i < fields.size()) {
+        fields.get(i).setUpdate(update[i]);
+      } else {
+        fields.add(new LdapOutputField(null, null, update[i]));
+      }
+    }
   }
 
   public static int getOperationTypeByDesc(String tt) {
@@ -301,7 +360,7 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
     return getReferralTypeByCode(tt);
   }
 
-  private static int getOperationTypeByCode(String tt) {
+  public static int getOperationTypeByCode(String tt) {
     if (tt == null) {
       return 0;
     }
@@ -314,7 +373,7 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
     return 0;
   }
 
-  private static int getReferralTypeByCode(String tt) {
+  public static int getReferralTypeByCode(String tt) {
     if (tt == null) {
       return 0;
     }
@@ -327,7 +386,7 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
     return 0;
   }
 
-  private static int getDerefAliasesTypeByCode(String tt) {
+  public static int getDerefAliasesTypeByCode(String tt) {
     if (tt == null) {
       return 0;
     }
@@ -338,18 +397,6 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
       }
     }
     return 0;
-  }
-
-  public void setOperationType(int operationType) {
-    this.operationType = operationType;
-  }
-
-  public void setReferralType(int value) {
-    this.referralType = value;
-  }
-
-  public void setDerefAliasesType(int value) {
-    this.derefAliasesType = value;
   }
 
   public static String getOperationTypeDesc(int i) {
@@ -377,42 +424,54 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
    * @return Returns the updateStream.
    */
   public String[] getUpdateStream() {
-    return updateStream;
+    if (fields == null) return new String[0];
+    return fields.stream().map(LdapOutputField::getUpdateStream).toArray(String[]::new);
   }
 
   /**
    * @param updateStream The updateStream to set.
    */
   public void setUpdateStream(String[] updateStream) {
-    this.updateStream = updateStream;
+    if (fields == null) {
+      allocate(updateStream != null ? updateStream.length : 0);
+    }
+    for (int i = 0; i < updateStream.length; i++) {
+      if (i < fields.size()) {
+        fields.get(i).setUpdateStream(updateStream[i]);
+      } else {
+        fields.add(new LdapOutputField(null, updateStream[i], null));
+      }
+    }
   }
 
   /**
    * @return Returns the updateLookup.
    */
   public String[] getUpdateLookup() {
-    return updateLookup;
+    if (fields == null) return new String[0];
+    return fields.stream().map(LdapOutputField::getUpdateLookup).toArray(String[]::new);
   }
 
   /**
    * @param updateLookup The updateLookup to set.
    */
   public void setUpdateLookup(String[] updateLookup) {
-    this.updateLookup = updateLookup;
-  }
-
-  /**
-   * @return Returns the input useAuthentication.
-   */
-  public boolean isUseAuthentication() {
-    return useAuthentication;
-  }
-
-  /**
-   * @param useAuthentication The useAuthentication to set.
-   */
-  public void setUseAuthentication(boolean useAuthentication) {
-    this.useAuthentication = useAuthentication;
+    if (fields == null) {
+      allocate(updateLookup != null ? updateLookup.length : 0);
+    }
+    for (int i = 0; i < updateLookup.length; i++) {
+      if (i < fields.size()) {
+        fields.get(i).setUpdateLookup(updateLookup[i]);
+      } else {
+        LdapOutputField field = new LdapOutputField();
+        field.setUpdateLookup(updateLookup[i]);
+        // Default: the same name!
+        if (field.getUpdateStream() == null) {
+          field.setUpdateStream(updateLookup[i]);
+        }
+        fields.add(field);
+      }
+    }
   }
 
   /**
@@ -423,41 +482,6 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
     return host;
   }
 
-  /**
-   * @param host The host to set.
-   */
-  public void setHost(String host) {
-    this.host = host;
-  }
-
-  /**
-   * @return Returns the user name.
-   */
-  public String getUserName() {
-    return userName;
-  }
-
-  /**
-   * @param userName The username to set.
-   */
-  public void setUserName(String userName) {
-    this.userName = userName;
-  }
-
-  /**
-   * @param password The password to set.
-   */
-  public void setPassword(String password) {
-    this.password = password;
-  }
-
-  /**
-   * @return Returns the password.
-   */
-  public String getPassword() {
-    return password;
-  }
-
   public void setDnField(String value) {
     this.dnFieldName = value;
   }
@@ -466,131 +490,30 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
     return this.dnFieldName;
   }
 
-  /**
-   * @return Returns the Port.
-   */
-  @Override
-  public String getPort() {
-    return port;
-  }
-
-  /**
-   * @param port The port to set.
-   */
-  public void setPort(String port) {
-    this.port = port;
-  }
-
-  /**
-   * @return Returns the failIfNotExist.
-   */
-  public boolean isFailIfNotExist() {
-    return failIfNotExist;
-  }
-
-  /**
-   * @param failIfNotExist The failIfNotExist to set.
-   */
-  public void setFailIfNotExist(boolean failIfNotExist) {
-    this.failIfNotExist = failIfNotExist;
-  }
-
-  @Override
-  public void loadXml(Node transformNode, IHopMetadataProvider metadataProvider)
-      throws HopXmlException {
-    readData(transformNode);
-  }
-
   @Override
   public Object clone() {
     LdapOutputMeta retval = (LdapOutputMeta) super.clone();
-    int nrvalues = updateLookup.length;
-
-    retval.allocate(nrvalues);
-    System.arraycopy(updateLookup, 0, retval.updateLookup, 0, nrvalues);
-    System.arraycopy(updateStream, 0, retval.updateStream, 0, nrvalues);
-    System.arraycopy(update, 0, retval.update, 0, nrvalues);
-
+    if (fields != null) {
+      retval.fields = new ArrayList<>();
+      for (LdapOutputField field : fields) {
+        retval.fields.add(
+            new LdapOutputField(
+                field.getUpdateLookup(), field.getUpdateStream(), field.isUpdate()));
+      }
+    } else {
+      retval.fields = new ArrayList<>();
+    }
     return retval;
   }
 
-  /**
-   * @param value The deleteRDN filed.
-   */
-  public void setDeleteRDN(boolean value) {
-    this.deleteRDN = value;
-  }
-
-  /**
-   * @return Returns the deleteRDN.
-   */
-  public boolean isDeleteRDN() {
-    return deleteRDN;
-  }
-
-  /**
-   * @param value The newDnFieldName filed.
-   */
-  public void setNewDnFieldName(String value) {
-    this.newDnFieldName = value;
-  }
-
-  /**
-   * @return Returns the newDnFieldName.
-   */
-  public String getNewDnFieldName() {
-    return newDnFieldName;
-  }
-
-  /**
-   * @param value The oldDnFieldName filed.
-   */
-  public void setOldDnFieldName(String value) {
-    this.oldDnFieldName = value;
-  }
-
-  /**
-   * @return Returns the oldDnFieldName.
-   */
-  public String getOldDnFieldName() {
-    return oldDnFieldName;
-  }
-
-  /**
-   * @param searchBase The searchBase filed.
-   */
-  public void setSearchBaseDN(String searchBase) {
-    this.searchBase = searchBase;
-  }
-
-  /**
-   * @return Returns the searchBase.
-   */
-  public String getSearchBaseDN() {
-    return searchBase;
-  }
-
-  /**
-   * @param multiValuedSeparator The multi-valued separator filed.
-   */
-  public void setMultiValuedSeparator(String multiValuedSeparator) {
-    this.multiValuedSeparator = multiValuedSeparator;
-  }
-
-  /**
-   * @return Returns the multi valued separator.
-   */
-  public String getMultiValuedSeparator() {
-    return multiValuedSeparator;
-  }
-
   public void allocate(int nrvalues) {
-    updateLookup = new String[nrvalues];
-    updateStream = new String[nrvalues];
-    update = new Boolean[nrvalues];
+    fields = new ArrayList<>(nrvalues);
+    for (int i = 0; i < nrvalues; i++) {
+      fields.add(new LdapOutputField());
+    }
   }
 
-  private static String getOperationTypeCode(int i) {
+  public static String getOperationTypeCode(int i) {
     if (i < 0 || i >= operationTypeCode.length) {
       return operationTypeCode[0];
     }
@@ -612,139 +535,6 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
   }
 
   @Override
-  public String getXml() {
-    StringBuilder retval = new StringBuilder(500);
-
-    retval.append("    ").append(XmlHandler.addTagValue("useauthentication", useAuthentication));
-    retval.append("    ").append(XmlHandler.addTagValue("host", host));
-    retval.append("    ").append(XmlHandler.addTagValue("username", userName));
-    retval
-        .append("    ")
-        .append(
-            XmlHandler.addTagValue("password", Encr.encryptPasswordIfNotUsingVariables(password)));
-    retval.append("    ").append(XmlHandler.addTagValue("port", port));
-    retval.append("    ").append(XmlHandler.addTagValue("dnFieldName", dnFieldName));
-    retval.append("    ").append(XmlHandler.addTagValue("failIfNotExist", failIfNotExist));
-    retval
-        .append("    ")
-        .append(XmlHandler.addTagValue("operationType", getOperationTypeCode(operationType)));
-    retval
-        .append("    ")
-        .append(XmlHandler.addTagValue("multivaluedseparator", multiValuedSeparator));
-    retval.append("    ").append(XmlHandler.addTagValue("searchBase", searchBase));
-    retval
-        .append("    ")
-        .append(XmlHandler.addTagValue("referralType", getReferralTypeCode(referralType)));
-    retval
-        .append("    ")
-        .append(XmlHandler.addTagValue("derefAliasesType", getDerefAliasesCode(derefAliasesType)));
-
-    retval.append("    ").append(XmlHandler.addTagValue("oldDnFieldName", oldDnFieldName));
-    retval.append("    ").append(XmlHandler.addTagValue("newDnFieldName", newDnFieldName));
-    retval.append("    ").append(XmlHandler.addTagValue("deleteRDN", deleteRDN));
-
-    retval.append("    <fields>" + Const.CR);
-
-    for (int i = 0; i < updateLookup.length; i++) {
-      retval.append("      <field>").append(Const.CR);
-      retval.append(CONST_SPACES).append(XmlHandler.addTagValue("name", updateLookup[i]));
-      retval.append(CONST_SPACES).append(XmlHandler.addTagValue(CONST_FIELD, updateStream[i]));
-      retval
-          .append(CONST_SPACES)
-          .append(XmlHandler.addTagValue(CONST_UPDATE, update[i].booleanValue()));
-      retval.append("      </field>").append(Const.CR);
-    }
-
-    retval.append("      </fields>" + Const.CR);
-    retval.append("    ").append(XmlHandler.addTagValue("protocol", protocol));
-    retval.append("    ").append(XmlHandler.addTagValue("trustStorePath", trustStorePath));
-    retval
-        .append("    ")
-        .append(
-            XmlHandler.addTagValue(
-                "trustStorePassword", Encr.encryptPasswordIfNotUsingVariables(trustStorePassword)));
-    retval
-        .append("    ")
-        .append(XmlHandler.addTagValue("trustAllCertificates", trustAllCertificates));
-    retval.append("    ").append(XmlHandler.addTagValue("useCertificate", useCertificate));
-
-    return retval.toString();
-  }
-
-  private void readData(Node transformNode) throws HopXmlException {
-    try {
-
-      useAuthentication =
-          "Y".equalsIgnoreCase(XmlHandler.getTagValue(transformNode, "useauthentication"));
-      host = XmlHandler.getTagValue(transformNode, "host");
-      userName = XmlHandler.getTagValue(transformNode, "username");
-      setPassword(
-          Encr.decryptPasswordOptionallyEncrypted(
-              XmlHandler.getTagValue(transformNode, "password")));
-
-      port = XmlHandler.getTagValue(transformNode, "port");
-      dnFieldName = XmlHandler.getTagValue(transformNode, "dnFieldName");
-      failIfNotExist =
-          "Y".equalsIgnoreCase(XmlHandler.getTagValue(transformNode, "failIfNotExist"));
-      operationType =
-          getOperationTypeByCode(
-              Const.NVL(XmlHandler.getTagValue(transformNode, "operationType"), ""));
-      multiValuedSeparator = XmlHandler.getTagValue(transformNode, "multivaluedseparator");
-      searchBase = XmlHandler.getTagValue(transformNode, "searchBase");
-      referralType =
-          getReferralTypeByCode(
-              Const.NVL(XmlHandler.getTagValue(transformNode, "referralType"), ""));
-      derefAliasesType =
-          getDerefAliasesTypeByCode(
-              Const.NVL(XmlHandler.getTagValue(transformNode, "derefAliasesType"), ""));
-
-      oldDnFieldName = XmlHandler.getTagValue(transformNode, "oldDnFieldName");
-      newDnFieldName = XmlHandler.getTagValue(transformNode, "newDnFieldName");
-      deleteRDN = "Y".equalsIgnoreCase(XmlHandler.getTagValue(transformNode, "deleteRDN"));
-
-      Node fields = XmlHandler.getSubNode(transformNode, "fields");
-      int nrFields = XmlHandler.countNodes(fields, CONST_FIELD);
-
-      allocate(nrFields);
-
-      for (int i = 0; i < nrFields; i++) {
-        Node fnode = XmlHandler.getSubNodeByNr(fields, CONST_FIELD, i);
-
-        updateLookup[i] = XmlHandler.getTagValue(fnode, "name");
-        updateStream[i] = XmlHandler.getTagValue(fnode, CONST_FIELD);
-        if (updateStream[i] == null) {
-          updateStream[i] = updateLookup[i]; // default: the same name!
-        }
-        String updateValue = XmlHandler.getTagValue(fnode, CONST_UPDATE);
-        if (updateValue == null) {
-          // default TRUE
-          update[i] = Boolean.TRUE;
-        } else {
-          if (updateValue.equalsIgnoreCase("Y")) {
-            update[i] = Boolean.TRUE;
-          } else {
-            update[i] = Boolean.FALSE;
-          }
-        }
-      }
-
-      protocol = XmlHandler.getTagValue(transformNode, "protocol");
-      trustStorePath = XmlHandler.getTagValue(transformNode, "trustStorePath");
-      trustStorePassword =
-          Encr.decryptPasswordOptionallyEncrypted(
-              XmlHandler.getTagValue(transformNode, "trustStorePassword"));
-      trustAllCertificates =
-          "Y".equalsIgnoreCase(XmlHandler.getTagValue(transformNode, "trustAllCertificates"));
-      useCertificate =
-          "Y".equalsIgnoreCase(XmlHandler.getTagValue(transformNode, "useCertificate"));
-
-    } catch (Exception e) {
-      throw new HopXmlException(
-          BaseMessages.getString(PKG, "LdapOutputMeta.UnableToLoadFromXML"), e);
-    }
-  }
-
-  @Override
   public void setDefault() {
     useAuthentication = false;
     host = "";
@@ -759,14 +549,7 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
     newDnFieldName = null;
     deleteRDN = true;
 
-    int nrFields = 0;
-    allocate(nrFields);
-
-    for (int i = 0; i < nrFields; i++) {
-      updateLookup[i] = "name" + (i + 1);
-      updateStream[i] = CONST_FIELD + (i + 1);
-      update[i] = Boolean.TRUE;
-    }
+    fields = new ArrayList<>();
     operationType = OPERATION_TYPE_INSERT;
     referralType = REFERRAL_TYPE_FOLLOW;
     derefAliasesType = DEREFALIASES_TYPE_ALWAYS;
@@ -824,18 +607,20 @@ public class LdapOutputMeta extends BaseTransformMeta<LdapOutput, LdapOutputData
     remarks.add(cr);
 
     // check return fields
-    if (updateLookup.length == 0) {
+    if (fields == null || fields.isEmpty()) {
       cr =
           new CheckResult(
               ICheckResult.TYPE_RESULT_ERROR,
               BaseMessages.getString(PKG, "LdapOutputUpdateMeta.CheckResult.NoFields"),
               transformMeta);
+      remarks.add(cr);
     } else {
       cr =
           new CheckResult(
               ICheckResult.TYPE_RESULT_OK,
               BaseMessages.getString(PKG, "LdapOutputUpdateMeta.CheckResult.FieldsOk"),
               transformMeta);
+      remarks.add(cr);
     }
   }
 

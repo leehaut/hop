@@ -18,7 +18,7 @@ package org.apache.hop.pipeline.transforms.monetdbbulkloader;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.DbCache;
 import org.apache.hop.core.Props;
@@ -71,7 +71,6 @@ import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.TableItem;
-import org.eclipse.swt.widgets.Text;
 
 public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
   private static final Class<?> PKG =
@@ -144,11 +143,9 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "MonetDBBulkLoaderDialog.Shell.Title"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).sql(e -> create()).cancel(e -> cancel()).build();
 
     ModifyListener lsMod = e -> input.setChanged();
     FocusListener lsFocusLost =
@@ -160,50 +157,13 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
         };
     changed = input.hasChanged();
 
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "MonetDBBulkLoaderDialog.Shell.Title"));
-
-    // The right side of all the labels is available as a user-defined percentage:
-    // props.getMiddlePct()
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin(); // Default 4 pixel margin around components.
-
-    //
-    // OK (Button), Cancel (Button) and SQL (Button)
-    // - these appear at the bottom of the dialog window.
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wSql = new Button(shell, SWT.PUSH);
-    wSql.setText(BaseMessages.getString(PKG, "MonetDBBulkLoaderDialog.SQL.Button"));
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    setButtonPositions(new Button[] {wOk, wSql, wCancel}, margin, null);
-
     //
     // Dialog Box Contents (Organized from dialog top to bottom, dialog left to right.)
-    // Label - Transform name
-
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(
-        BaseMessages.getString(PKG, "MonetDBBulkLoaderDialog.Transformname.Label"));
-    PropsUi.setLook(
-        wlTransformName); // Puts the user-selected background color and font on the widget.
-
-    // Text box for editing the transform name
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-
     //
     // Connection line
     //
     // Connection line
-    wConnection = addConnectionLine(shell, wTransformName, input.getDatabaseMeta(), lsMod);
+    wConnection = addConnectionLine(shell, wSpacer, input.getDbConnectionName(), lsMod);
 
     // //////////////////////////////////////////////
     // Prepare the Folder that will contain tabs. //
@@ -340,6 +300,8 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
     //
     Label wlTruncate = new Label(wGeneralSettingsComp, SWT.RIGHT);
     wlTruncate.setText(BaseMessages.getString(PKG, "MonetDBBulkLoaderDialog.Truncate.Label"));
+    wlTruncate.setToolTipText(
+        BaseMessages.getString(PKG, "MonetDBBulkLoaderDialog.Truncate.Tooltip"));
     PropsUi.setLook(wlTruncate);
     wTruncate = new Button(wGeneralSettingsComp, SWT.CHECK);
     PropsUi.setLook(wTruncate);
@@ -360,16 +322,19 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
     Label wlFullyQuoteSQL = new Label(wGeneralSettingsComp, SWT.RIGHT);
     wlFullyQuoteSQL.setText(
         BaseMessages.getString(PKG, "MonetDBBulkLoaderDialog.FullyQuoteSQL.Label"));
+    wlFullyQuoteSQL.setToolTipText(
+        BaseMessages.getString(PKG, "MonetDBBulkLoaderDialog.FullyQuoteSQL.Tooltip"));
     PropsUi.setLook(wlFullyQuoteSQL);
 
     wFullyQuoteSQL = new Button(wGeneralSettingsComp, SWT.CHECK);
     PropsUi.setLook(wFullyQuoteSQL);
+    DatabaseMeta databaseMeta = pipelineMeta.findDatabase(wConnection.getText(), variables);
     SelectionAdapter lsFullyQuoteSQL =
         new SelectionAdapter() {
           @Override
           public void widgetSelected(SelectionEvent arg0) {
             input.setChanged();
-            input.getDatabaseMeta().setQuoteAllFields(wFullyQuoteSQL.getSelection());
+            databaseMeta.setQuoteAllFields(wFullyQuoteSQL.getSelection());
           }
         };
     wFullyQuoteSQL.addSelectionListener(lsFullyQuoteSQL);
@@ -444,7 +409,7 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
     PropsUi.setLook(wlReturn);
 
     int upInsCols = 3;
-    int upInsRows = (input.getFieldTable() != null ? input.getFieldTable().length : 1);
+    int upInsRows = (input.getFields() != null ? input.getFields().size() : 1);
 
     ciReturn = new ColumnInfo[upInsCols];
     ciReturn[0] =
@@ -506,23 +471,6 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
     // widget within the layout.
 
     //
-    // Transform name (Label and Edit Box)
-    // - Location: top of the dialog box
-    //
-    fdlTransformName = new FormData();
-    fdlTransformName.top = new FormAttachment(0, 15);
-    fdlTransformName.left = new FormAttachment(0, margin);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-
-    fdTransformName = new FormData();
-    fdTransformName.top = new FormAttachment(wlTransformName, 0, SWT.CENTER);
-    fdTransformName.left = new FormAttachment(wlTransformName, margin);
-    fdTransformName.right =
-        new FormAttachment(100, -margin); // 100% of the form component (length of edit box)
-    wTransformName.setLayoutData(fdTransformName);
-
-    //
     // Tabs will appear below the "Transform Name" area and above the buttons at the bottom of the
     // dialog.
     //
@@ -530,15 +478,15 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
     fdTabFolder.left = new FormAttachment(0, 0);
     fdTabFolder.top = new FormAttachment(wConnection, margin + 20);
     fdTabFolder.right = new FormAttachment(100, 0);
-    fdTabFolder.bottom = new FormAttachment(wOk, -2 * margin);
+    fdTabFolder.bottom = new FormAttachment(wOk, -margin);
     wTabFolder.setLayoutData(fdTabFolder);
 
     // Database Schema Line - (General Settings Tab)
     //
-    // Database Schema (Label layout)
+    // Database Schema (Label layout) - first row: attach to top of tab composite
     FormData fdlSchema = new FormData();
-    fdlSchema.top = new FormAttachment(wTabFolder, margin);
-    fdlSchema.left = new FormAttachment(wGeneralSettingsComp, margin);
+    fdlSchema.top = new FormAttachment(0, margin);
+    fdlSchema.left = new FormAttachment(0, margin);
     fdlSchema.right = new FormAttachment(middle, -margin);
     wlSchema.setLayoutData(fdlSchema);
 
@@ -552,25 +500,21 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
     // Target Table Line - (General Settings Tab)
     //
     // Target table (Label layout)
-    // - tied to the left wall of the general settings tab (composite)
     FormData fdlTable = new FormData();
     fdlTable.top = new FormAttachment(wSchema, margin);
     fdlTable.left = new FormAttachment(0, margin);
     fdlTable.right = new FormAttachment(middle, -margin);
     wlTable.setLayoutData(fdlTable);
 
-    // Target table browse (Button layout)
-    // - tied to the right wall of the general settings tab (composite)
+    // Target table Browse button - right edge, vertically centered with label
     FormData fdbTable = new FormData();
     fdbTable.top = new FormAttachment(wlTable, 0, SWT.CENTER);
-    fdbTable.right = new FormAttachment(100, -margin);
+    fdbTable.right = new FormAttachment(100, 0);
     wbTable.setLayoutData(fdbTable);
 
-    // Target table (Edit box layout)
-    // Between the label and button.
-    // - tied to the right edge of the general Browse tables button
+    // Target table (Edit box) - between label and browse button
     FormData fdTable = new FormData();
-    fdTable.top = new FormAttachment(wSchema, margin);
+    fdTable.top = new FormAttachment(wlTable, 0, SWT.CENTER);
     fdTable.left = new FormAttachment(middle, 0);
     fdTable.right = new FormAttachment(wbTable, -margin);
     wTable.setLayoutData(fdTable);
@@ -594,20 +538,20 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
     fdlLogFile.right = new FormAttachment(middle, -margin);
     wlLogFile.setLayoutData(fdlLogFile);
 
-    // Log file Browse (button)
+    // Log file Browse button - right edge, vertically centered with label
     FormData fdbLogFile = new FormData();
-    fdbLogFile.top = new FormAttachment(wBufferSize, 0);
-    fdbLogFile.right = new FormAttachment(100, -margin);
+    fdbLogFile.top = new FormAttachment(wlLogFile, 0, SWT.CENTER);
+    fdbLogFile.right = new FormAttachment(100, 0);
     wbLogFile.setLayoutData(fdbLogFile);
 
     FormData fdLogFile = new FormData();
     fdLogFile.left = new FormAttachment(middle, 0);
-    fdLogFile.top = new FormAttachment(wBufferSize, margin);
+    fdLogFile.top = new FormAttachment(wlLogFile, 0, SWT.CENTER);
     fdLogFile.right = new FormAttachment(wbLogFile, -margin);
     wLogFile.setLayoutData(fdLogFile);
 
     FormData fdlTruncate = new FormData();
-    fdlTruncate.top = new FormAttachment(wLogFile, margin * 2);
+    fdlTruncate.top = new FormAttachment(wLogFile, margin);
     fdlTruncate.left = new FormAttachment(0, margin);
     fdlTruncate.right = new FormAttachment(middle, -margin);
     wlTruncate.setLayoutData(fdlTruncate);
@@ -619,7 +563,7 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
     wTruncate.setLayoutData(fdTruncate);
 
     FormData fdlFullyQuoteSQL = new FormData();
-    fdlFullyQuoteSQL.top = new FormAttachment(wlTruncate, margin * 2);
+    fdlFullyQuoteSQL.top = new FormAttachment(wlTruncate, margin);
     fdlFullyQuoteSQL.left = new FormAttachment(0, margin);
     fdlFullyQuoteSQL.right = new FormAttachment(middle, -margin);
     wlFullyQuoteSQL.setLayoutData(fdlFullyQuoteSQL);
@@ -634,106 +578,97 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
     //
 
     //
-    // mclient parameter grouping (Group composite)
-    // - Visually we make it clear what is being fed to mclient as parameters.
+    // mclient parameter grouping (Group composite) - attach to top of tab composite
     FormData fdgMonetDBmclientParamGroup = new FormData();
-    fdgMonetDBmclientParamGroup.top = new FormAttachment(wMonetDBmclientSettingsComp, margin * 3);
+    fdgMonetDBmclientParamGroup.top = new FormAttachment(0, margin * 3);
     fdgMonetDBmclientParamGroup.left = new FormAttachment(0, margin);
     fdgMonetDBmclientParamGroup.right = new FormAttachment(100, -margin);
     wMonetDBmclientParamGroup.setLayoutData(fdgMonetDBmclientParamGroup);
 
-    // Figure out font width in pixels, then set the combo boxes to a standard width of 20
-    // characters.
-    Text text = new Text(shell, SWT.NONE);
-    GC gc = new GC(text);
+    // Combo width: ~20 characters (use existing control for font metrics, avoid stray widget on
+    // shell)
+    GC gc = new GC(wSchema);
     FontMetrics fm = gc.getFontMetrics();
     int charWidth = fm.getAverageCharWidth();
-    int fieldWidth = text.computeSize(charWidth * 20, SWT.DEFAULT).x;
+    int fieldWidth = 20 * charWidth;
     gc.dispose();
-    text.dispose();
 
     FormData fdlFieldSeparator = new FormData();
-    fdlFieldSeparator.top = new FormAttachment(wMonetDBmclientSettingsComp, 3 * margin);
+    fdlFieldSeparator.top = new FormAttachment(0, 3 * margin);
     fdlFieldSeparator.left = new FormAttachment(0, 3 * margin);
     fdlFieldSeparator.right = new FormAttachment(middle, -margin);
     wlFieldSeparator.setLayoutData(fdlFieldSeparator);
 
     FormData fdFieldSeparator = new FormData();
-    fdFieldSeparator.top = new FormAttachment(wMonetDBmclientSettingsComp, 3 * margin);
+    fdFieldSeparator.top = new FormAttachment(0, 3 * margin);
     fdFieldSeparator.left = new FormAttachment(middle, 0);
     fdFieldSeparator.width = fieldWidth;
     wFieldSeparator.setLayoutData(fdFieldSeparator);
 
     FormData fdlFieldEnclosure = new FormData();
-    fdlFieldEnclosure.top = new FormAttachment(wFieldSeparator, 2 * margin);
+    fdlFieldEnclosure.top = new FormAttachment(wFieldSeparator, margin);
     fdlFieldEnclosure.left = new FormAttachment(0, 3 * margin);
     fdlFieldEnclosure.right = new FormAttachment(middle, -margin);
     wlFieldEnclosure.setLayoutData(fdlFieldEnclosure);
 
     FormData fdFieldEnclosure = new FormData();
-    fdFieldEnclosure.top = new FormAttachment(wFieldSeparator, 2 * margin);
+    fdFieldEnclosure.top = new FormAttachment(wFieldSeparator, margin);
     fdFieldEnclosure.left = new FormAttachment(middle, 0);
     fdFieldEnclosure.width = fieldWidth;
     wFieldEnclosure.setLayoutData(fdFieldEnclosure);
 
     FormData fdlNULLrepresentation = new FormData();
-    fdlNULLrepresentation.top = new FormAttachment(wFieldEnclosure, 2 * margin);
+    fdlNULLrepresentation.top = new FormAttachment(wFieldEnclosure, margin);
     fdlNULLrepresentation.left = new FormAttachment(0, 3 * margin);
     fdlNULLrepresentation.right = new FormAttachment(middle, -margin);
     wlNULLrepresentation.setLayoutData(fdlNULLrepresentation);
 
     FormData fdNULLrepresentation = new FormData();
-    fdNULLrepresentation.top = new FormAttachment(wFieldEnclosure, 2 * margin);
+    fdNULLrepresentation.top = new FormAttachment(wFieldEnclosure, margin);
     fdNULLrepresentation.left = new FormAttachment(middle, 0);
     fdNULLrepresentation.width = fieldWidth;
     wNULLrepresentation.setLayoutData(fdNULLrepresentation);
 
-    // Stream encoding parameter sent to mclient (Label layout)
     FormData fdlEncoding = new FormData();
-    fdlEncoding.top = new FormAttachment(wNULLrepresentation, 2 * margin);
+    fdlEncoding.top = new FormAttachment(wNULLrepresentation, margin);
     fdlEncoding.left = new FormAttachment(0, 3 * margin);
     fdlEncoding.right = new FormAttachment(middle, -margin);
     wlEncoding.setLayoutData(fdlEncoding);
 
     FormData fdEncoding = new FormData();
-    fdEncoding.top = new FormAttachment(wNULLrepresentation, 2 * margin);
+    fdEncoding.top = new FormAttachment(wNULLrepresentation, margin);
     fdEncoding.left = new FormAttachment(middle, 0);
     fdEncoding.width = fieldWidth;
     wEncoding.setLayoutData(fdEncoding);
 
     //
-    // Output Fields tab layout
+    // Output Fields tab layout - attach to top of tab composite (0, margin)
     //
-    // Label at the top left of the tab
     FormData fdlReturn = new FormData();
-    fdlReturn.top = new FormAttachment(wOutputFieldsComp, 5 * margin);
+    fdlReturn.top = new FormAttachment(0, 5 * margin);
     fdlReturn.left = new FormAttachment(0, margin);
     wlReturn.setLayoutData(fdlReturn);
 
-    // button right, top of the tab
     FormData fdDoMapping = new FormData();
-    fdDoMapping.top = new FormAttachment(wOutputFieldsComp, 2 * margin);
+    fdDoMapping.top = new FormAttachment(0, margin);
     fdDoMapping.right = new FormAttachment(100, -margin);
     wDoMapping.setLayoutData(fdDoMapping);
 
-    // to the left of the button above
     FormData fdGetLU = new FormData();
-    fdGetLU.top = new FormAttachment(wOutputFieldsComp, 2 * margin);
+    fdGetLU.top = new FormAttachment(0, margin);
     fdGetLU.right = new FormAttachment(wDoMapping, -margin);
     wGetLU.setLayoutData(fdGetLU);
 
-    // to the left of the button above
     FormData fdClearDBCache = new FormData();
-    fdClearDBCache.top = new FormAttachment(wOutputFieldsComp, 2 * margin);
+    fdClearDBCache.top = new FormAttachment(0, margin);
     fdClearDBCache.right = new FormAttachment(wGetLU, -margin);
     wClearDBCache.setLayoutData(fdClearDBCache);
 
-    // Table of results
     FormData fdReturn = new FormData();
     fdReturn.top = new FormAttachment(wGetLU, 3 * margin);
     fdReturn.left = new FormAttachment(0, margin);
     fdReturn.right = new FormAttachment(100, -margin);
-    fdReturn.bottom = new FormAttachment(100, -2 * margin);
+    fdReturn.bottom = new FormAttachment(100, 0);
     wReturn.setLayoutData(fdReturn);
 
     //
@@ -769,12 +704,6 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
             BaseDialog.presentFileDialog(
                 shell, wLogFile, variables, new String[] {"*"}, ALL_FILETYPES, true));
 
-    // Add listeners
-    wOk.addListener(SWT.Selection, e -> ok());
-    wGetLU.addListener(SWT.Selection, e -> getUpdate());
-    wSql.addListener(SWT.Selection, e -> create());
-    wCancel.addListener(SWT.Selection, e -> cancel());
-
     wbTable.addSelectionListener(
         new SelectionAdapter() {
           @Override
@@ -787,6 +716,8 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
     setTableFieldCombo();
     input.setChanged(changed);
 
+    setSize();
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -854,21 +785,21 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
       logDebug(BaseMessages.getString(PKG, "MonetDBBulkLoaderDialog.Log.GettingKeyInfo"));
     }
 
-    if (input.getFieldTable() != null) {
-      for (int i = 0; i < input.getFieldTable().length; i++) {
+    if (!input.getFields().isEmpty()) {
+      for (int i = 0; i < input.getFields().size(); i++) {
         TableItem item = wReturn.table.getItem(i);
-        if (input.getFieldTable()[i] != null) {
-          item.setText(1, input.getFieldTable()[i]);
+        if (input.getFields().get(i).getFieldTable() != null) {
+          item.setText(1, input.getFields().get(i).getFieldTable());
         }
-        if (input.getFieldStream()[i] != null) {
-          item.setText(2, input.getFieldStream()[i]);
+        if (input.getFields().get(i).getFieldStream() != null) {
+          item.setText(2, input.getFields().get(i).getFieldStream());
         }
-        item.setText(3, input.getFieldFormatOk()[i] ? "Y" : "N");
+        item.setText(3, input.getFields().get(i).isFieldFormatOk() ? "Y" : "N");
       }
     }
 
-    if (input.getDatabaseMeta() != null) {
-      wConnection.setText(input.getDatabaseMeta().getName());
+    if (input.getDbConnectionName() != null) {
+      wConnection.setText(input.getDbConnectionName());
     }
     // General Settings Tab values from transform meta-data configuration.
     if (input.getSchemaName() != null) {
@@ -900,9 +831,6 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
 
     wReturn.setRowNums();
     wReturn.optWidth(true);
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   protected void cancel() {
@@ -928,24 +856,23 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
   protected void getInfo(MonetDbBulkLoaderMeta inf) {
     int nrfields = wReturn.nrNonEmpty();
 
-    inf.allocate(nrfields);
-
     if (log.isDebug()) {
       logDebug(
           BaseMessages.getString(PKG, "MonetDBBulkLoaderDialog.Log.FoundFields", "" + nrfields));
     }
+    inf.getFields().clear();
 
     for (int i = 0; i < nrfields; i++) {
       TableItem item = wReturn.getNonEmpty(i);
-      inf.getFieldTable()[i] = item.getText(1);
-      inf.getFieldStream()[i] = item.getText(2);
-      inf.getFieldFormatOk()[i] = "Y".equalsIgnoreCase(item.getText(3));
+      MonetDbBulkLoaderMeta.MonetDbField mf =
+          new MonetDbBulkLoaderMeta.MonetDbField(
+              item.getText(1), item.getText(2), "Y".equalsIgnoreCase(item.getText(3)));
+      inf.getFields().add(mf);
     }
     // General Settings Tab values from transform meta-data configuration.
     inf.setDbConnectionName(wConnection.getText());
     inf.setSchemaName(wSchema.getText());
     inf.setTableName(wTable.getText());
-    inf.setDatabaseMeta(pipelineMeta.findDatabase(wConnection.getText(), variables));
     inf.setBufferSize(wBufferSize.getText());
     inf.setLogFile(wLogFile.getText());
     inf.setTruncate(wTruncate.getSelection());
@@ -1027,7 +954,6 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
       return;
     }
     // refresh data
-    input.setDatabaseMeta(pipelineMeta.findDatabase(wConnection.getText(), variables));
     input.setTableName(variables.resolve(wTable.getText()));
     ITransformMeta transformMetaInterface = transformMeta.getTransform();
     try {
@@ -1191,17 +1117,13 @@ public class MonetDbBulkLoaderDialog extends BaseTransformDialog {
 
       String name = transformName; // new name might not yet be linked to other transforms!
 
+      DatabaseMeta databaseMeta = pipelineMeta.findDatabase(wConnection.getText(), variables);
       SqlStatement sql = info.getTableDdl(variables, pipelineMeta, name, false, null, false);
       if (!sql.hasError()) {
         if (sql.hasSql()) {
           SqlEditor sqledit =
               new SqlEditor(
-                  shell,
-                  SWT.NONE,
-                  variables,
-                  info.getDatabaseMeta(),
-                  DbCache.getInstance(),
-                  sql.getSql());
+                  shell, SWT.NONE, variables, databaseMeta, DbCache.getInstance(), sql.getSql());
           sqledit.open();
         } else {
           MessageBox mb = new MessageBox(shell, SWT.OK | SWT.ICON_INFORMATION);

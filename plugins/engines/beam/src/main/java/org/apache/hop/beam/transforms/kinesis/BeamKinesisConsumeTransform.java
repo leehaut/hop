@@ -17,11 +17,10 @@
 
 package org.apache.hop.beam.transforms.kinesis;
 
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.beam.sdk.io.kinesis.KinesisIO;
-import org.apache.beam.sdk.io.kinesis.KinesisRecord;
+import org.apache.beam.sdk.io.aws2.common.ClientConfiguration;
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.metrics.Counter;
 import org.apache.beam.sdk.metrics.Metrics;
 import org.apache.beam.sdk.transforms.DoFn;
@@ -30,15 +29,20 @@ import org.apache.beam.sdk.transforms.ParDo;
 import org.apache.beam.sdk.values.KV;
 import org.apache.beam.sdk.values.PBegin;
 import org.apache.beam.sdk.values.PCollection;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.beam.core.BeamHop;
 import org.apache.hop.beam.core.HopRow;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.JsonRowMeta;
 import org.apache.hop.pipeline.Pipeline;
 import org.joda.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.kinesis.common.InitialPositionInStream;
 
 public class BeamKinesisConsumeTransform extends PTransform<PBegin, PCollection<HopRow>> {
 
@@ -49,7 +53,7 @@ public class BeamKinesisConsumeTransform extends PTransform<PBegin, PCollection<
 
   private String accessKey;
   private String secretKey;
-  private Regions regions;
+  private String region;
   private String streamName;
   private String uniqueIdField;
   private String dataField;
@@ -80,7 +84,7 @@ public class BeamKinesisConsumeTransform extends PTransform<PBegin, PCollection<
       String transformName,
       String accessKey,
       String secretKey,
-      Regions regions,
+      String region,
       String rowMetaJson,
       String streamName,
       String uniqueIdField,
@@ -107,7 +111,7 @@ public class BeamKinesisConsumeTransform extends PTransform<PBegin, PCollection<
     this.streamName = streamName;
     this.accessKey = accessKey;
     this.secretKey = secretKey;
-    this.regions = regions;
+    this.region = region;
     this.uniqueIdField = uniqueIdField;
     this.dataField = dataField;
     this.dataType = dataType;
@@ -133,7 +137,7 @@ public class BeamKinesisConsumeTransform extends PTransform<PBegin, PCollection<
     // For now only String data type is supported
     //
     if (!"String".equalsIgnoreCase(dataType)) {
-      throw new RuntimeException("Only String messages are supported at this time");
+      throw new HopRuntimeException("Only String messages are supported at this time");
     }
   }
 
@@ -146,9 +150,19 @@ public class BeamKinesisConsumeTransform extends PTransform<PBegin, PCollection<
 
       PCollection<HopRow> output;
 
-      KinesisIO.Read<KinesisRecord> kinesisRecordRead =
+      StaticCredentialsProvider credentialsProvider =
+          StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey));
+      Region awsRegion = Region.of(region);
+
+      ClientConfiguration clientConfig =
+          ClientConfiguration.builder()
+              .credentialsProvider(credentialsProvider)
+              .region(awsRegion)
+              .build();
+
+      KinesisIO.Read kinesisRecordRead =
           KinesisIO.read()
-              .withAWSClientsProvider(accessKey, secretKey, regions)
+              .withClientConfiguration(clientConfig)
               .withStreamName(streamName)
               .withInitialPositionInStream(InitialPositionInStream.LATEST) // TODO make configurable
           ;
@@ -219,7 +233,7 @@ public class BeamKinesisConsumeTransform extends PTransform<PBegin, PCollection<
     } catch (Exception e) {
       numErrors.inc();
       LOG.error("Error in Kafka input transform", e);
-      throw new RuntimeException("Error in Kafka input transform", e);
+      throw new HopRuntimeException("Error in Kafka input transform", e);
     }
   }
 
@@ -255,7 +269,7 @@ public class BeamKinesisConsumeTransform extends PTransform<PBegin, PCollection<
       } catch (Exception e) {
         numErrors.inc();
         LOG.error("Error in setup of KV<String,String> to Hop Row conversion function", e);
-        throw new RuntimeException(
+        throw new HopRuntimeException(
             "Error in setup of KV<String,String> to Hop Row conversion function", e);
       }
     }
@@ -275,7 +289,8 @@ public class BeamKinesisConsumeTransform extends PTransform<PBegin, PCollection<
       } catch (Exception e) {
         numErrors.inc();
         LOG.error("Error in KV<String,String> to Hop Row conversion function", e);
-        throw new RuntimeException("Error in KV<String,String> to Hop Row conversion function", e);
+        throw new HopRuntimeException(
+            "Error in KV<String,String> to Hop Row conversion function", e);
       }
     }
   }
@@ -313,7 +328,7 @@ public class BeamKinesisConsumeTransform extends PTransform<PBegin, PCollection<
       } catch (Exception e) {
         numErrors.inc();
         LOG.error("Error in setup of KV<String,GenericRecord> to Hop Row conversion function", e);
-        throw new RuntimeException(
+        throw new HopRuntimeException(
             "Error in setup of KV<String,GenericRecord> to Hop Row conversion function", e);
       }
     }
@@ -333,7 +348,7 @@ public class BeamKinesisConsumeTransform extends PTransform<PBegin, PCollection<
       } catch (Exception e) {
         numErrors.inc();
         LOG.error("Error in KV<String,GenericRecord> to Hop Row conversion function", e);
-        throw new RuntimeException(
+        throw new HopRuntimeException(
             "Error in KV<String,GenericRecord> to Hop Row conversion function", e);
       }
     }

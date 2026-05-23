@@ -29,10 +29,13 @@ import org.apache.hop.core.ResultFile;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopTransformException;
 import org.apache.hop.core.exception.HopValueException;
+import org.apache.hop.core.io.CountingOutputStream;
 import org.apache.hop.core.row.IRowMeta;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.vfs.HopVfs;
+import org.apache.hop.lineage.LineageFileIoEmitter;
+import org.apache.hop.lineage.model.FileIoOperation;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransform;
@@ -66,7 +69,7 @@ public class XmlOutput extends BaseTransform<XmlOutputMeta, XmlOutputData> {
 
     r = getRow(); // This also waits for a row to be finished.
 
-    if (first && meta.isDoNotOpenNewFileInit()) {
+    if (first && meta.getFileDetails().isDoNotOpenNewFileInit()) {
       // no more input to be expected...
       // In this case, no file was opened.
       if (r == null) {
@@ -77,7 +80,7 @@ public class XmlOutput extends BaseTransform<XmlOutputMeta, XmlOutputData> {
       if (openNewFile()) {
         data.OpenedNewFile = true;
       } else {
-        logError("Couldn't open file " + meta.getFileName());
+        logError("Couldn't open file " + meta.getFileDetails().getFileName());
         setErrors(1L);
         return false;
       }
@@ -85,23 +88,24 @@ public class XmlOutput extends BaseTransform<XmlOutputMeta, XmlOutputData> {
 
     if ((r != null
         && getLinesOutput() > 0
-        && meta.getSplitEvery() > 0
-        && (getLinesOutput() % meta.getSplitEvery()) == 0)) {
+        && meta.getFileDetails().getSplitEvery() > 0
+        && (getLinesOutput() % meta.getFileDetails().getSplitEvery()) == 0)) {
       // Done with this part or with everything.
       closeFile();
 
       // Not finished: open another file...
-      if (r != null) {
-        if (!openNewFile()) {
-          logError("Unable to open new file (split #" + data.splitnr + "...");
-          setErrors(1);
-          return false;
-        }
+      if (r != null && !openNewFile()) {
+        logError("Unable to open new file (split #" + data.splitnr + "...");
+        setErrors(1);
+        return false;
       }
     }
 
     if (r == null) { // no more input to be expected...
-
+      // Close the currently open output file here so the FILE_IO lineage event is emitted
+      // before PipelineCompleted flushes the lineage hub. dispose() is only a safety net
+      // and runs after the flush in the local pipeline engine's normal completion path.
+      closeFile();
       setOutputDone();
       return false;
     }
@@ -112,7 +116,7 @@ public class XmlOutput extends BaseTransform<XmlOutputMeta, XmlOutputData> {
     meta.getFields(data.outputRowMeta, getTransformName(), null, null, this, metadataProvider);
     putRow(data.outputRowMeta, r); // in case we want it to go further...
 
-    if (checkFeedback(getLinesOutput())) {
+    if (checkFeedback(getLinesOutput()) && isBasic()) {
       logBasic("linenr " + getLinesOutput());
     }
 
@@ -126,30 +130,29 @@ public class XmlOutput extends BaseTransform<XmlOutputMeta, XmlOutputData> {
 
         first = false;
 
-        data.fieldnrs = new int[meta.getOutputFields().length];
-        for (int i = 0; i < meta.getOutputFields().length; i++) {
-          data.fieldnrs[i] =
-              data.formatRowMeta.indexOfValue(meta.getOutputFields()[i].getFieldName());
+        data.fieldnrs = new int[meta.getOutputFields().size()];
+        for (int i = 0; i < meta.getOutputFields().size(); i++) {
+          XmlField xmlField = meta.getOutputFields().get(i);
+
+          data.fieldnrs[i] = data.formatRowMeta.indexOfValue(xmlField.getFieldName());
           if (data.fieldnrs[i] < 0) {
             throw new HopException(
-                "Field ["
-                    + meta.getOutputFields()[i].getFieldName()
-                    + "] couldn't be found in the input stream!");
+                "Field [" + xmlField.getFieldName() + "] couldn't be found in the input stream!");
           }
 
           // Apply the formatting settings to the valueMeta object...
           //
           IValueMeta valueMeta = data.formatRowMeta.getValueMeta(data.fieldnrs[i]);
-          XmlField field = meta.getOutputFields()[i];
-          valueMeta.setConversionMask(field.getFormat());
-          valueMeta.setLength(field.getLength(), field.getPrecision());
-          valueMeta.setDecimalSymbol(field.getDecimalSymbol());
-          valueMeta.setGroupingSymbol(field.getGroupingSymbol());
-          valueMeta.setCurrencySymbol(field.getCurrencySymbol());
+
+          valueMeta.setConversionMask(xmlField.getFormat());
+          valueMeta.setLength(xmlField.getLength(), xmlField.getPrecision());
+          valueMeta.setDecimalSymbol(xmlField.getDecimalSymbol());
+          valueMeta.setGroupingSymbol(xmlField.getGroupingSymbol());
+          valueMeta.setCurrencySymbol(xmlField.getCurrencySymbol());
         }
       }
 
-      if (meta.getOutputFields() == null || meta.getOutputFields().length == 0) {
+      if (meta.getOutputFields().isEmpty()) {
         /*
          * Write all values in stream to text file.
          */
@@ -181,8 +184,8 @@ public class XmlOutput extends BaseTransform<XmlOutputMeta, XmlOutputData> {
 
         // Now write the elements
         //
-        for (int i = 0; i < meta.getOutputFields().length; i++) {
-          XmlField outputField = meta.getOutputFields()[i];
+        for (int i = 0; i < meta.getOutputFields().size(); i++) {
+          XmlField outputField = meta.getOutputFields().get(i);
           if (outputField.getContentType() == ContentType.Element) {
             if (i > 0) {
               data.writer.writeCharacters(" "); // a variables between
@@ -197,7 +200,7 @@ public class XmlOutput extends BaseTransform<XmlOutputMeta, XmlOutputData> {
               elementName = outputField.getFieldName();
             }
 
-            if (!(valueMeta.isNull(valueData) && meta.isOmitNullValues())) {
+            if (!(valueMeta.isNull(valueData) && meta.getFileDetails().isOmitNullValues())) {
               writeField(valueMeta, valueData, elementName);
             }
           }
@@ -220,8 +223,8 @@ public class XmlOutput extends BaseTransform<XmlOutputMeta, XmlOutputData> {
   }
 
   void writeRowAttributes(Object[] r) throws HopValueException, XMLStreamException {
-    for (int i = 0; i < meta.getOutputFields().length; i++) {
-      XmlField xmlField = meta.getOutputFields()[i];
+    for (int i = 0; i < meta.getOutputFields().size(); i++) {
+      XmlField xmlField = meta.getOutputFields().get(i);
       if (xmlField.getContentType() == ContentType.Attribute) {
         IValueMeta valueMeta = data.formatRowMeta.getValueMeta(data.fieldnrs[i]);
         Object valueData = r[data.fieldnrs[i]];
@@ -265,8 +268,9 @@ public class XmlOutput extends BaseTransform<XmlOutputMeta, XmlOutputData> {
     try {
 
       FileObject file = HopVfs.getFileObject(buildFilename(true), variables);
+      data.outputVfsFile = file;
 
-      if (meta.isAddToResultFiles()) {
+      if (meta.getFileDetails().isAddToResultFilenames()) {
         // Add this to the result file names...
         ResultFile resultFile =
             new ResultFile(
@@ -278,25 +282,32 @@ public class XmlOutput extends BaseTransform<XmlOutputMeta, XmlOutputData> {
         addResultFile(resultFile);
       }
 
-      if (meta.isZipped()) {
+      if (meta.getFileDetails().isZipped()) {
         OutputStream fos = HopVfs.getOutputStream(file, false);
-        data.zip = new ZipOutputStream(fos);
+        data.countingStream = new CountingOutputStream(fos);
+        data.zip = new ZipOutputStream(data.countingStream);
         File entry = new File(buildFilename(false));
         ZipEntry zipentry = new ZipEntry(entry.getName());
         zipentry.setComment("Compressed by Apache Hop");
         data.zip.putNextEntry(zipentry);
         outputStream = data.zip;
       } else {
-        outputStream = HopVfs.getOutputStream(file, false);
+        OutputStream fos = HopVfs.getOutputStream(file, false);
+        data.countingStream = new CountingOutputStream(fos);
+        outputStream = data.countingStream;
       }
       if (!Utils.isEmpty(meta.getEncoding())) {
-        logBasic("Opening output stream in encoding: " + meta.getEncoding());
+        if (isBasic()) {
+          logBasic("Opening output stream in encoding: " + meta.getEncoding());
+        }
         data.writer = XML_OUT_FACTORY.createXMLStreamWriter(outputStream, meta.getEncoding());
         data.writer.writeStartDocument(meta.getEncoding(), "1.0");
       } else {
-        logBasic("Opening output stream in default encoding : " + Const.XML_ENCODING);
+        if (isBasic()) {
+          logBasic("Opening output stream in default encoding : " + Const.UTF_8);
+        }
         data.writer = XML_OUT_FACTORY.createXMLStreamWriter(outputStream);
-        data.writer.writeStartDocument(Const.XML_ENCODING, "1.0");
+        data.writer.writeStartDocument(Const.UTF_8, "1.0");
       }
       data.writer.writeCharacters(EOL);
 
@@ -328,6 +339,18 @@ public class XmlOutput extends BaseTransform<XmlOutputMeta, XmlOutputData> {
     }
   }
 
+  private void emitXmlOutputLineage(long written) {
+    if (data.isBeamContext() || written <= 0 || data.outputVfsFile == null) {
+      return;
+    }
+    try {
+      LineageFileIoEmitter.emitTransformFileIo(
+          this, FileIoOperation.WRITE, null, data.outputVfsFile, written, true, null);
+    } catch (Exception ignored) {
+      // optional lineage
+    }
+  }
+
   private boolean closeFile() {
     boolean retval = false;
     if (data.OpenedNewFile) {
@@ -339,13 +362,24 @@ public class XmlOutput extends BaseTransform<XmlOutputMeta, XmlOutputData> {
         data.writer.writeEndDocument();
         data.writer.close();
 
-        if (meta.isZipped()) {
+        if (meta.getFileDetails().isZipped()) {
           data.zip.closeEntry();
           data.zip.finish();
+          if (data.countingStream != null) {
+            long written = data.countingStream.getCount();
+            dataVolumeOut = (dataVolumeOut != null ? dataVolumeOut : 0L) + written;
+            emitXmlOutputLineage(written);
+          }
           data.zip.close();
+        } else {
+          if (data.countingStream != null) {
+            long written = data.countingStream.getCount();
+            dataVolumeOut = (dataVolumeOut != null ? dataVolumeOut : 0L) + written;
+            emitXmlOutputLineage(written);
+          }
         }
-
         closeOutputStream(outputStream);
+        data.outputVfsFile = null;
 
         retval = true;
       } catch (Exception e) {
@@ -360,12 +394,12 @@ public class XmlOutput extends BaseTransform<XmlOutputMeta, XmlOutputData> {
 
     if (super.init()) {
       data.splitnr = 0;
-      if (!meta.isDoNotOpenNewFileInit()) {
+      if (!meta.getFileDetails().isDoNotOpenNewFileInit()) {
         if (openNewFile()) {
           data.OpenedNewFile = true;
           return true;
         } else {
-          logError("Couldn't open file " + meta.getFileName());
+          logError("Couldn't open file " + meta.getFileDetails().getFileName());
           setErrors(1L);
           stopAll();
         }

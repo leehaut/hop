@@ -18,19 +18,15 @@
 package org.apache.hop.pipeline.transforms.concatfields;
 
 import java.util.ArrayList;
-import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopTransformException;
-import org.apache.hop.core.exception.HopValueException;
-import org.apache.hop.core.row.IValueMeta;
-import org.apache.hop.core.row.RowDataUtil;
-import org.apache.hop.core.row.value.ValueMetaBase;
 import org.apache.hop.core.util.StringUtil;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransform;
 import org.apache.hop.pipeline.transform.TransformMeta;
+import org.apache.hop.pipeline.transforms.concatfields.helper.ConcatFieldHelper;
 
 public class ConcatFields extends BaseTransform<ConcatFieldsMeta, ConcatFieldsData> {
 
@@ -43,13 +39,14 @@ public class ConcatFields extends BaseTransform<ConcatFieldsMeta, ConcatFieldsDa
       int copyNr,
       PipelineMeta pipelineMeta,
       Pipeline pipeline) {
-    super(transformMeta, meta, data, copyNr, pipelineMeta, pipeline); // allocate TextFileOutput
+    // allocate TextFileOutput
+    super(transformMeta, meta, data, copyNr, pipelineMeta, pipeline);
   }
 
   @Override
   public synchronized boolean processRow() throws HopException {
-
-    Object[] row = getRow(); // This also waits for a row to be finished.
+    // This also waits for a row to be finished.
+    Object[] row = getRow();
     if (row == null) {
       setOutputDone();
       return false;
@@ -115,7 +112,7 @@ public class ConcatFields extends BaseTransform<ConcatFieldsMeta, ConcatFieldsDa
       }
     }
 
-    Object[] outputRowData = concatFields(row);
+    Object[] outputRowData = ConcatFieldHelper.concat(row, data, meta, getInputRowMeta());
     putRow(data.outputRowMeta, outputRowData);
 
     if (isRowLevel()) {
@@ -125,101 +122,11 @@ public class ConcatFields extends BaseTransform<ConcatFieldsMeta, ConcatFieldsDa
               + " : "
               + data.outputRowMeta.getString(row));
     }
-    if (checkFeedback(getLinesRead())) {
-      if (isBasic()) {
-        logBasic(BaseMessages.getString(PKG, "ConcatFields.Log.LineNumber") + getLinesRead());
-      }
+    if (checkFeedback(getLinesRead()) && isBasic()) {
+      logBasic(BaseMessages.getString(PKG, "ConcatFields.Log.LineNumber") + getLinesRead());
     }
 
     return true;
-  }
-
-  /** Concat the field values and call putRow() */
-  private Object[] concatFields(Object[] inputRowData) throws HopException {
-    Object[] outputRowData = createOutputRow(inputRowData);
-
-    StringBuilder targetString = new StringBuilder(data.targetFieldLength); // use a good capacity
-
-    for (int i = 0; i < data.inputFieldIndexes.size(); i++) {
-      if (i > 0) {
-        targetString.append(data.stringSeparator);
-      }
-
-      int inputRowIndex = data.inputFieldIndexes.get(i);
-      IValueMeta valueMeta = getInputRowMeta().getValueMeta(inputRowIndex);
-      Object valueData = inputRowData[inputRowIndex];
-
-      String nullString;
-      String trimType;
-      if (meta.getOutputFields().isEmpty()) {
-        // No specific null value defined
-        nullString = "";
-        trimType = ValueMetaBase.getTrimTypeCode(IValueMeta.TRIM_TYPE_NONE);
-      } else {
-        ConcatField field = meta.getOutputFields().get(i);
-        nullString = Const.NVL(field.getNullString(), "");
-        trimType = data.trimType[i];
-        // Manage missing trim type. Leave the incoming value as it is
-        if (trimType == null) {
-          trimType = ValueMetaBase.getTrimTypeCode(IValueMeta.TRIM_TYPE_NONE);
-        }
-      }
-
-      concatField(targetString, valueMeta, valueData, nullString, trimType);
-    }
-
-    outputRowData[data.outputRowMeta.size() - 1] = targetString.toString();
-
-    return outputRowData;
-  }
-
-  private void concatField(
-      StringBuilder targetField,
-      IValueMeta valueMeta,
-      Object valueData,
-      String nullString,
-      String trimType)
-      throws HopValueException {
-
-    if (meta.isForceEnclosure()) {
-      targetField.append(meta.getEnclosure());
-    }
-    if (valueMeta.isNull(valueData)) {
-      targetField.append(nullString);
-    } else {
-      if (trimType != null) {
-        targetField.append(
-            Const.trimToType(
-                valueMeta.getString(valueData), ValueMetaBase.getTrimTypeByCode(trimType)));
-      }
-    }
-    if (meta.isForceEnclosure()) {
-      targetField.append(meta.getEnclosure());
-    }
-  }
-
-  // reserve room for the target field and eventually re-map the fields
-  private Object[] createOutputRow(Object[] inputRowData) {
-    // Allocate a new empty row
-    //
-    Object[] outputRowData;
-
-    if (meta.getExtraFields().isRemoveSelectedFields()) {
-      outputRowData = RowDataUtil.allocateRowData(data.outputRowMeta.size());
-      int outputRowIndex = 0;
-
-      // Copy over only the fields we want from the input.
-      //
-      for (int inputRowIndex : data.outputFieldIndexes) {
-        outputRowData[outputRowIndex++] = inputRowData[inputRowIndex];
-      }
-    } else {
-      // Keep the current row and add a field
-      //
-      outputRowData = RowDataUtil.createResizedCopy(inputRowData, data.outputRowMeta.size());
-    }
-
-    return outputRowData;
   }
 
   @Override
@@ -255,10 +162,5 @@ public class ConcatFields extends BaseTransform<ConcatFieldsMeta, ConcatFieldsDa
         data.trimType[i] = trimType;
       }
     }
-  }
-
-  @Override
-  public void dispose() {
-    super.dispose();
   }
 }

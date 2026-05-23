@@ -68,48 +68,28 @@ public class XmlOutputDialog extends BaseTransformDialog {
   private static final Class<?> PKG = XmlOutputMeta.class;
 
   private TextVar wFilename;
-
   private TextVar wExtension;
-
   private Button wAddTransformnr;
-
   private Label wlAddDate;
   private Button wAddDate;
-
   private Label wlAddTime;
   private Button wAddTime;
-
   private Button wZipped;
-
   private Button wOmitNullValues;
-
   private CCombo wEncoding;
-
   private Text wNameSpace;
-
   private CCombo wMainElement;
-
   private CCombo wRepeatElement;
-
   private Text wSplitEvery;
-
   private TableView wFields;
-
   private final XmlOutputMeta input;
-
   private boolean gotEncodings = false;
-
   private Button wAddToResult;
-
   private Button wDoNotOpenNewFileInit;
-
   private Button wSpecifyFormat;
-
   private Label wlDateTimeFormat;
   private CCombo wDateTimeFormat;
-
-  private ColumnInfo[] colinf;
-
+  private ColumnInfo[] columnInfos;
   private final List<String> inputFields = new ArrayList<>();
 
   public XmlOutputDialog(
@@ -120,53 +100,12 @@ public class XmlOutputDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "XMLOutputDialog.DialogTitle"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
 
     ModifyListener lsMod = e -> input.setChanged();
     changed = input.hasChanged();
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "XMLOutputDialog.DialogTitle"));
-
-    int middle = props.getMiddlePct();
-    int margin = PropsUi.getMargin();
-
-    // Buttons at the bottom
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wCancel}, margin, null);
-
-    // TransformName line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "System.TransformName.Label"));
-    wlTransformName.setToolTipText(BaseMessages.getString(PKG, "System.TransformName.Tooltip"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
 
     CTabFolder wTabFolder = new CTabFolder(shell, SWT.BORDER);
     PropsUi.setLook(wTabFolder, Props.WIDGET_STYLE_TAB);
@@ -201,7 +140,7 @@ public class XmlOutputDialog extends BaseTransformDialog {
     wbFilename.setText(BaseMessages.getString(PKG, "XMLOutputDialog.Browse.Button"));
     FormData fdbFilename = new FormData();
     fdbFilename.right = new FormAttachment(100, 0);
-    fdbFilename.top = new FormAttachment(0, 0);
+    fdbFilename.top = new FormAttachment(0, margin);
     wbFilename.setLayoutData(fdbFilename);
 
     wFilename = new TextVar(variables, wFileComp, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
@@ -246,7 +185,7 @@ public class XmlOutputDialog extends BaseTransformDialog {
     PropsUi.setLook(wlExtension);
     FormData fdlExtension = new FormData();
     fdlExtension.left = new FormAttachment(0, 0);
-    fdlExtension.top = new FormAttachment(wlDoNotOpenNewFileInit, 2 * margin);
+    fdlExtension.top = new FormAttachment(wlDoNotOpenNewFileInit, margin);
     fdlExtension.right = new FormAttachment(middle, -margin);
     wlExtension.setLayoutData(fdlExtension);
     wExtension = new TextVar(variables, wFileComp, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
@@ -255,7 +194,7 @@ public class XmlOutputDialog extends BaseTransformDialog {
     wExtension.addModifyListener(lsMod);
     FormData fdExtension = new FormData();
     fdExtension.left = new FormAttachment(middle, 0);
-    fdExtension.top = new FormAttachment(wlDoNotOpenNewFileInit, 2 * margin);
+    fdExtension.top = new FormAttachment(wlDoNotOpenNewFileInit, margin);
     fdExtension.right = new FormAttachment(100, 0);
     wExtension.setLayoutData(fdExtension);
 
@@ -387,7 +326,7 @@ public class XmlOutputDialog extends BaseTransformDialog {
     wbShowFiles.setText(BaseMessages.getString(PKG, "XMLOutputDialog.ShowFiles.Button"));
     FormData fdbShowFiles = new FormData();
     fdbShowFiles.left = new FormAttachment(middle, 0);
-    fdbShowFiles.top = new FormAttachment(wDateTimeFormat, margin * 2);
+    fdbShowFiles.top = new FormAttachment(wDateTimeFormat, margin);
     wbShowFiles.setLayoutData(fdbShowFiles);
     wbShowFiles.addSelectionListener(
         new SelectionAdapter() {
@@ -421,7 +360,7 @@ public class XmlOutputDialog extends BaseTransformDialog {
     PropsUi.setLook(wlAddToResult);
     FormData fdlAddToResult = new FormData();
     fdlAddToResult.left = new FormAttachment(0, 0);
-    fdlAddToResult.top = new FormAttachment(wbShowFiles, 2 * margin);
+    fdlAddToResult.top = new FormAttachment(wbShowFiles, margin);
     fdlAddToResult.right = new FormAttachment(middle, -margin);
     wlAddToResult.setLayoutData(fdlAddToResult);
     wAddToResult = new Button(wFileComp, SWT.CHECK);
@@ -659,9 +598,7 @@ public class XmlOutputDialog extends BaseTransformDialog {
 
     setButtonPositions(new Button[] {wGet, wMinWidth}, margin, null);
 
-    final int FieldsRows = input.getOutputFields().length;
-
-    colinf =
+    columnInfos =
         new ColumnInfo[] {
           new ColumnInfo(
               BaseMessages.getString(PKG, "XMLOutputDialog.Fieldname.Column"),
@@ -718,8 +655,8 @@ public class XmlOutputDialog extends BaseTransformDialog {
             variables,
             wFieldsComp,
             SWT.BORDER | SWT.FULL_SELECTION | SWT.MULTI,
-            colinf,
-            FieldsRows,
+            columnInfos,
+            1,
             lsMod,
             props);
 
@@ -764,9 +701,9 @@ public class XmlOutputDialog extends BaseTransformDialog {
 
     FormData fdTabFolder = new FormData();
     fdTabFolder.left = new FormAttachment(0, 0);
-    fdTabFolder.top = new FormAttachment(wTransformName, margin);
+    fdTabFolder.top = new FormAttachment(wSpacer, margin);
     fdTabFolder.right = new FormAttachment(100, 0);
-    fdTabFolder.bottom = new FormAttachment(wOk, -2 * margin);
+    fdTabFolder.bottom = new FormAttachment(100, -50);
     wTabFolder.setLayoutData(fdTabFolder);
 
     // Add listeners
@@ -806,7 +743,7 @@ public class XmlOutputDialog extends BaseTransformDialog {
     getData();
     setDateTimeFormat();
     input.setChanged(changed);
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -838,7 +775,7 @@ public class XmlOutputDialog extends BaseTransformDialog {
       }
 
       // Now select the default!
-      String defEncoding = Const.getEnvironmentVariable("file.encoding", "UTF-8");
+      String defEncoding = Const.getEnvironmentVariable("file.encoding", Const.UTF_8);
       int idx = Const.indexOfString(defEncoding, wEncoding.getItems());
       if (idx >= 0) {
         wEncoding.select(idx);
@@ -848,147 +785,79 @@ public class XmlOutputDialog extends BaseTransformDialog {
 
   /** Copy information from the meta-data input to the dialog fields. */
   public void getData() {
-    if (input.getFileName() != null) {
-      wFilename.setText(input.getFileName());
-    }
-    if (input.getExtension() != null) {
-      wExtension.setText(input.getExtension());
-    }
-    wDoNotOpenNewFileInit.setSelection(input.isDoNotOpenNewFileInit());
+    wFilename.setText(Const.NVL(input.getFileDetails().getFileName(), ""));
+    wExtension.setText(Const.NVL(input.getFileDetails().getExtension(), ""));
+    wDoNotOpenNewFileInit.setSelection(input.getFileDetails().isDoNotOpenNewFileInit());
 
-    if (input.getEncoding() != null) {
-      wEncoding.setText(input.getEncoding());
-    }
-    if (input.getNameSpace() != null) {
-      wNameSpace.setText(input.getNameSpace());
-    }
-    if (input.getMainElement() != null) {
-      wMainElement.setText(input.getMainElement());
-    }
-    if (input.getRepeatElement() != null) {
-      wRepeatElement.setText(input.getRepeatElement());
-    }
+    wEncoding.setText(Const.NVL(input.getEncoding(), ""));
+    wNameSpace.setText(Const.NVL(input.getNameSpace(), ""));
+    wMainElement.setText(Const.NVL(input.getMainElement(), ""));
+    wRepeatElement.setText(Const.NVL(input.getRepeatElement(), ""));
 
-    wSplitEvery.setText("" + input.getSplitEvery());
+    wSplitEvery.setText("" + input.getFileDetails().getSplitEvery());
 
-    wZipped.setSelection(input.isZipped());
-    wOmitNullValues.setSelection(input.isOmitNullValues());
-    wAddDate.setSelection(input.isDateInFilename());
-    wAddTime.setSelection(input.isTimeInFilename());
-    wAddTransformnr.setSelection(input.isTransformNrInFilename());
+    wZipped.setSelection(input.getFileDetails().isZipped());
+    wOmitNullValues.setSelection(input.getFileDetails().isOmitNullValues());
+    wAddDate.setSelection(input.getFileDetails().isDateInFilename());
+    wAddTime.setSelection(input.getFileDetails().isTimeInFilename());
+    wAddTransformnr.setSelection(input.getFileDetails().isTransformNrInFilename());
 
-    wAddToResult.setSelection(input.isAddToResultFiles());
+    wAddToResult.setSelection(input.getFileDetails().isAddToResultFilenames());
 
-    if (input.getDateTimeFormat() != null) {
-      wDateTimeFormat.setText(input.getDateTimeFormat());
-    }
-    wSpecifyFormat.setSelection(input.isSpecifyFormat());
+    wDateTimeFormat.setText(Const.NVL(input.getFileDetails().getDateTimeFormat(), ""));
+    wSpecifyFormat.setSelection(input.getFileDetails().isSpecifyFormat());
 
-    if (isDebug()) {
-      logDebug(BaseMessages.getString(PKG, "XMLOutputDialog.Log.GettingFieldsInfo"));
-    }
-
-    for (int i = 0; i < input.getOutputFields().length; i++) {
-      XmlField field = input.getOutputFields()[i];
-
-      TableItem item = wFields.table.getItem(i);
+    for (XmlField field : input.getOutputFields()) {
+      TableItem item = new TableItem(wFields.table, SWT.NONE);
       int index = 1;
 
-      if (field.getFieldName() != null) {
-        item.setText(index++, field.getFieldName());
-      }
-      if (field.getElementName() != null) {
-        item.setText(index++, field.getElementName());
-      } else {
-        // Fixup for defect. Make it the same functionality
-        // as the loading of the original XML file.
-        if (field.getFieldName() != null) {
-          item.setText(index++, field.getFieldName());
-        } else {
-          index++;
-        }
-      }
+      item.setText(index++, Const.NVL(field.getFieldName(), ""));
+      item.setText(index++, Const.NVL(field.getElementName(), ""));
+
       item.setText(index++, field.getContentType().name());
       item.setText(index++, field.getTypeDesc());
-      if (field.getFormat() != null) {
-        item.setText(index++, field.getFormat());
-      } else {
-        index++;
-      }
-      if (field.getLength() >= 0) {
-        item.setText(index++, "" + field.getLength());
-      } else {
-        index++;
-      }
-      if (field.getPrecision() >= 0) {
-        item.setText(index++, "" + field.getPrecision());
-      } else {
-        index++;
-      }
-      if (field.getCurrencySymbol() != null) {
-        item.setText(index++, field.getCurrencySymbol());
-      } else {
-        index++;
-      }
-      if (field.getDecimalSymbol() != null) {
-        item.setText(index++, field.getDecimalSymbol());
-      } else {
-        index++;
-      }
-      if (field.getGroupingSymbol() != null) {
-        item.setText(index++, field.getGroupingSymbol());
-      } else {
-        index++;
-      }
-      if (field.getNullString() != null) {
-        item.setText(index++, field.getNullString());
-      } else {
-        index++;
-      }
+      item.setText(index++, Const.NVL(field.getFormat(), ""));
+      item.setText(index++, field.getLength() > 0 ? Integer.toString(field.getLength()) : "");
+      item.setText(index++, field.getPrecision() > 0 ? Integer.toString(field.getPrecision()) : "");
+      item.setText(index++, Const.NVL(field.getCurrencySymbol(), ""));
+      item.setText(index++, Const.NVL(field.getDecimalSymbol(), ""));
+      item.setText(index++, Const.NVL(field.getGroupingSymbol(), ""));
+      item.setText(index, Const.NVL(field.getNullString(), ""));
     }
-
-    wFields.optWidth(true);
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
+    wFields.optimizeTableView();
   }
 
   private void cancel() {
     transformName = null;
-
     input.setChanged(backupChanged);
-
     dispose();
   }
 
   private void getInfo(XmlOutputMeta xmlOutputMeta) {
-    xmlOutputMeta.setFileName(wFilename.getText());
+    xmlOutputMeta.getFileDetails().setFileName(wFilename.getText());
     xmlOutputMeta.setEncoding(wEncoding.getText());
     xmlOutputMeta.setNameSpace(wNameSpace.getText());
     xmlOutputMeta.setMainElement(wMainElement.getText());
     xmlOutputMeta.setRepeatElement(wRepeatElement.getText());
-    xmlOutputMeta.setExtension(wExtension.getText());
-    xmlOutputMeta.setDoNotOpenNewFileInit(wDoNotOpenNewFileInit.getSelection());
-    xmlOutputMeta.setSplitEvery(Const.toInt(wSplitEvery.getText(), 0));
+    xmlOutputMeta.getFileDetails().setExtension(wExtension.getText());
+    xmlOutputMeta.getFileDetails().setDoNotOpenNewFileInit(wDoNotOpenNewFileInit.getSelection());
+    xmlOutputMeta.getFileDetails().setSplitEvery(Const.toInt(wSplitEvery.getText(), 0));
 
-    xmlOutputMeta.setDateTimeFormat(wDateTimeFormat.getText());
-    xmlOutputMeta.setSpecifyFormat(wSpecifyFormat.getSelection());
+    xmlOutputMeta.getFileDetails().setDateTimeFormat(wDateTimeFormat.getText());
+    xmlOutputMeta.getFileDetails().setSpecifyFormat(wSpecifyFormat.getSelection());
 
-    xmlOutputMeta.setTransformNrInFilename(wAddTransformnr.getSelection());
-    xmlOutputMeta.setDateInFilename(wAddDate.getSelection());
-    xmlOutputMeta.setTimeInFilename(wAddTime.getSelection());
-    xmlOutputMeta.setAddToResultFiles(wAddToResult.getSelection());
-    xmlOutputMeta.setZipped(wZipped.getSelection());
-    xmlOutputMeta.setOmitNullValues(wOmitNullValues.getSelection());
+    xmlOutputMeta.getFileDetails().setTransformNrInFilename(wAddTransformnr.getSelection());
+    xmlOutputMeta.getFileDetails().setDateInFilename(wAddDate.getSelection());
+    xmlOutputMeta.getFileDetails().setTimeInFilename(wAddTime.getSelection());
+    xmlOutputMeta.getFileDetails().setAddToResultFilenames(wAddToResult.getSelection());
+    xmlOutputMeta.getFileDetails().setZipped(wZipped.getSelection());
+    xmlOutputMeta.getFileDetails().setOmitNullValues(wOmitNullValues.getSelection());
 
-    int nrFields = wFields.nrNonEmpty();
-
-    xmlOutputMeta.allocate(nrFields);
-
-    for (int i = 0; i < nrFields; i++) {
+    xmlOutputMeta.getOutputFields().clear();
+    for (TableItem item : wFields.getNonEmptyItems()) {
       XmlField field = new XmlField();
+      xmlOutputMeta.getOutputFields().add(field);
 
-      TableItem item = wFields.getNonEmpty(i);
       int index = 1;
       field.setFieldName(item.getText(index++));
       field.setElementName(item.getText(index++));
@@ -996,7 +865,7 @@ public class XmlOutputDialog extends BaseTransformDialog {
         field.setElementName("");
       }
       field.setContentType(XmlField.ContentType.getIfPresent(item.getText(index++)));
-      field.setType(item.getText(index++));
+      field.setTypeWithDescription(item.getText(index++));
       field.setFormat(item.getText(index++));
       field.setLength(Const.toInt(item.getText(index++), -1));
       field.setPrecision(Const.toInt(item.getText(index++), -1));
@@ -1004,8 +873,6 @@ public class XmlOutputDialog extends BaseTransformDialog {
       field.setDecimalSymbol(item.getText(index++));
       field.setGroupingSymbol(item.getText(index++));
       field.setNullString(item.getText(index++));
-
-      xmlOutputMeta.getOutputFields()[i] = field;
     }
   }
 
@@ -1028,27 +895,21 @@ public class XmlOutputDialog extends BaseTransformDialog {
         ITableItemInsertListener listener =
             (tableItem, v) -> {
               tableItem.setText(3, XmlField.ContentType.Element.name());
-              if (v.isNumber()) {
-                if (v.getLength() > 0) {
-                  int le = v.getLength();
-                  int pr = v.getPrecision();
+              if (v.isNumber() && v.getLength() > 0) {
+                int le = v.getLength();
+                int pr = v.getPrecision();
 
-                  if (v.getPrecision() <= 0) {
-                    pr = 0;
-                  }
-
-                  String mask = " ";
-                  for (int m = 0; m < le - pr; m++) {
-                    mask += "0";
-                  }
-                  if (pr > 0) {
-                    mask += ".";
-                  }
-                  for (int m = 0; m < pr; m++) {
-                    mask += "0";
-                  }
-                  tableItem.setText(4, mask);
+                if (v.getPrecision() <= 0) {
+                  pr = 0;
                 }
+
+                StringBuilder mask = new StringBuilder(" ");
+                mask.append("0".repeat(Math.max(0, le - pr)));
+                if (pr > 0) {
+                  mask.append(".");
+                }
+                mask.append("0".repeat(Math.max(0, pr)));
+                tableItem.setText(4, mask.toString());
               }
               return true;
             };
@@ -1097,6 +958,6 @@ public class XmlOutputDialog extends BaseTransformDialog {
     // Something was changed in the row.
     //
     String[] fieldNames = ConstUi.sortFieldNames(inputFields);
-    colinf[0].setComboValues(fieldNames);
+    columnInfos[0].setComboValues(fieldNames);
   }
 }

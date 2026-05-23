@@ -18,7 +18,7 @@
 package org.apache.hop.projects.xp;
 
 import java.util.Properties;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.config.IRestServicesProvider;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.extension.ExtensionPoint;
@@ -59,11 +59,10 @@ public class HopRestServicesStartupProjectsConfig
 
     try {
       // Configure the project and environment if needed
-      if (StringUtils.isNotEmpty(projectName) || StringUtils.isNotEmpty(environmentName)) {
-        if (ProjectsOptionPlugin.configure(
-            log, variables, hasHopMetadataProvider, projectName, environmentName)) {
-          log.logBasic("Configured project or environment for the Hop REST services");
-        }
+      if ((StringUtils.isNotEmpty(projectName) || StringUtils.isNotEmpty(environmentName))
+          && ProjectsOptionPlugin.configure(
+              log, variables, hasHopMetadataProvider, projectName, environmentName)) {
+        log.logBasic("Configured project or environment for the Hop REST services");
       }
     } catch (Exception e) {
       throw new HopException(

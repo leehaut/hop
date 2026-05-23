@@ -18,7 +18,6 @@
 package org.apache.hop.pipeline.transforms.multimerge;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopException;
@@ -27,12 +26,7 @@ import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.pipeline.PipelineMeta;
-import org.apache.hop.pipeline.transform.ITransformIOMeta;
 import org.apache.hop.pipeline.transform.TransformMeta;
-import org.apache.hop.pipeline.transform.stream.IStream;
-import org.apache.hop.pipeline.transform.stream.IStream.StreamType;
-import org.apache.hop.pipeline.transform.stream.Stream;
-import org.apache.hop.pipeline.transform.stream.StreamIcon;
 import org.apache.hop.ui.core.ConstUi;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.dialog.BaseDialog;
@@ -44,11 +38,15 @@ import org.apache.hop.ui.hopgui.HopGui;
 import org.apache.hop.ui.pipeline.transform.BaseTransformDialog;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CCombo;
+import org.eclipse.swt.custom.ScrolledComposite;
 import org.eclipse.swt.events.ModifyListener;
+import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
+import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Listener;
@@ -69,10 +67,8 @@ public class MultiMergeJoinDialog extends BaseTransformDialog {
   private IRowMeta prev;
   private ColumnInfo[] ciKeys;
 
-  private final int margin = PropsUi.getMargin();
-  private final int middle = props.getMiddlePct();
-
   private final MultiMergeJoinMeta joinMeta;
+  private String[] allInputTransforms;
 
   public MultiMergeJoinDialog(
       Shell parent,
@@ -82,18 +78,19 @@ public class MultiMergeJoinDialog extends BaseTransformDialog {
     super(parent, variables, transformMeta, pipelineMeta);
     joinMeta = transformMeta;
 
-    String[] inputTransformNames = getInputTransformNames();
-    wInputTransformArray = new CCombo[inputTransformNames.length];
-    keyValTextBox = new Text[inputTransformNames.length];
+    allInputTransforms = getInputTransformNames();
+
+    int availableTransforms = allInputTransforms.length;
+    int configuredTransforms =
+        (joinMeta.getInputTransforms() != null) ? joinMeta.getInputTransforms().size() : 0;
+    int numInputs = Math.max(2, Math.max(availableTransforms, configuredTransforms));
+
+    wInputTransformArray = new CCombo[numInputs];
+    keyValTextBox = new Text[numInputs];
   }
 
   private String[] getInputTransformNames() {
-    String[] inputTransformNames = joinMeta.getInputTransforms();
     ArrayList<String> nameList = new ArrayList<>();
-    if (inputTransformNames != null) {
-      Collections.addAll(nameList, inputTransformNames);
-    }
-
     String[] prevTransformNames = pipelineMeta.getPrevTransformNames(transformName);
     if (prevTransformNames != null) {
       String prevTransformName;
@@ -105,8 +102,7 @@ public class MultiMergeJoinDialog extends BaseTransformDialog {
         nameList.add(prevTransformName);
       }
     }
-
-    return nameList.toArray(new String[nameList.size()]);
+    return nameList.toArray(new String[0]);
   }
 
   /*
@@ -116,63 +112,48 @@ public class MultiMergeJoinDialog extends BaseTransformDialog {
    */
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "MultiMergeJoinDialog.Shell.Label"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MIN | SWT.MAX);
-    PropsUi.setLook(shell);
-    setShellImage(shell, joinMeta);
+    buildButtonBar().ok(e -> ok()).cancel(e -> cancel()).build();
+
+    ScrolledComposite scrolledComposite = new ScrolledComposite(shell, SWT.V_SCROLL | SWT.H_SCROLL);
+    PropsUi.setLook(scrolledComposite);
+    FormData fdScrolledComposite = new FormData();
+    fdScrolledComposite.left = new FormAttachment(0, 0);
+    fdScrolledComposite.top = new FormAttachment(wSpacer, 0);
+    fdScrolledComposite.right = new FormAttachment(100, 0);
+    fdScrolledComposite.bottom = new FormAttachment(wOk, -margin);
+    scrolledComposite.setLayoutData(fdScrolledComposite);
+    scrolledComposite.setLayout(new FillLayout());
+
+    Composite wContent = new Composite(scrolledComposite, SWT.NONE);
+    PropsUi.setLook(wContent);
+    FormLayout contentLayout = new FormLayout();
+    contentLayout.marginWidth = PropsUi.getFormMargin();
+    contentLayout.marginHeight = PropsUi.getFormMargin();
+    wContent.setLayout(contentLayout);
 
     final ModifyListener lsMod = e -> joinMeta.setChanged();
     backupChanged = joinMeta.hasChanged();
 
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "MultiMergeJoinDialog.Shell.Label"));
-
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(
-        BaseMessages.getString(PKG, "MultiMergeJoinDialog.TransformName.Label"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    wTransformName.addModifyListener(lsMod);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(wlTransformName, margin);
-    fdTransformName.top = new FormAttachment(wlTransformName, 0, SWT.CENTER);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
-
     // create widgets for input stream and join key selections
-    createInputStreamWidgets(lsMod);
+    createInputStreamWidgets(wContent, lsMod);
 
     // create widgets for Join type
-    createJoinTypeWidget(lsMod);
+    createJoinTypeWidget(wContent, lsMod);
 
-    // Some buttons
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-
-    setButtonPositions(new Button[] {wOk, wCancel}, margin, null);
-
-    // Add listeners
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    wOk.addListener(SWT.Selection, e -> ok());
+    wContent.pack();
+    Rectangle bounds = wContent.getBounds();
+    scrolledComposite.setContent(wContent);
+    scrolledComposite.setExpandHorizontal(true);
+    scrolledComposite.setExpandVertical(true);
+    scrolledComposite.setMinWidth(bounds.width);
+    scrolledComposite.setMinHeight(bounds.height);
 
     // get the data
     getData();
     joinMeta.setChanged(backupChanged);
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
@@ -181,10 +162,10 @@ public class MultiMergeJoinDialog extends BaseTransformDialog {
   /**
    * Create widgets for join type selection
    *
-   * @param lsMod
+   * @param lsMod the modify listener
    */
-  private void createJoinTypeWidget(final ModifyListener lsMod) {
-    Label joinTypeLabel = new Label(shell, SWT.RIGHT);
+  private void createJoinTypeWidget(Composite parent, final ModifyListener lsMod) {
+    Label joinTypeLabel = new Label(parent, SWT.RIGHT);
     joinTypeLabel.setText(BaseMessages.getString(PKG, "MultiMergeJoinDialog.Type.Label"));
     PropsUi.setLook(joinTypeLabel);
     FormData fdlType = new FormData();
@@ -194,10 +175,10 @@ public class MultiMergeJoinDialog extends BaseTransformDialog {
       fdlType.top =
           new FormAttachment(wInputTransformArray[wInputTransformArray.length - 1], margin * 3);
     } else {
-      fdlType.top = new FormAttachment(wTransformName, margin * 3);
+      fdlType.top = new FormAttachment(0, margin);
     }
     joinTypeLabel.setLayoutData(fdlType);
-    joinTypeCombo = new CCombo(shell, SWT.BORDER);
+    joinTypeCombo = new CCombo(parent, SWT.SINGLE | SWT.READ_ONLY | SWT.BORDER);
     PropsUi.setLook(joinTypeCombo);
 
     joinTypeCombo.setItems(MultiMergeJoinMeta.joinTypes);
@@ -213,17 +194,16 @@ public class MultiMergeJoinDialog extends BaseTransformDialog {
   /**
    * create widgets for input stream and join keys
    *
-   * @param lsMod
+   * @param lsMod the modify listener
    */
-  private void createInputStreamWidgets(final ModifyListener lsMod) {
-    // Get the previous transforms ...
-    String[] inputTransforms = getInputTransformNames();
-    for (int index = 0; index < inputTransforms.length; index++) {
+  private void createInputStreamWidgets(Composite parent, final ModifyListener lsMod) {
+    String[] inputTransforms = allInputTransforms;
+    for (int index = 0; index < wInputTransformArray.length; index++) {
       Label wlTransform;
       FormData fdlTransform;
       FormData fdTransform1;
 
-      wlTransform = new Label(shell, SWT.RIGHT);
+      wlTransform = new Label(parent, SWT.RIGHT);
       wlTransform.setText(
           BaseMessages.getString(PKG, "MultiMergeJoinMeta.InputTransform") + (index + 1));
       PropsUi.setLook(wlTransform);
@@ -231,33 +211,34 @@ public class MultiMergeJoinDialog extends BaseTransformDialog {
       fdlTransform.left = new FormAttachment(0, 0);
       fdlTransform.right = new FormAttachment(middle, -margin);
       if (index == 0) {
-        fdlTransform.top = new FormAttachment(wTransformName, margin * 3);
+        fdlTransform.top = new FormAttachment(0, margin);
       } else {
         fdlTransform.top = new FormAttachment(wInputTransformArray[index - 1], margin * 3);
       }
 
       wlTransform.setLayoutData(fdlTransform);
-      wInputTransformArray[index] = new CCombo(shell, SWT.BORDER);
+      wInputTransformArray[index] = new CCombo(parent, SWT.BORDER);
       PropsUi.setLook(wInputTransformArray[index]);
 
       wInputTransformArray[index].setItems(inputTransforms);
 
       wInputTransformArray[index].addModifyListener(lsMod);
+
       fdTransform1 = new FormData();
       fdTransform1.left = new FormAttachment(wlTransform, margin);
       fdTransform1.top = new FormAttachment(wlTransform, 0, SWT.CENTER);
       fdTransform1.right = new FormAttachment(60);
       wInputTransformArray[index].setLayoutData(fdTransform1);
 
-      Label keyLabel = new Label(shell, SWT.LEFT);
+      Label keyLabel = new Label(parent, SWT.LEFT);
       keyLabel.setText(BaseMessages.getString(PKG, "MultiMergeJoinMeta.JoinKeys"));
       PropsUi.setLook(keyLabel);
       FormData keyTransform = new FormData();
-      keyTransform.left = new FormAttachment(wInputTransformArray[index], margin * 2);
+      keyTransform.left = new FormAttachment(wInputTransformArray[index], margin);
       keyTransform.top = new FormAttachment(wlTransform, 0, SWT.CENTER);
       keyLabel.setLayoutData(keyTransform);
 
-      keyValTextBox[index] = new Text(shell, SWT.READ_ONLY | SWT.SINGLE | SWT.LEFT | SWT.BORDER);
+      keyValTextBox[index] = new Text(parent, SWT.READ_ONLY | SWT.SINGLE | SWT.LEFT | SWT.BORDER);
       PropsUi.setLook(keyValTextBox[index]);
       keyValTextBox[index].setText("");
       keyValTextBox[index].addModifyListener(lsMod);
@@ -266,7 +247,7 @@ public class MultiMergeJoinDialog extends BaseTransformDialog {
       keyData.top = new FormAttachment(wlTransform, 0, SWT.CENTER);
       keyValTextBox[index].setLayoutData(keyData);
 
-      Button button = new Button(shell, SWT.PUSH);
+      Button button = new Button(parent, SWT.PUSH);
       button.setText(BaseMessages.getString(PKG, "MultiMergeJoinMeta.SelectKeys"));
       // add listener
       button.addListener(
@@ -282,8 +263,8 @@ public class MultiMergeJoinDialog extends BaseTransformDialog {
   /**
    * "Configure join key" shell
    *
-   * @param keyValTextBox
-   * @param lsMod
+   * @param keyValTextBox the text widget that needs to be added
+   * @param lsMod modify listener
    */
   private void configureKeys(
       final Text keyValTextBox, final int inputStreamIndex, ModifyListener lsMod) {
@@ -369,13 +350,12 @@ public class MultiMergeJoinDialog extends BaseTransformDialog {
     getKeyButton.setLayoutData(fdbKeys);
     getKeyButton.addListener(
         SWT.Selection,
-        e -> {
-          BaseTransformDialog.getFieldsFromPrevious(
-              prev, wKeys, 1, new int[] {1}, new int[] {}, -1, -1, null);
-        });
+        e ->
+            BaseTransformDialog.getFieldsFromPrevious(
+                prev, wKeys, 1, new int[] {1}, new int[] {}, -1, -1, null));
 
     Listener onOk =
-        (e) -> {
+        e -> {
           int nrKeys = wKeys.nrNonEmpty();
           StringBuilder sb = new StringBuilder();
           for (int i = 0; i < nrKeys; i++) {
@@ -418,17 +398,54 @@ public class MultiMergeJoinDialog extends BaseTransformDialog {
 
   /** Copy information from the meta-data input to the dialog fields. */
   public void getData() {
-    String[] inputTransformNames = joinMeta.getInputTransforms();
+    // If no inputs configured and at least 2 transforms are attached, auto-fill from prev
+    if (joinMeta.getInputTransforms() == null || joinMeta.getInputTransforms().isEmpty()) {
+      String[] prev = pipelineMeta.getPrevTransformNames(transformName);
+      if (prev != null && prev.length >= 2) {
+        List<String> list = new ArrayList<>();
+        for (String p : prev) {
+          list.add(p);
+        }
+        joinMeta.setInputTransforms(list);
+      }
+    }
+    // Sync from hops (rename, insert-in-the-middle) and resolve streams
+    joinMeta.searchInfoAndTargetTransforms(pipelineMeta.getTransforms());
+
+    List<String> inputTransformNames = joinMeta.getInputTransforms();
     if (inputTransformNames != null) {
       String inputTransformName;
-      String[] keyFields = joinMeta.getKeyFields();
+      List<String> keyFields = joinMeta.getKeyFields();
       String keyField;
-      for (int i = 0; i < inputTransformNames.length; i++) {
-        inputTransformName = Const.NVL(inputTransformNames[i], "");
-        wInputTransformArray[i].setText(inputTransformName);
 
-        keyField = Const.NVL(i < keyFields.length ? keyFields[i] : null, "");
-        keyValTextBox[i].setText(keyField);
+      // Create a set of available transforms for quick lookup
+      List<String> availableTransforms = java.util.Arrays.asList(allInputTransforms);
+
+      // Load transforms from metadata, but only if they still exist in the pipeline
+      int widgetIndex = 0;
+      for (int i = 0;
+          i < inputTransformNames.size() && widgetIndex < wInputTransformArray.length;
+          i++) {
+        inputTransformName = Const.NVL(inputTransformNames.get(i), "");
+
+        // Skip transforms that no longer exist in the pipeline
+        if (!Utils.isEmpty(inputTransformName)
+            && !availableTransforms.contains(inputTransformName)) {
+          continue;
+        }
+
+        wInputTransformArray[widgetIndex].setText(inputTransformName);
+
+        keyField = Const.NVL(i < keyFields.size() ? keyFields.get(i) : null, "");
+        keyValTextBox[widgetIndex].setText(keyField);
+
+        widgetIndex++;
+      }
+
+      while (widgetIndex < wInputTransformArray.length) {
+        wInputTransformArray[widgetIndex].setText("");
+        keyValTextBox[widgetIndex].setText("");
+        widgetIndex++;
       }
 
       String joinType = joinMeta.getJoinType();
@@ -438,8 +455,6 @@ public class MultiMergeJoinDialog extends BaseTransformDialog {
         joinTypeCombo.setText(MultiMergeJoinMeta.joinTypes[0]);
       }
     }
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   private void cancel() {
@@ -448,20 +463,12 @@ public class MultiMergeJoinDialog extends BaseTransformDialog {
     dispose();
   }
 
-  /**
-   * Get the meta data
-   *
-   * @param meta
-   */
   private void getMeta(MultiMergeJoinMeta meta) {
-    ITransformIOMeta transformIOMeta = meta.getTransformIOMeta();
-    List<IStream> infoStreams = transformIOMeta.getInfoStreams();
-    IStream stream;
-    String streamDescription;
     ArrayList<String> inputTransformNameList = new ArrayList<>();
     ArrayList<String> keyList = new ArrayList<>();
     CCombo wInputTransform;
     String inputTransformName;
+
     for (int i = 0; i < wInputTransformArray.length; i++) {
       wInputTransform = wInputTransformArray[i];
       inputTransformName = wInputTransform.getText();
@@ -472,30 +479,12 @@ public class MultiMergeJoinDialog extends BaseTransformDialog {
 
       inputTransformNameList.add(inputTransformName);
       keyList.add(keyValTextBox[i].getText());
-
-      if (infoStreams.size() < inputTransformNameList.size()) {
-        streamDescription = BaseMessages.getString(PKG, "MultiMergeJoin.InfoStream.Description");
-        stream = new Stream(StreamType.INFO, null, streamDescription, StreamIcon.INFO, null);
-        transformIOMeta.addStream(stream);
-      }
     }
 
-    int inputTransformCount = inputTransformNameList.size();
-    meta.allocateInputTransforms(inputTransformCount);
-    meta.allocateKeys(inputTransformCount);
-
-    String[] inputTransforms = meta.getInputTransforms();
-    String[] keyFields = meta.getKeyFields();
-    infoStreams = transformIOMeta.getInfoStreams();
-    for (int i = 0; i < inputTransformCount; i++) {
-      inputTransformName = inputTransformNameList.get(i);
-      inputTransforms[i] = inputTransformName;
-      stream = infoStreams.get(i);
-      stream.setTransformMeta(pipelineMeta.findTransform(inputTransformName));
-      keyFields[i] = keyList.get(i);
-    }
-
+    meta.setInputTransforms(inputTransformNameList);
+    meta.setKeyFields(keyList);
     meta.setJoinType(joinTypeCombo.getText());
+    meta.searchInfoAndTargetTransforms(pipelineMeta.getTransforms());
   }
 
   private void ok() {

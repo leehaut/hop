@@ -19,16 +19,25 @@ package org.apache.hop.ui.util;
 
 import static org.apache.hop.core.Const.getDocUrl;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import org.apache.hop.core.HopEnvironment;
 import org.apache.hop.core.database.DatabasePluginType;
+import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.plugins.ActionPluginType;
 import org.apache.hop.core.plugins.IPlugin;
 import org.apache.hop.core.plugins.TransformPluginType;
 import org.apache.hop.core.util.StringUtil;
+import org.apache.hop.core.util.Utils;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.dialog.ErrorDialog;
 import org.apache.hop.ui.core.dialog.MessageBox;
 import org.apache.hop.ui.core.gui.GuiResource;
+import org.apache.hop.ui.hopgui.HopGui;
+import org.apache.hop.ui.hopgui.file.HopFileTypeRegistry;
+import org.apache.hop.ui.hopgui.file.IHopFileType;
+import org.apache.hop.ui.hopgui.perspective.explorer.config.ExplorerPerspectiveConfigSingleton;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
@@ -85,7 +94,13 @@ public class HelpUtils {
     }
     if (isPluginDocumented(plugin)) {
       try {
-        EnvironmentUtils.getInstance().openUrl(getDocUrl(plugin.getDocumentationUrl()));
+        String originalUrl = getDocUrl(plugin.getDocumentationUrl());
+        String trackedUrl = appendUtmParameters(originalUrl);
+        if (ExplorerPerspectiveConfigSingleton.getConfig().isOpeningHelpFiles()) {
+          openHelpInTab(trackedUrl);
+        } else {
+          EnvironmentUtils.getInstance().openUrl(trackedUrl);
+        }
       } catch (Exception ex) {
         new ErrorDialog(shell, "Error", "Error opening URL", ex);
       }
@@ -107,5 +122,47 @@ public class HelpUtils {
       mb.setText(BaseMessages.getString(PKG, "System.Dialog.Error.Title"));
       mb.open();
     }
+  }
+
+  /**
+   * Add analytics tracking parameters for help-button <code>
+   * mtm_campaign=hopgui&mtm_source=help_btn&mtm_kwd=write to log
+   * </code>
+   */
+  private static String appendUtmParameters(String url) {
+    if (url == null || url.isEmpty()) {
+      return url;
+    }
+
+    // campaign: hop gui, source: hop version
+    String utmCampaign;
+    utmCampaign = EnvironmentUtils.getInstance().isWeb() ? "HopWeb" : "hopGui";
+    String utmSource = HopEnvironment.class.getPackage().getImplementationVersion();
+    String utmParams = "mtm_campaign=" + encode(utmCampaign) + "&mtm_source=" + encode(utmSource);
+
+    String separator = url.contains("?") ? "&" : "?";
+    return url + separator + utmParams;
+  }
+
+  /** url params encode. */
+  private static String encode(String field) {
+    if (Utils.isEmpty(field)) {
+      return field;
+    }
+
+    return URLEncoder.encode(field, StandardCharsets.UTF_8);
+  }
+
+  private static void openHelpInTab(String url) throws HopException {
+    HopGui hopGui = HopGui.getInstance();
+    if (hopGui != null) {
+      IHopFileType htmlFileType = HopFileTypeRegistry.getInstance().findHopFileType("help.html");
+      if (htmlFileType != null) {
+        htmlFileType.openFile(hopGui, url, hopGui.getVariables());
+        return;
+      }
+    }
+    // Fallback
+    EnvironmentUtils.getInstance().openUrl(url);
   }
 }

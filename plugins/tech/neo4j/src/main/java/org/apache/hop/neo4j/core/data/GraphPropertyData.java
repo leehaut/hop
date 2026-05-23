@@ -18,7 +18,7 @@
 
 package org.apache.hop.neo4j.core.data;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.json.simple.JSONObject;
 
 public class GraphPropertyData {
@@ -45,14 +45,11 @@ public class GraphPropertyData {
     if (value == null) {
       return "";
     }
-    switch (type) {
-      case Boolean:
-        return ((Boolean) value) ? "true" : "false";
-      case String:
-        return escapeString((String) value);
-      default:
-        return value.toString();
-    }
+    return switch (type) {
+      case Boolean -> ((Boolean) value) ? "true" : "false";
+      case String -> escapeString((String) value);
+      default -> value.toString();
+    };
   }
 
   public static String escapeString(String string) {

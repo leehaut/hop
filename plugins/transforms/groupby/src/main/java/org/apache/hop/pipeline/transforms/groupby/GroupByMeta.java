@@ -225,8 +225,8 @@ public class GroupByMeta extends BaseTransformMeta<GroupBy, GroupByData> {
     if (!passAllRows) {
       // Add the grouping fields in the correct order...
       //
-      for (int i = 0; i < groupingFields.size(); i++) {
-        IValueMeta valueMeta = rowMeta.searchValueMeta(groupingFields.get(i).getName());
+      for (GroupingField groupingField : groupingFields) {
+        IValueMeta valueMeta = rowMeta.searchValueMeta(groupingField.getName());
         if (valueMeta != null) {
           fields.addValueMeta(valueMeta);
         }
@@ -327,14 +327,12 @@ public class GroupByMeta extends BaseTransformMeta<GroupBy, GroupByData> {
       }
     }
 
-    if (passAllRows) {
+    if (passAllRows && addingLineNrInGroup && !Utils.isEmpty(lineNrInGroupField)) {
       // If we pass all rows, we can add a line nr in the group...
-      if (addingLineNrInGroup && !Utils.isEmpty(lineNrInGroupField)) {
-        IValueMeta lineNr = new ValueMetaInteger(lineNrInGroupField);
-        lineNr.setLength(IValueMeta.DEFAULT_INTEGER_LENGTH, 0);
-        lineNr.setOrigin(origin);
-        fields.addValueMeta(lineNr);
-      }
+      IValueMeta lineNr = new ValueMetaInteger(lineNrInGroupField);
+      lineNr.setLength(IValueMeta.DEFAULT_INTEGER_LENGTH, 0);
+      lineNr.setOrigin(origin);
+      fields.addValueMeta(lineNr);
     }
 
     // Now that we have all the fields we want, we should clear the original row and replace the

@@ -1,0 +1,102 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+FROM ubuntu:22.04
+LABEL maintainer="Apache Hop Team"
+
+# Argument Branch name, used to download correct version
+ARG BRANCH_NAME
+ENV BRANCH_NAME=$BRANCH_NAME
+# path to where the artefacts should be deployed to
+ENV DEPLOYMENT_PATH=/opt
+# volume mount point
+ENV VOLUME_MOUNT_POINT=/files
+#Jenkins user an group
+ARG JENKINS_USER=hop
+ARG JENKINS_GROUP=hop
+ARG JENKINS_UID=1000
+ARG JENKINS_GID=1000
+ARG GCP_KEY_FILE=
+# Set system properties
+ENV DEBIAN_FRONTEND=noninteractive
+
+# any JRE settings you want to pass on
+# The “-XX:+AggressiveHeap” tells the container to use all memory assigned to the container. 
+# this removed the need to calculate the necessary heap Xmx
+ENV HOP_OPTIONS=-XX:+AggressiveHeap
+
+# Set Locale correctly
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+
+# INSTALL REQUIRED PACKAGES AND ADJUST LOCALE
+# procps: The package includes the programs ps, top, vmstat, w, kill, free, slabtop, and skill
+
+# Copy the hop package from the local resources folder to the container image directory
+
+RUN apt-get update \
+  && apt-get install --assume-yes \
+  bash \
+  curl \
+  procps \
+  git \
+  python3-pip \
+  openjdk-21-jre-headless \
+  unzip \
+  ttf-mscorefonts-installer \
+  locales \
+  && apt-get clean \
+  && mkdir ${VOLUME_MOUNT_POINT} \
+  && addgroup -gid ${JENKINS_GID} ${JENKINS_GROUP} \
+  && useradd -m  -d /home/${JENKINS_USER} -u ${JENKINS_UID} -g ${JENKINS_GROUP} ${JENKINS_USER} \
+  && chown ${JENKINS_USER}:${JENKINS_GROUP} ${DEPLOYMENT_PATH} \
+  && chown ${JENKINS_USER}:${JENKINS_GROUP} ${VOLUME_MOUNT_POINT} \
+  && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen  \
+  && locale-gen \
+  # Install parquet-tools from Python
+  && pip3 install parquet-tools
+
+
+COPY --chown=${JENKINS_USER}:${JENKINS_GROUP} ./assemblies/client/target/hop ${DEPLOYMENT_PATH}/hop
+
+# Copy gcp key
+COPY --chown=${JENKINS_USER}:${JENKINS_GROUP} ${GCP_KEY_FILE} /tmp/google-key-apache-hop-it.json
+
+# Copy mail keystore
+COPY --chown=${JENKINS_USER}:${JENKINS_GROUP} ./docker/integration-tests/resource/mail/conf/keystore /tmp
+
+# Unzip and install in correct location
+RUN chown -R ${JENKINS_USER}:${JENKINS_GROUP} ${DEPLOYMENT_PATH}/hop \
+  && chmod 700 ${DEPLOYMENT_PATH}/hop/*.sh \
+  && cd ${DEPLOYMENT_PATH}/hop \
+  && ./hop-conf.sh --generate-fat-jar=/tmp/hop-fatjar.jar
+
+
+# Download Additional drivers/dependencies
+ADD --chown=${JENKINS_USER}:${JENKINS_GROUP} https://repo1.maven.org/maven2/com/vertica/jdbc/vertica-jdbc/23.4.0-0/vertica-jdbc-23.4.0-0.jar /opt/hop/lib/jdbc/vertica-jdbc-23.4.0-0.jar
+ADD --chown=${JENKINS_USER}:${JENKINS_GROUP} https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/9.2.0/mysql-connector-j-9.2.0.jar /opt/hop/lib/jdbc/mysql-connector-j-9.2.0.jar
+
+# make volume available so that hop pipeline and workflow files can be provided easily
+VOLUME ["/files"]
+USER ${JENKINS_USER}
+ENV PATH=$PATH:${DEPLOYMENT_PATH}/hop
+ENV GOOGLE_APPLICATION_CREDENTIALS="/tmp/google-key-apache-hop-it.json"
+ENV HOP_OPTIONS="${HOP_OPTIONS}"
+WORKDIR /home/${JENKINS_USER}
+# CMD ["/bin/bash"]
+ENTRYPOINT []

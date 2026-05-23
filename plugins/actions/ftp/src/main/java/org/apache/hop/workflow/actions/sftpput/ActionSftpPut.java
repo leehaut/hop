@@ -23,6 +23,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.FileType;
 import org.apache.hop.core.Const;
@@ -33,12 +35,12 @@ import org.apache.hop.core.RowMetaAndData;
 import org.apache.hop.core.annotations.Action;
 import org.apache.hop.core.encryption.Encr;
 import org.apache.hop.core.exception.HopException;
-import org.apache.hop.core.exception.HopXmlException;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.core.vfs.HopVfs;
-import org.apache.hop.core.xml.XmlHandler;
 import org.apache.hop.i18n.BaseMessages;
+import org.apache.hop.metadata.api.HopMetadataProperty;
+import org.apache.hop.metadata.api.IEnumHasCodeAndDescription;
 import org.apache.hop.metadata.api.IHopMetadataProvider;
 import org.apache.hop.resource.ResourceEntry;
 import org.apache.hop.resource.ResourceEntry.ResourceType;
@@ -49,7 +51,6 @@ import org.apache.hop.workflow.action.IAction;
 import org.apache.hop.workflow.action.validator.ActionValidatorUtils;
 import org.apache.hop.workflow.action.validator.AndValidator;
 import org.apache.hop.workflow.actions.sftp.SftpClient;
-import org.w3c.dom.Node;
 
 /** This defines an SFTP put action. */
 @Action(
@@ -60,504 +61,135 @@ import org.w3c.dom.Node;
     categoryDescription = "i18n:org.apache.hop.workflow:ActionCategory.Category.FileTransfer",
     keywords = "i18n::ActionSftpPut.keyword",
     documentationUrl = "/workflow/actions/sftpput.html")
+@Getter
+@Setter
 public class ActionSftpPut extends ActionBase implements Cloneable, IAction {
   private static final Class<?> PKG = ActionSftpPut.class;
-  private static final String CONST_SPACE_SHORT = "      ";
   private static final String CONST_PASSWORD = "password";
 
-  private int afterFtps;
-
-  public static final String[] afterFtpsDesc =
-      new String[] {
-        BaseMessages.getString(PKG, "ActionSftpPut.AfterSFTP.DoNothing.Label"),
-        BaseMessages.getString(PKG, "ActionSftpPut.AfterSFTP.Delete.Label"),
-        BaseMessages.getString(PKG, "ActionSftpPut.AfterSFTP.Move.Label"),
-      };
-  public static final String[] afterFtpsCode = new String[] {"nothing", "delete", "move"};
-
-  public static final int AFTER_FTPSPUT_NOTHING = 0;
-  public static final int AFTER_FTPSPUT_DELETE = 1;
-  public static final int AFTER_FTPSPUT_MOVE = 2;
-
+  @HopMetadataProperty(key = "servername")
   private String serverName;
+
+  @HopMetadataProperty(key = "serverport")
   private String serverPort;
+
+  @HopMetadataProperty(key = "username")
   private String userName;
+
+  @HopMetadataProperty(key = "password", password = true)
   private String password;
+
+  @HopMetadataProperty(key = "sftpdirectory")
   private String remoteDirectory;
+
+  @HopMetadataProperty(key = "localdirectory")
   private String localDirectory;
+
+  @HopMetadataProperty(key = "wildcard")
   private String wildcard;
+
+  @HopMetadataProperty(key = "copyprevious")
   private boolean copyingPrevious;
+
+  @HopMetadataProperty(key = "copypreviousfiles")
   private boolean copyingPreviousFiles;
+
+  @HopMetadataProperty(key = "addFilenameResut")
   private boolean addFilenameResut;
+
+  @HopMetadataProperty(key = "usekeyfilename")
   private boolean useKeyFilename;
+
+  @HopMetadataProperty(key = "keyfilename")
   private String keyFilename;
+
+  @HopMetadataProperty(key = "keyfilepass", password = true)
   private String keyFilePassword;
+
+  @HopMetadataProperty(key = "compression")
   private String compression;
+
+  @HopMetadataProperty(key = "createRemoteFolder")
   private boolean createRemoteFolder;
-  // proxy
+
+  @HopMetadataProperty(key = "aftersftpput", storeWithCode = true)
+  private AfterFtpAction afterSftpAction;
+
+  @HopMetadataProperty(key = "preserveTargetFileTimestamp")
+  private boolean preserveTargetFileTimestamp;
+
+  @HopMetadataProperty(key = "proxyType")
   private String proxyType;
+
+  @HopMetadataProperty(key = "proxyHost")
   private String proxyHost;
+
+  @HopMetadataProperty(key = "proxyPort")
   private String proxyPort;
+
+  @HopMetadataProperty(key = "proxyUsername")
   private String proxyUsername;
+
+  @HopMetadataProperty(key = "proxyPassword", password = true)
   private String proxyPassword;
 
+  @HopMetadataProperty(key = "destinationfolder")
   private String destinationFolder;
+
+  @HopMetadataProperty(key = "createdestinationfolder")
   private boolean createDestinationFolder;
 
+  @HopMetadataProperty(key = "successWhenNoFile")
   private boolean successWhenNoFile;
 
   public ActionSftpPut(String n) {
     super(n, "");
-    serverName = null;
     serverPort = "22";
-    copyingPrevious = false;
-    copyingPreviousFiles = false;
-    addFilenameResut = false;
-    useKeyFilename = false;
-    keyFilename = null;
-    keyFilePassword = null;
     compression = "none";
-    proxyType = null;
-    proxyHost = null;
-    proxyPort = null;
-    proxyUsername = null;
-    proxyPassword = null;
-    createRemoteFolder = false;
-    afterFtps = AFTER_FTPSPUT_NOTHING;
-    destinationFolder = null;
-    createDestinationFolder = false;
-    successWhenNoFile = false;
+    afterSftpAction = AfterFtpAction.NOTHING;
+    preserveTargetFileTimestamp = true;
   }
 
   public ActionSftpPut() {
     this("");
   }
 
+  public ActionSftpPut(ActionSftpPut a) {
+    super(a);
+    this.serverName = a.serverName;
+    this.serverPort = a.serverPort;
+    this.userName = a.userName;
+    this.password = a.password;
+    this.remoteDirectory = a.remoteDirectory;
+    this.localDirectory = a.localDirectory;
+    this.wildcard = a.wildcard;
+    this.copyingPrevious = a.copyingPrevious;
+    this.copyingPreviousFiles = a.copyingPreviousFiles;
+    this.addFilenameResut = a.addFilenameResut;
+    this.useKeyFilename = a.useKeyFilename;
+    this.keyFilename = a.keyFilename;
+    this.keyFilePassword = a.keyFilePassword;
+    this.compression = a.compression;
+    this.createRemoteFolder = a.createRemoteFolder;
+    this.afterSftpAction = a.afterSftpAction;
+    this.preserveTargetFileTimestamp = a.preserveTargetFileTimestamp;
+    this.proxyType = a.proxyType;
+    this.proxyHost = a.proxyHost;
+    this.proxyPort = a.proxyPort;
+    this.proxyUsername = a.proxyUsername;
+    this.proxyPassword = a.proxyPassword;
+    this.destinationFolder = a.destinationFolder;
+    this.createDestinationFolder = a.createDestinationFolder;
+    this.successWhenNoFile = a.successWhenNoFile;
+  }
+
   @Override
   public Object clone() {
-    ActionSftpPut je = (ActionSftpPut) super.clone();
-    return je;
+    return new ActionSftpPut(this);
   }
 
   @Override
-  public String getXml() {
-    StringBuilder retval = new StringBuilder(300);
-
-    retval.append(super.getXml());
-
-    retval.append(CONST_SPACE_SHORT).append(XmlHandler.addTagValue("servername", serverName));
-    retval.append(CONST_SPACE_SHORT).append(XmlHandler.addTagValue("serverport", serverPort));
-    retval.append(CONST_SPACE_SHORT).append(XmlHandler.addTagValue("username", userName));
-    retval
-        .append(CONST_SPACE_SHORT)
-        .append(
-            XmlHandler.addTagValue(
-                CONST_PASSWORD, Encr.encryptPasswordIfNotUsingVariables(password)));
-    retval
-        .append(CONST_SPACE_SHORT)
-        .append(XmlHandler.addTagValue("sftpdirectory", remoteDirectory));
-    retval
-        .append(CONST_SPACE_SHORT)
-        .append(XmlHandler.addTagValue("localdirectory", localDirectory));
-    retval.append(CONST_SPACE_SHORT).append(XmlHandler.addTagValue("wildcard", wildcard));
-    retval
-        .append(CONST_SPACE_SHORT)
-        .append(XmlHandler.addTagValue("copyprevious", copyingPrevious));
-    retval
-        .append(CONST_SPACE_SHORT)
-        .append(XmlHandler.addTagValue("copypreviousfiles", copyingPreviousFiles));
-    retval
-        .append(CONST_SPACE_SHORT)
-        .append(XmlHandler.addTagValue("addFilenameResut", addFilenameResut));
-    retval
-        .append(CONST_SPACE_SHORT)
-        .append(XmlHandler.addTagValue("usekeyfilename", useKeyFilename));
-    retval.append(CONST_SPACE_SHORT).append(XmlHandler.addTagValue("keyfilename", keyFilename));
-    retval
-        .append(CONST_SPACE_SHORT)
-        .append(
-            XmlHandler.addTagValue(
-                "keyfilepass", Encr.encryptPasswordIfNotUsingVariables(keyFilePassword)));
-    retval.append(CONST_SPACE_SHORT).append(XmlHandler.addTagValue("compression", compression));
-    retval.append(CONST_SPACE_SHORT).append(XmlHandler.addTagValue("proxyType", proxyType));
-    retval.append(CONST_SPACE_SHORT).append(XmlHandler.addTagValue("proxyHost", proxyHost));
-    retval.append(CONST_SPACE_SHORT).append(XmlHandler.addTagValue("proxyPort", proxyPort));
-    retval.append(CONST_SPACE_SHORT).append(XmlHandler.addTagValue("proxyUsername", proxyUsername));
-    retval
-        .append(CONST_SPACE_SHORT)
-        .append(
-            XmlHandler.addTagValue(
-                "proxyPassword", Encr.encryptPasswordIfNotUsingVariables(proxyPassword)));
-    retval
-        .append(CONST_SPACE_SHORT)
-        .append(XmlHandler.addTagValue("createRemoteFolder", createRemoteFolder));
-    retval
-        .append(CONST_SPACE_SHORT)
-        .append(XmlHandler.addTagValue("aftersftpput", getAfterSftpPutCode(getAfterFtps())));
-    retval
-        .append(CONST_SPACE_SHORT)
-        .append(XmlHandler.addTagValue("destinationfolder", destinationFolder));
-    retval
-        .append(CONST_SPACE_SHORT)
-        .append(XmlHandler.addTagValue("createdestinationfolder", createDestinationFolder));
-
-    retval
-        .append(CONST_SPACE_SHORT)
-        .append(XmlHandler.addTagValue("successWhenNoFile", successWhenNoFile));
-
-    return retval.toString();
-  }
-
-  public static String getAfterSftpPutCode(int i) {
-    if (i < 0 || i >= afterFtpsCode.length) {
-      return afterFtpsCode[0];
-    }
-    return afterFtpsCode[i];
-  }
-
-  @Override
-  public void loadXml(Node entrynode, IHopMetadataProvider metadataProvider, IVariables variables)
-      throws HopXmlException {
-    try {
-      super.loadXml(entrynode);
-      serverName = XmlHandler.getTagValue(entrynode, "servername");
-      serverPort = XmlHandler.getTagValue(entrynode, "serverport");
-      userName = XmlHandler.getTagValue(entrynode, "username");
-      password =
-          Encr.decryptPasswordOptionallyEncrypted(
-              XmlHandler.getTagValue(entrynode, CONST_PASSWORD));
-      remoteDirectory = XmlHandler.getTagValue(entrynode, "sftpdirectory");
-      localDirectory = XmlHandler.getTagValue(entrynode, "localdirectory");
-      wildcard = XmlHandler.getTagValue(entrynode, "wildcard");
-      copyingPrevious = "Y".equalsIgnoreCase(XmlHandler.getTagValue(entrynode, "copyprevious"));
-      copyingPreviousFiles =
-          "Y".equalsIgnoreCase(XmlHandler.getTagValue(entrynode, "copypreviousfiles"));
-      addFilenameResut =
-          "Y".equalsIgnoreCase(XmlHandler.getTagValue(entrynode, "addFilenameResut"));
-
-      useKeyFilename = "Y".equalsIgnoreCase(XmlHandler.getTagValue(entrynode, "usekeyfilename"));
-      keyFilename = XmlHandler.getTagValue(entrynode, "keyfilename");
-      keyFilePassword =
-          Encr.decryptPasswordOptionallyEncrypted(XmlHandler.getTagValue(entrynode, "keyfilepass"));
-      compression = XmlHandler.getTagValue(entrynode, "compression");
-      proxyType = XmlHandler.getTagValue(entrynode, "proxyType");
-      proxyHost = XmlHandler.getTagValue(entrynode, "proxyHost");
-      proxyPort = XmlHandler.getTagValue(entrynode, "proxyPort");
-      proxyUsername = XmlHandler.getTagValue(entrynode, "proxyUsername");
-      proxyPassword =
-          Encr.decryptPasswordOptionallyEncrypted(
-              XmlHandler.getTagValue(entrynode, "proxyPassword"));
-
-      createRemoteFolder =
-          "Y".equalsIgnoreCase(XmlHandler.getTagValue(entrynode, "createRemoteFolder"));
-
-      boolean remove = "Y".equalsIgnoreCase(XmlHandler.getTagValue(entrynode, "remove"));
-      setAfterFtps(
-          getAfterSftpPutByCode(Const.NVL(XmlHandler.getTagValue(entrynode, "aftersftpput"), "")));
-      if (remove && getAfterFtps() == AFTER_FTPSPUT_NOTHING) {
-        setAfterFtps(AFTER_FTPSPUT_DELETE);
-      }
-      destinationFolder = XmlHandler.getTagValue(entrynode, "destinationfolder");
-      createDestinationFolder =
-          "Y".equalsIgnoreCase(XmlHandler.getTagValue(entrynode, "createdestinationfolder"));
-      successWhenNoFile =
-          "Y".equalsIgnoreCase(XmlHandler.getTagValue(entrynode, "successWhenNoFile"));
-
-    } catch (HopXmlException xe) {
-      throw new HopXmlException("Unable to load action of type 'SFTPPUT' from XML node", xe);
-    }
-  }
-
-  public static int getAfterSftpPutByCode(String tt) {
-    if (tt == null) {
-      return 0;
-    }
-
-    for (int i = 0; i < afterFtpsCode.length; i++) {
-      if (afterFtpsCode[i].equalsIgnoreCase(tt)) {
-        return i;
-      }
-    }
-    return 0;
-  }
-
-  public static String getAfterSftpPutDesc(int i) {
-    if (i < 0 || i >= afterFtpsDesc.length) {
-      return afterFtpsDesc[0];
-    }
-    return afterFtpsDesc[i];
-  }
-
-  public static int getAfterSftpPutByDesc(String tt) {
-    if (tt == null) {
-      return 0;
-    }
-
-    for (int i = 0; i < afterFtpsDesc.length; i++) {
-      if (afterFtpsDesc[i].equalsIgnoreCase(tt)) {
-        return i;
-      }
-    }
-
-    // If this fails, try to match using the code.
-    return getAfterSftpPutByCode(tt);
-  }
-
-  /**
-   * @param createDestinationFolder The create destination folder flag to set.
-   */
-  public void setCreateDestinationFolder(boolean createDestinationFolder) {
-    this.createDestinationFolder = createDestinationFolder;
-  }
-
-  /**
-   * @return Returns the create destination folder flag
-   */
-  public boolean isCreateDestinationFolder() {
-    return createDestinationFolder;
-  }
-
-  /**
-   * @param successWhenNoFile The successWhenNoFile flag to set.
-   */
-  public void setSuccessWhenNoFile(boolean successWhenNoFile) {
-    this.successWhenNoFile = successWhenNoFile;
-  }
-
-  /**
-   * @return Returns the create successWhenNoFile folder flag
-   */
-  public boolean isSuccessWhenNoFile() {
-    return successWhenNoFile;
-  }
-
-  public void setDestinationFolder(String destinationfolderin) {
-    this.destinationFolder = destinationfolderin;
-  }
-
-  public String getDestinationFolder() {
-    return destinationFolder;
-  }
-
-  /**
-   * @return Returns the afterFTPS.
-   */
-  public int getAfterFtps() {
-    return afterFtps;
-  }
-
-  /**
-   * @param value The afterFTPS to set.
-   */
-  public void setAfterFtps(int value) {
-    this.afterFtps = value;
-  }
-
-  /**
-   * @return Returns the directory.
-   */
-  public String getScpDirectory() {
-    return remoteDirectory;
-  }
-
-  /**
-   * @param directory The directory to set.
-   */
-  public void setScpDirectory(String directory) {
-    this.remoteDirectory = directory;
-  }
-
-  /**
-   * @return Returns the password.
-   */
-  public String getPassword() {
-    return password;
-  }
-
-  /**
-   * @param password The password to set.
-   */
-  public void setPassword(String password) {
-    this.password = password;
-  }
-
-  /**
-   * @return Returns the serverName.
-   */
-  public String getServerName() {
-    return serverName;
-  }
-
-  /**
-   * @param serverName The serverName to set.
-   */
-  public void setServerName(String serverName) {
-    this.serverName = serverName;
-  }
-
-  /**
-   * @return Returns the userName.
-   */
-  public String getUserName() {
-    return userName;
-  }
-
-  /**
-   * @param userName The userName to set.
-   */
-  public void setUserName(String userName) {
-    this.userName = userName;
-  }
-
-  /**
-   * @return Returns the wildcard.
-   */
-  public String getWildcard() {
-    return wildcard;
-  }
-
-  /**
-   * @param wildcard The wildcard to set.
-   */
-  public void setWildcard(String wildcard) {
-    this.wildcard = wildcard;
-  }
-
-  /**
-   * @return Returns the localdirectory.
-   */
-  public String getLocalDirectory() {
-    return localDirectory;
-  }
-
-  /**
-   * @param localDirectory The localDirectory to set.
-   */
-  public void setLocalDirectory(String localDirectory) {
-    this.localDirectory = localDirectory;
-  }
-
-  public boolean isCopyPrevious() {
-    return copyingPrevious;
-  }
-
-  public void setCopyPrevious(boolean copyprevious) {
-    this.copyingPrevious = copyprevious;
-  }
-
-  public boolean isCopyPreviousFiles() {
-    return copyingPreviousFiles;
-  }
-
-  public void setCopyPreviousFiles(boolean copypreviousfiles) {
-    this.copyingPreviousFiles = copypreviousfiles;
-  }
-
-  public boolean isAddFilenameResut() {
-    return addFilenameResut;
-  }
-
-  public boolean isUseKeyFile() {
-    return useKeyFilename;
-  }
-
-  public void setUseKeyFile(boolean value) {
-    this.useKeyFilename = value;
-  }
-
-  public String getKeyFilename() {
-    return keyFilename;
-  }
-
-  public void setKeyFilename(String value) {
-    this.keyFilename = value;
-  }
-
-  public String getKeyPassPhrase() {
-    return keyFilePassword;
-  }
-
-  public void setKeyPassPhrase(String value) {
-    this.keyFilePassword = value;
-  }
-
-  public void setAddFilenameResut(boolean addFilenameResut) {
-    this.addFilenameResut = addFilenameResut;
-  }
-
-  /**
-   * @return Returns the compression.
-   */
-  public String getCompression() {
-    return compression;
-  }
-
-  /**
-   * @param compression The compression to set.
-   */
-  public void setCompression(String compression) {
-    this.compression = compression;
-  }
-
-  public String getServerPort() {
-    return serverPort;
-  }
-
-  public void setServerPort(String serverPort) {
-    this.serverPort = serverPort;
-  }
-
-  public String getProxyType() {
-    return proxyType;
-  }
-
-  public void setProxyType(String value) {
-    this.proxyType = value;
-  }
-
-  public String getProxyHost() {
-    return proxyHost;
-  }
-
-  public void setProxyHost(String value) {
-    this.proxyHost = value;
-  }
-
-  public String getProxyPort() {
-    return proxyPort;
-  }
-
-  public void setProxyPort(String value) {
-    this.proxyPort = value;
-  }
-
-  public String getProxyUsername() {
-    return proxyUsername;
-  }
-
-  public void setProxyUsername(String value) {
-    this.proxyUsername = value;
-  }
-
-  public String getProxyPassword() {
-    return proxyPassword;
-  }
-
-  public void setProxyPassword(String value) {
-    this.proxyPassword = value;
-  }
-
-  public boolean isCreateRemoteFolder() {
-    return this.createRemoteFolder;
-  }
-
-  public void setCreateRemoteFolder(boolean value) {
-    this.createRemoteFolder = value;
-  }
-
-  @Override
-  public Result execute(Result previousResult, int nr) throws HopException {
-    Result result = previousResult;
+  public Result execute(Result result, int nr) throws HopException {
     List<RowMetaAndData> rows = result.getRows();
     result.setResult(false);
 
@@ -578,8 +210,8 @@ public class ActionSftpPut extends ActionBase implements Cloneable, IAction {
       try {
         RowMetaAndData resultRow = null;
         // Copy the input row to the (command line) arguments
-        for (int iteration = 0; iteration < rows.size(); iteration++) {
-          resultRow = rows.get(iteration);
+        for (RowMetaAndData row : rows) {
+          resultRow = row;
 
           // Get file names
           String filePrevious = resultRow.getString(0, null);
@@ -602,8 +234,6 @@ public class ActionSftpPut extends ActionBase implements Cloneable, IAction {
       } catch (Exception e) {
         logError(BaseMessages.getString(PKG, "ActionSftpPut.Error.ArgFromPrevious"));
         result.setNrErrors(1);
-        // free resource
-        myFileList = null;
         return result;
       }
     }
@@ -641,8 +271,6 @@ public class ActionSftpPut extends ActionBase implements Cloneable, IAction {
       } catch (Exception e) {
         logError(BaseMessages.getString(PKG, "ActionSftpPut.Error.ArgFromPrevious"));
         result.setNrErrors(1);
-        // free resource
-        myFileList = null;
         return result;
       }
     }
@@ -665,15 +293,13 @@ public class ActionSftpPut extends ActionBase implements Cloneable, IAction {
     try {
       // Let's perform some checks before starting
 
-      if (getAfterFtps() == AFTER_FTPSPUT_MOVE) {
+      if (afterSftpAction == AfterFtpAction.MOVE) {
         if (Utils.isEmpty(realDestinationFolder)) {
           logError(BaseMessages.getString(PKG, "ActionSSH2PUT.Log.DestinatFolderMissing"));
           result.setNrErrors(1);
           return result;
         } else {
-          FileObject folder = null;
-          try {
-            folder = HopVfs.getFileObject(realDestinationFolder);
+          try (FileObject folder = HopVfs.getFileObject(realDestinationFolder)) {
             // Let's check if folder exists...
             if (!folder.exists()) {
               // Do we need to create it?
@@ -690,19 +316,11 @@ public class ActionSftpPut extends ActionBase implements Cloneable, IAction {
             realDestinationFolder = HopVfs.getFilename(folder);
           } catch (Exception e) {
             throw new HopException(e);
-          } finally {
-            if (folder != null) {
-              try {
-                folder.close();
-              } catch (Exception e) {
-                /* Ignore */
-              }
-            }
           }
         }
       }
 
-      if (isUseKeyFile()) {
+      if (isUseKeyFilename()) {
         // We must have here a private keyfilename
         realKeyFilename = resolve(getKeyFilename());
         if (Utils.isEmpty(realKeyFilename)) {
@@ -717,7 +335,7 @@ public class ActionSftpPut extends ActionBase implements Cloneable, IAction {
           result.setNrErrors(1);
           return result;
         }
-        realPassPhrase = resolve(getKeyPassPhrase());
+        realPassPhrase = resolve(getKeyFilePassword());
       }
 
       // Create sftp client to host ...
@@ -761,8 +379,8 @@ public class ActionSftpPut extends ActionBase implements Cloneable, IAction {
 
       // move to spool dir ...
       if (!Utils.isEmpty(realSftpDirString)) {
-        boolean existfolder = sftpclient.folderExists(realSftpDirString);
-        if (!existfolder) {
+        boolean folderExists = sftpclient.folderExists(realSftpDirString);
+        if (!folderExists) {
           if (!isCreateRemoteFolder()) {
             throw new HopException(
                 BaseMessages.getString(
@@ -796,10 +414,10 @@ public class ActionSftpPut extends ActionBase implements Cloneable, IAction {
         FileObject localFiles = HopVfs.getFileObject(realLocalDirectory);
         FileObject[] children = localFiles.getChildren();
         if (children != null) {
-          for (int i = 0; i < children.length; i++) {
+          for (FileObject child : children) {
             // Get filename of file or directory
-            if (children[i].getType().equals(FileType.FILE)) {
-              myFileList.add(children[i]);
+            if (child.getType().equals(FileType.FILE)) {
+              myFileList.add(child);
             }
           } // end for
         }
@@ -812,10 +430,8 @@ public class ActionSftpPut extends ActionBase implements Cloneable, IAction {
       }
 
       Pattern pattern = null;
-      if (!copyingPrevious && !copyingPreviousFiles) {
-        if (!Utils.isEmpty(realWildcard)) {
-          pattern = Pattern.compile(realWildcard);
-        }
+      if (!copyingPrevious && !copyingPreviousFiles && !Utils.isEmpty(realWildcard)) {
+        pattern = Pattern.compile(realWildcard);
       }
 
       int nrFilesSent = 0;
@@ -845,7 +461,7 @@ public class ActionSftpPut extends ActionBase implements Cloneable, IAction {
                       PKG, "ActionSftpPut.Log.PuttingFile", localFilename, realSftpDirString));
             }
 
-            sftpclient.put(myFile, destinationFilename);
+            sftpclient.put(myFile, destinationFilename, preserveTargetFileTimestamp);
             nrFilesSent++;
 
             if (isDetailed()) {
@@ -855,15 +471,15 @@ public class ActionSftpPut extends ActionBase implements Cloneable, IAction {
 
             // We successfully uploaded the file
             // what's next ...
-            switch (getAfterFtps()) {
-              case AFTER_FTPSPUT_DELETE:
+            switch (afterSftpAction) {
+              case DELETE:
                 myFile.delete();
                 if (isDetailed()) {
                   logDetailed(
                       BaseMessages.getString(PKG, "ActionSftpPut.Log.DeletedFile", localFilename));
                 }
                 break;
-              case AFTER_FTPSPUT_MOVE:
+              case MOVE:
                 FileObject destination = null;
                 try {
                   destination =
@@ -946,9 +562,8 @@ public class ActionSftpPut extends ActionBase implements Cloneable, IAction {
         }
       } catch (Exception e) {
         // just ignore this, makes no big difference
-      } // end catch
-      myFileList = null;
-    } // end finally
+      }
+    }
 
     return result;
   } // JKU: end function execute()
@@ -1009,5 +624,29 @@ public class ActionSftpPut extends ActionBase implements Cloneable, IAction {
             "serverPort",
             remarks,
             AndValidator.putValidators(ActionValidatorUtils.integerValidator()));
+  }
+
+  @Getter
+  public enum AfterFtpAction implements IEnumHasCodeAndDescription {
+    NOTHING("nothing", BaseMessages.getString(PKG, "ActionSftpPut.AfterSFTP.DoNothing.Label")),
+    DELETE("delete", BaseMessages.getString(PKG, "ActionSftpPut.AfterSFTP.Delete.Label")),
+    MOVE("move", BaseMessages.getString(PKG, "ActionSftpPut.AfterSFTP.Move.Label")),
+    ;
+    final String code;
+    final String description;
+
+    private AfterFtpAction(String code, String description) {
+      this.code = code;
+      this.description = description;
+    }
+
+    public static String[] getDescriptions() {
+      return IEnumHasCodeAndDescription.getDescriptions(AfterFtpAction.class);
+    }
+
+    public static AfterFtpAction lookupDescription(String description) {
+      return IEnumHasCodeAndDescription.lookupDescription(
+          AfterFtpAction.class, description, NOTHING);
+    }
   }
 }

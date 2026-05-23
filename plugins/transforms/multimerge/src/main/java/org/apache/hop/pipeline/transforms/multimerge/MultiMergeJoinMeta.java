@@ -17,31 +17,35 @@
 
 package org.apache.hop.pipeline.transforms.multimerge;
 
+import java.util.ArrayList;
 import java.util.List;
-import org.apache.commons.lang.ArrayUtils;
+import lombok.Getter;
+import lombok.Setter;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.hop.core.CheckResult;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.ICheckResult;
 import org.apache.hop.core.annotations.Transform;
+import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopTransformException;
-import org.apache.hop.core.exception.HopXmlException;
-import org.apache.hop.core.injection.Injection;
-import org.apache.hop.core.injection.InjectionSupported;
 import org.apache.hop.core.row.IRowMeta;
+import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.core.xml.XmlHandler;
 import org.apache.hop.i18n.BaseMessages;
+import org.apache.hop.metadata.api.HopMetadataProperty;
 import org.apache.hop.metadata.api.IHopMetadataProvider;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransformMeta;
 import org.apache.hop.pipeline.transform.ITransformIOMeta;
+import org.apache.hop.pipeline.transform.TransformIOMeta;
 import org.apache.hop.pipeline.transform.TransformMeta;
+import org.apache.hop.pipeline.transform.stream.IStream;
 import org.apache.hop.pipeline.transform.stream.IStream.StreamType;
 import org.apache.hop.pipeline.transform.stream.Stream;
 import org.apache.hop.pipeline.transform.stream.StreamIcon;
 import org.w3c.dom.Node;
 
-@InjectionSupported(localizationPrefix = "MultiMergeJoin.Injection.")
 @Transform(
     id = "MultiwayMergeJoin",
     image = "multimergejoin.svg",
@@ -50,54 +54,30 @@ import org.w3c.dom.Node;
     categoryDescription = "i18n:org.apache.hop.pipeline.transform:BaseTransform.Category.Joins",
     keywords = "i18n::MultiMergeJoinMeta.keyword",
     documentationUrl = "/pipeline/transforms/multimerge.html")
+@Getter
+@Setter
 public class MultiMergeJoinMeta extends BaseTransformMeta<MultiMergeJoin, MultiMergeJoinData> {
   private static final Class<?> PKG = MultiMergeJoinMeta.class;
 
   public static final String[] joinTypes = {"INNER", "FULL OUTER"};
   public static final boolean[] optionals = {false, true};
 
-  @Injection(name = "JOIN_TYPE")
+  @HopMetadataProperty(
+      key = "join_type",
+      injectionKey = "JOIN_TYPE",
+      injectionKeyDescription = "MultiMergeJoinMeta.Injection.JoinType")
   private String joinType;
 
   /** comma separated key values for each stream */
-  @Injection(name = "KEY_FIELDS")
-  private String[] keyFields;
+  @HopMetadataProperty(key = "key", groupKey = "keys", injectionKey = "KEY_FIELDS")
+  private List<String> keyFields;
 
   /** input stream names */
-  @Injection(name = "INPUT_TRANSFORMS")
-  private String[] inputTransforms;
-
-  /**
-   * The supported join types are INNER, LEFT OUTER, RIGHT OUTER and FULL OUTER
-   *
-   * @return The type of join
-   */
-  public String getJoinType() {
-    return joinType;
-  }
-
-  /**
-   * Sets the type of join
-   *
-   * @param joinType The type of join, e.g. INNER/FULL OUTER
-   */
-  public void setJoinType(String joinType) {
-    this.joinType = joinType;
-  }
-
-  /**
-   * @return Returns the keyFields1.
-   */
-  public String[] getKeyFields() {
-    return keyFields;
-  }
-
-  /**
-   * @param keyFields The keyFields1 to set.
-   */
-  public void setKeyFields(String[] keyFields) {
-    this.keyFields = keyFields;
-  }
+  @HopMetadataProperty(
+      key = "transform",
+      groupKey = "transforms",
+      injectionKey = "INPUT_TRANSFORMS")
+  private List<String> inputTransforms;
 
   @Override
   public boolean excludeFromRowLayoutVerification() {
@@ -105,106 +85,154 @@ public class MultiMergeJoinMeta extends BaseTransformMeta<MultiMergeJoin, MultiM
   }
 
   public MultiMergeJoinMeta() {
-    super(); // allocate BaseTransformMeta
-  }
-
-  @Override
-  public void loadXml(Node transformNode, IHopMetadataProvider metadataProvider)
-      throws HopXmlException {
-    readData(transformNode);
-  }
-
-  public void allocateKeys(int nrKeys) {
-    keyFields = new String[nrKeys];
-  }
-
-  @Override
-  public Object clone() {
-    MultiMergeJoinMeta retval = (MultiMergeJoinMeta) super.clone();
-    int nrKeys = keyFields == null ? 0 : keyFields.length;
-    int nrTransforms = inputTransforms == null ? 0 : inputTransforms.length;
-    retval.allocateKeys(nrKeys);
-    retval.allocateInputTransforms(nrTransforms);
-    System.arraycopy(keyFields, 0, retval.keyFields, 0, nrKeys);
-    System.arraycopy(inputTransforms, 0, retval.inputTransforms, 0, nrTransforms);
-    return retval;
-  }
-
-  @Override
-  public String getXml() {
-    StringBuilder retval = new StringBuilder();
-
-    String[] inputTransformsNames =
-        inputTransforms != null ? inputTransforms : ArrayUtils.EMPTY_STRING_ARRAY;
-    retval.append("    ").append(XmlHandler.addTagValue("join_type", getJoinType()));
-    for (int i = 0; i < inputTransformsNames.length; i++) {
-      retval
-          .append("    ")
-          .append(XmlHandler.addTagValue("transform" + i, inputTransformsNames[i]));
-    }
-
-    retval
-        .append("    ")
-        .append(XmlHandler.addTagValue("number_input", inputTransformsNames.length));
-    retval.append("    ").append(XmlHandler.openTag("keys")).append(Const.CR);
-    for (int i = 0; i < keyFields.length; i++) {
-      retval.append("      ").append(XmlHandler.addTagValue("key", keyFields[i]));
-    }
-    retval.append("    ").append(XmlHandler.closeTag("keys")).append(Const.CR);
-
-    return retval.toString();
-  }
-
-  private void readData(Node transformNode) throws HopXmlException {
-    try {
-
-      Node keysNode = XmlHandler.getSubNode(transformNode, "keys");
-
-      int nrKeys = XmlHandler.countNodes(keysNode, "key");
-
-      allocateKeys(nrKeys);
-
-      for (int i = 0; i < nrKeys; i++) {
-        Node keynode = XmlHandler.getSubNodeByNr(keysNode, "key", i);
-        keyFields[i] = XmlHandler.getNodeValue(keynode);
-      }
-
-      int nInputStreams = Integer.parseInt(XmlHandler.getTagValue(transformNode, "number_input"));
-
-      allocateInputTransforms(nInputStreams);
-
-      for (int i = 0; i < nInputStreams; i++) {
-        inputTransforms[i] = XmlHandler.getTagValue(transformNode, "transform" + i);
-      }
-
-      joinType = XmlHandler.getTagValue(transformNode, "join_type");
-    } catch (Exception e) {
-      throw new HopXmlException(
-          BaseMessages.getString(PKG, "MultiMergeJoinMeta.Exception.UnableToLoadTransformMeta"), e);
-    }
+    super();
+    this.keyFields = new ArrayList<>();
+    this.inputTransforms = new ArrayList<>();
   }
 
   @Override
   public void setDefault() {
     joinType = joinTypes[0];
-    allocateKeys(0);
-    allocateInputTransforms(0);
+  }
+
+  /**
+   * Returns the I/O meta with INFO streams so the pipeline marks input hops as info streams (like
+   * Merge Join / Append).
+   */
+  @Override
+  public ITransformIOMeta getTransformIOMeta() {
+    ITransformIOMeta ioMeta = super.getTransformIOMeta(false);
+    if (ioMeta == null) {
+      ioMeta = new TransformIOMeta(true, true, false, false, false, false);
+      int n = (inputTransforms != null && !inputTransforms.isEmpty()) ? inputTransforms.size() : 2;
+      for (int i = 0; i < n; i++) {
+        ioMeta.addStream(
+            new Stream(
+                StreamType.INFO,
+                null,
+                BaseMessages.getString(PKG, "MultiMergeJoin.InfoStream.Description"),
+                StreamIcon.INFO,
+                null));
+      }
+      setTransformIOMeta(ioMeta);
+    }
+    return ioMeta;
   }
 
   @Override
   public void searchInfoAndTargetTransforms(List<TransformMeta> transforms) {
     ITransformIOMeta ioMeta = getTransformIOMeta();
-    ioMeta.getInfoStreams().clear();
-    for (int i = 0; i < inputTransforms.length; i++) {
-      String inputTransformName = inputTransforms[i];
-      if (i >= ioMeta.getInfoStreams().size()) {
-        ioMeta.addStream(
-            new Stream(
-                StreamType.INFO,
-                TransformMeta.findTransform(transforms, inputTransformName),
-                BaseMessages.getString(PKG, "MultiMergeJoin.InfoStream.Description"),
-                StreamIcon.INFO,
-                inputTransformName));
+    List<IStream> infoStreams = ioMeta.getInfoStreams();
+
+    String[] prev = null;
+    if (parentTransformMeta != null && parentTransformMeta.getParentPipelineMeta() != null) {
+      prev = parentTransformMeta.getParentPipelineMeta().getPrevTransformNames(parentTransformMeta);
+    }
+
+    // Auto-fill when empty and we have connected transforms
+    if ((inputTransforms == null || inputTransforms.isEmpty())
+        && prev != null
+        && prev.length >= 2) {
+      inputTransforms = new ArrayList<>();
+      for (String p : prev) {
+        inputTransforms.add(p);
+      }
+      setChanged();
+    }
+    if (inputTransforms == null) {
+      inputTransforms = new ArrayList<>();
+    }
+
+    // Clear names that no longer exist in prev; keep and update name when it's a rename (stream's
+    // transform is in prev)
+    if (prev != null) {
+      List<String> newInputTransforms = new ArrayList<>();
+      List<String> newKeyFields = (keyFields != null) ? new ArrayList<>() : null;
+      for (int i = 0; i < inputTransforms.size(); i++) {
+        String name = inputTransforms.get(i);
+        if (Utils.isEmpty(name) || ArrayUtils.contains(prev, name)) {
+          newInputTransforms.add(name);
+          if (newKeyFields != null && i < keyFields.size()) {
+            newKeyFields.add(keyFields.get(i));
+          }
+        } else if (i < infoStreams.size()) {
+          IStream stream = infoStreams.get(i);
+          if (stream.getTransformMeta() != null
+              && ArrayUtils.contains(prev, stream.getTransformName())) {
+            // Renamed: keep entry with updated name
+            newInputTransforms.add(stream.getTransformName());
+            if (newKeyFields != null && i < keyFields.size()) {
+              newKeyFields.add(keyFields.get(i));
+            }
+            setChanged();
+          }
+        } else {
+          setChanged();
+        }
+      }
+      inputTransforms.clear();
+      inputTransforms.addAll(newInputTransforms);
+      if (keyFields != null) {
+        keyFields.clear();
+        keyFields.addAll(newKeyFields);
+      }
+    }
+
+    // Resolve each slot and build the list of streams to set (getInfoStreams() returns a copy, so
+    // we must replace via clearStreams + addStream)
+    List<IStream> resolvedStreams = new ArrayList<>();
+    String streamDescription = BaseMessages.getString(PKG, "MultiMergeJoin.InfoStream.Description");
+
+    for (int i = 0; i < inputTransforms.size(); i++) {
+      String name = inputTransforms.get(i);
+      IStream existingStream = (i < infoStreams.size()) ? infoStreams.get(i) : null;
+
+      boolean nameStale =
+          Utils.isEmpty(name)
+              || (prev != null && !ArrayUtils.contains(prev, name))
+              || TransformMeta.findTransform(transforms, name) == null;
+      boolean preferStream =
+          existingStream != null
+              && existingStream.getTransformMeta() != null
+              && prev != null
+              && ArrayUtils.contains(prev, existingStream.getTransformName())
+              && nameStale;
+
+      TransformMeta tm = null;
+      if (preferStream) {
+        name = existingStream.getTransformName();
+        inputTransforms.set(i, name);
+        tm = existingStream.getTransformMeta();
+        setChanged();
+      }
+      if (tm == null) {
+        tm = TransformMeta.findTransform(transforms, name);
+        if (tm == null && existingStream != null && existingStream.getTransformMeta() != null) {
+          name = existingStream.getTransformName();
+          inputTransforms.set(i, name);
+          tm = TransformMeta.findTransform(transforms, name);
+        }
+      }
+      String subject = (tm != null) ? tm.getName() : null;
+      resolvedStreams.add(
+          new Stream(StreamType.INFO, tm, streamDescription, StreamIcon.INFO, subject));
+    }
+
+    // Sync keyFields size
+    if (keyFields != null) {
+      while (keyFields.size() > inputTransforms.size()) {
+        keyFields.remove(keyFields.size() - 1);
+      }
+      while (keyFields.size() < inputTransforms.size()) {
+        keyFields.add("");
+      }
+    }
+
+    // Replace ioMeta streams so the pipeline sees INFO streams (like Merge Join / Append)
+    if (ioMeta instanceof TransformIOMeta) {
+      ((TransformIOMeta) ioMeta).clearStreams();
+      for (IStream s : resolvedStreams) {
+        ioMeta.addStream(s);
       }
     }
   }
@@ -245,9 +273,9 @@ public class MultiMergeJoinMeta extends BaseTransformMeta<MultiMergeJoin, MultiM
     // So we just merge in the info fields.
     //
     if (info != null) {
-      for (int i = 0; i < info.length; i++) {
-        if (info[i] != null) {
-          r.mergeRowMeta(info[i]);
+      for (IRowMeta iRowMeta : info) {
+        if (iRowMeta != null) {
+          r.mergeRowMeta(iRowMeta);
         }
       }
     }
@@ -255,7 +283,6 @@ public class MultiMergeJoinMeta extends BaseTransformMeta<MultiMergeJoin, MultiM
     for (int i = 0; i < r.size(); i++) {
       r.getValueMeta(i).setOrigin(name);
     }
-    return;
   }
 
   @Override
@@ -263,15 +290,49 @@ public class MultiMergeJoinMeta extends BaseTransformMeta<MultiMergeJoin, MultiM
     // Don't reset!
   }
 
-  public void setInputTransforms(String[] inputTransforms) {
-    this.inputTransforms = inputTransforms;
+  @Override
+  public boolean cleanAfterHopToRemove(TransformMeta fromTransform) {
+    if (fromTransform == null || fromTransform.getName() == null) {
+      return false;
+    }
+
+    if (inputTransforms == null || inputTransforms.isEmpty()) {
+      return false;
+    }
+
+    String fromTransformName = fromTransform.getName();
+
+    for (int i = 0; i < inputTransforms.size(); i++) {
+      if (fromTransformName.equals(inputTransforms.get(i))) {
+        inputTransforms.remove(i);
+        if (keyFields != null && i < keyFields.size()) {
+          keyFields.remove(i);
+        }
+        return true;
+      }
+    }
+
+    return false;
   }
 
-  public String[] getInputTransforms() {
-    return inputTransforms;
-  }
+  @Override
+  public void convertLegacyXml(Node node) throws HopException {
+    if (node == null) {
+      return;
+    }
 
-  public void allocateInputTransforms(int count) {
-    inputTransforms = new String[count];
+    // Get the number of input transforms
+    int numberOfInput = Const.toInt(XmlHandler.getTagValue(node, "number_input"), -1);
+    if (numberOfInput < 0) {
+      return;
+    }
+    if (inputTransforms == null) {
+      inputTransforms = new ArrayList<>();
+    }
+    inputTransforms.clear();
+    for (int i = 0; i < numberOfInput; i++) {
+      String inputTransform = XmlHandler.getTagValue(node, "transform" + i);
+      inputTransforms.add(inputTransform);
+    }
   }
 }

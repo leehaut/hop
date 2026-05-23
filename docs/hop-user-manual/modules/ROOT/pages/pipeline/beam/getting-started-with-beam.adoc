@@ -52,6 +52,21 @@ Here is the documentation for the relevant plugins:
 |===
 |Hop version |Beam version |Spark version |Flink version
 
+|2.18.0
+|2.71.0
+|3.5.X (scala 2.12)
+|1.19.x
+
+|2.17.0
+|2.70.0
+|3.5.X (scala 2.12)
+|1.19.x
+
+|2.16.0
+|2.62.0
+|3.4.X (scala 2.12)
+|1.17.x
+
 |2.9.0
 |2.56.0
 |3.4.X (scala 2.12)
@@ -233,7 +248,7 @@ Apache Hop allows you to create a fat jar in the Hop GUI with the `Tools/Generat
 
 [source]
 ----
-sh hop-config.sh -fj /path/to/fat.jar
+sh hop-conf.sh -fj /path/to/fat.jar
 ----
 
 The path to this fat jar can then be referenced in the various Beam runtime configurations.

@@ -37,6 +37,7 @@ import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.core.vfs.HopVfs;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.metadata.api.HopMetadataProperty;
+import org.apache.hop.metadata.api.HopMetadataPropertyType;
 import org.apache.hop.metadata.api.IHopMetadataProvider;
 import org.apache.hop.resource.ResourceEntry;
 import org.apache.hop.resource.ResourceEntry.ResourceType;
@@ -107,7 +108,9 @@ public class ActionMysqlBulkFile extends ActionBase {
   @HopMetadataProperty(key = "addfiletoresult")
   private boolean addFileToResult;
 
-  @HopMetadataProperty(key = "connection")
+  @HopMetadataProperty(
+      key = "connection",
+      hopMetadataPropertyType = HopMetadataPropertyType.RDBMS_CONNECTION)
   private String connection;
 
   public ActionMysqlBulkFile(String n) {
@@ -201,10 +204,12 @@ public class ActionMysqlBulkFile extends ActionBase {
             realFilename = realFilename + "_" + StringUtil.getFormattedDateTimeNow(true);
           }
 
-          logDebug(
-              BaseMessages.getString(PKG, "ActionMysqlBulkFile.FileNameChange1.Label")
-                  + realFilename
-                  + BaseMessages.getString(PKG, "ActionMysqlBulkFile.FileNameChange1.Label"));
+          if (isDebug()) {
+            logDebug(
+                BaseMessages.getString(PKG, "ActionMysqlBulkFile.FileNameChange1.Label")
+                    + realFilename
+                    + BaseMessages.getString(PKG, "ActionMysqlBulkFile.FileNameChange1.Label"));
+          }
         }
 
         // User has specified an existing file, We can continue ...
@@ -216,12 +221,7 @@ public class ActionMysqlBulkFile extends ActionBase {
         }
 
         if (connection != null) {
-          DatabaseMeta databaseMeta = null;
-          try {
-            databaseMeta = DatabaseMeta.loadDatabase(getMetadataProvider(), connection);
-          } catch (Exception e) {
-            logError("Unable to load database :" + connection, e);
-          }
+          DatabaseMeta databaseMeta = parentWorkflowMeta.findDatabase(connection, getVariables());
 
           // User has specified a connection, We can continue ...
           try (Database db = new Database(this, this, databaseMeta)) {
@@ -416,11 +416,11 @@ public class ActionMysqlBulkFile extends ActionBase {
     String returnString = "";
     String[] split = listcolumns.split(",");
 
-    for (int i = 0; i < split.length; i++) {
+    for (String s : split) {
       if (returnString.equals("")) {
-        returnString = "`" + Const.trim(split[i]) + "`";
+        returnString = "`" + Const.trim(s) + "`";
       } else {
-        returnString = returnString + ", `" + Const.trim(split[i]) + "`";
+        returnString = returnString + ", `" + Const.trim(s) + "`";
       }
     }
 
@@ -432,12 +432,7 @@ public class ActionMysqlBulkFile extends ActionBase {
       IVariables variables, WorkflowMeta workflowMeta) {
     List<ResourceReference> references = super.getResourceDependencies(variables, workflowMeta);
     if (connection != null) {
-      DatabaseMeta databaseMeta = null;
-      try {
-        databaseMeta = DatabaseMeta.loadDatabase(getMetadataProvider(), connection);
-      } catch (Exception e) {
-        logError("Unable to load database :" + connection, e);
-      }
+      DatabaseMeta databaseMeta = parentWorkflowMeta.findDatabase(connection, getVariables());
       ResourceReference reference = new ResourceReference(this);
       reference
           .getEntries()

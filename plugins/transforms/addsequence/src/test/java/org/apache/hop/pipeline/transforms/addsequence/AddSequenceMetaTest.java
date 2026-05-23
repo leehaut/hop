@@ -30,7 +30,6 @@ import org.apache.hop.core.HopEnvironment;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.junit.rules.RestoreHopEngineEnvironmentExtension;
 import org.apache.hop.pipeline.transforms.loadsave.LoadSaveTester;
-import org.apache.hop.pipeline.transforms.loadsave.validator.IFieldLoadSaveValidator;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -66,8 +65,8 @@ class AddSequenceMetaTest {
             attributes,
             new HashMap<>(),
             new HashMap<>(),
-            new HashMap<String, IFieldLoadSaveValidator<?>>(),
-            new HashMap<String, IFieldLoadSaveValidator<?>>());
+            new HashMap<>(),
+            new HashMap<>());
     loadSaveTester.testSerialization();
   }
 
@@ -123,13 +122,13 @@ class AddSequenceMetaTest {
     assertEquals("1000", meta.getMaxValue());
 
     // Test long setters
-    meta.setStartAt(100L);
+    meta.setStartAtByValue(100L);
     assertEquals("100", meta.getStartAt());
 
-    meta.setIncrementBy(10L);
+    meta.setIncrementByValue(10L);
     assertEquals("10", meta.getIncrementBy());
 
-    meta.setMaxValue(10000L);
+    meta.setMaxValueByValue(10000L);
     assertEquals("10000", meta.getMaxValue());
   }
 

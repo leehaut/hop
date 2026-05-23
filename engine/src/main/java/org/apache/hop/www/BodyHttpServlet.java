@@ -16,12 +16,14 @@
  */
 package org.apache.hop.www;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import java.io.Serial;
+import java.nio.charset.StandardCharsets;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.core.xml.XmlHandler;
@@ -29,8 +31,7 @@ import org.apache.hop.i18n.PackageMessages;
 import org.owasp.encoder.Encode;
 
 public abstract class BodyHttpServlet extends BaseHttpServlet implements IHopServerPlugin {
-
-  private static final long serialVersionUID = 6576714217004890327L;
+  @Serial private static final long serialVersionUID = 6576714217004890327L;
   private final PackageMessages messages;
 
   public BodyHttpServlet() {
@@ -52,32 +53,54 @@ public abstract class BodyHttpServlet extends BaseHttpServlet implements IHopSer
     }
 
     boolean useXML = useXML(request);
-    PrintWriter out = new PrintWriter(response.getOutputStream());
+    boolean useJson = isJsonRequest(request);
+
+    final PrintWriter out;
+    try {
+      out =
+          new PrintWriter(
+              new OutputStreamWriter(response.getOutputStream(), StandardCharsets.UTF_8), true);
+    } catch (IOException e) {
+      logError("Failed to open servlet response stream", e);
+      sendSafeError(
+          response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Unable to process request.");
+      return;
+    }
 
     try {
 
       if (useXML) {
         startXml(response, out);
+      } else if (useJson) {
+        response.setContentType("application/json");
+        response.setCharacterEncoding(Const.UTF_8);
       } else {
         beginHtml(response, out);
       }
 
       WebResult result = generateBody(request, response, useXML, variables);
       if (result != null) {
-        out.println(result.getXml());
+        if (useJson) {
+          out.println(result.getJson());
+        } else {
+          out.println(result.getXml());
+        }
       }
 
     } catch (Exception e) {
-      String st = ExceptionUtils.getFullStackTrace(e);
+      logError("Servlet body generation failed", e);
+      final String clientMessage = "Request failed. See server log for details.";
       if (useXML) {
-        out.println(new WebResult(WebResult.STRING_ERROR, st).getXml());
+        out.println(new WebResult(WebResult.STRING_ERROR, clientMessage).getXml());
+      } else if (useJson) {
+        out.println(new WebResult(WebResult.STRING_ERROR, clientMessage).getJson());
       } else {
         out.println("<p><pre>");
-        out.println(Encode.forHtml(st));
+        out.println(Encode.forHtml(clientMessage));
         out.println("</pre>");
       }
     } finally {
-      if (!useXML) {
+      if (!useXML && !useJson) {
         endHtml(out);
       }
       out.flush();
@@ -106,8 +129,8 @@ public abstract class BodyHttpServlet extends BaseHttpServlet implements IHopSer
 
   protected void startXml(HttpServletResponse response, PrintWriter out) {
     response.setContentType("text/xml");
-    response.setCharacterEncoding(Const.XML_ENCODING);
-    out.print(XmlHandler.getXmlHeader(Const.XML_ENCODING));
+    response.setCharacterEncoding(Const.UTF_8);
+    out.print(XmlHandler.getXmlHeader(Const.UTF_8));
   }
 
   abstract WebResult generateBody(

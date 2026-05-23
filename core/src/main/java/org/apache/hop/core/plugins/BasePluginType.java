@@ -34,10 +34,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.time.StopWatch;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.time.StopWatch;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.exception.HopPluginException;
 import org.apache.hop.core.logging.DefaultLogLevel;
@@ -106,7 +108,6 @@ public abstract class BasePluginType<T extends Annotation> implements IPluginTyp
   /** Let's put in code here to search for the transform plugins.. */
   @Override
   public void searchPlugins() throws HopPluginException {
-
     StopWatch watch = new StopWatch();
     if (log.isDebug()) {
       watch.start();
@@ -501,6 +502,25 @@ public abstract class BasePluginType<T extends Annotation> implements IPluginTyp
             // This includes the possible lib/ folder dependencies in there
             //
             for (File libFile : jarCache.findJarFiles(dependenciesFolder)) {
+              urls.add(libFile.toURI().toURL());
+            }
+          }
+        }
+        // Also read specific libs from a folder
+        List<Node> libsNodes = XmlHandler.getNodes(dependenciesNode, "libs");
+        for (Node libsNode : libsNodes) {
+          String relativeFolderName = XmlHandler.getTagValue(libsNode, "folder");
+          String wildcard = XmlHandler.getTagValue(libsNode, "wildcard");
+          String dependenciesFolderName =
+              parentFolderName + Const.FILE_SEPARATOR + relativeFolderName;
+          File dependenciesFolder = new File(dependenciesFolderName);
+          // Now get the jar files in this dependency folder.
+          // Only select the jar files matching the specified wildcard.
+          //
+          Pattern pattern = Pattern.compile(wildcard, Pattern.CASE_INSENSITIVE);
+          for (File libFile : jarCache.findJarFiles(dependenciesFolder)) {
+            Matcher matcher = pattern.matcher(libFile.getName());
+            if (matcher.matches()) {
               urls.add(libFile.toURI().toURL());
             }
           }

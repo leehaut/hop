@@ -17,14 +17,15 @@
 
 package org.apache.hop.www;
 
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import org.apache.commons.lang.StringEscapeUtils;
-import org.apache.commons.lang.StringUtils;
+import java.io.Serial;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.annotations.HopServerServlet;
 import org.apache.hop.core.exception.HopException;
@@ -39,7 +40,7 @@ import org.apache.hop.metadata.serializer.multi.MultiMetadataProvider;
 
 @HopServerServlet(id = "registerExecInfo", name = "Register execution information")
 public class RegisterExecutionInfoServlet extends BaseHttpServlet implements IHopServerPlugin {
-  private static final long serialVersionUID = -2817136625869923847L;
+  @Serial private static final long serialVersionUID = -2817136625869923847L;
 
   public static final String CONTEXT_PATH = "/hop/registerExecInfo";
   public static final String TYPE_EXECUTION = "execution";
@@ -72,10 +73,16 @@ public class RegisterExecutionInfoServlet extends BaseHttpServlet implements IHo
 
     // The name of the location is also in a parameter
     //
-    String locationName = StringEscapeUtils.escapeHtml(request.getParameter(PARAMETER_LOCATION));
+    String locationName = StringEscapeUtils.escapeHtml4(request.getParameter(PARAMETER_LOCATION));
 
-    PrintWriter out = response.getWriter();
-    BufferedReader in = request.getReader();
+    PrintWriter out = getSafeWriter(response);
+    if (out == null) {
+      return;
+    }
+    BufferedReader in = getSafeReader(request, response);
+    if (in == null) {
+      return;
+    }
 
     response.setContentType("text/xml");
     out.print(XmlHandler.getXmlHeader());

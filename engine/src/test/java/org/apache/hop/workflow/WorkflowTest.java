@@ -17,34 +17,35 @@
 
 package org.apache.hop.workflow;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.apache.hop.core.HopEnvironment;
-import org.apache.hop.core.database.Database;
+import org.apache.hop.core.Result;
+import org.apache.hop.core.annotations.Action;
 import org.apache.hop.core.exception.HopException;
-import org.apache.hop.core.logging.LogChannel;
-import org.apache.hop.core.variables.IVariables;
-import org.apache.hop.metadata.api.IHopMetadataProvider;
+import org.apache.hop.core.exception.HopPluginException;
+import org.apache.hop.core.exception.HopRuntimeException;
+import org.apache.hop.core.logging.HopLogStore;
+import org.apache.hop.core.logging.LogLevel;
+import org.apache.hop.core.plugins.ActionPluginType;
+import org.apache.hop.core.plugins.PluginRegistry;
+import org.apache.hop.workflow.action.ActionBase;
 import org.apache.hop.workflow.action.ActionMeta;
+import org.apache.hop.workflow.action.IAction;
+import org.apache.hop.workflow.actions.dummy.ActionDummy;
 import org.apache.hop.workflow.actions.start.ActionStart;
 import org.apache.hop.workflow.engine.IWorkflowEngine;
 import org.apache.hop.workflow.engines.local.LocalWorkflowEngine;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-public class WorkflowTest {
-  private static final String STRING_DEFAULT = "<def>";
-  private IWorkflowEngine<WorkflowMeta> mockedWorkflow;
-  private Database mockedDataBase;
-  private IVariables mockedVariableSpace;
-  private IHopMetadataProvider mockedMetadataProvider;
-  private WorkflowMeta mockedWorkflowMeta;
-  private ActionMeta mockedActionMeta;
-  private ActionStart mockedActionStart;
-  private LogChannel mockedLogChannel;
+class WorkflowTest {
+
   int count = 10000;
 
   private abstract class WorkflowKicker implements Runnable {
@@ -56,33 +57,20 @@ public class WorkflowTest {
     WorkflowKicker(IWorkflowEngine<WorkflowMeta> workflow, CountDownLatch start) {
       this.workflow = workflow;
       this.start = start;
+      this.workflow.setLogLevel(LogLevel.MINIMAL);
     }
 
     public void await() {
       try {
         start.await();
       } catch (InterruptedException e) {
-        throw new RuntimeException();
+        throw new HopRuntimeException();
       }
     }
 
     public boolean isStopped() {
       c++;
       return c >= max;
-    }
-  }
-
-  private class WorkflowFinishedListenerAdder extends WorkflowKicker {
-    WorkflowFinishedListenerAdder(IWorkflowEngine<WorkflowMeta> workflow, CountDownLatch start) {
-      super(workflow, start);
-    }
-
-    @Override
-    public void run() {
-      await();
-      while (!isStopped()) {
-        workflow.addExecutionFinishedListener(w -> {});
-      }
     }
   }
 
@@ -114,28 +102,65 @@ public class WorkflowTest {
     }
   }
 
-  @BeforeClass
-  public static void beforeClass() throws HopException {
-    HopEnvironment.init();
+  /** Used by {@link ActionBlockingForWorkflowStopTest} to coordinate with the test thread. */
+  private static volatile CountDownLatch blockingEntered;
+
+  private static volatile CountDownLatch blockingRelease;
+
+  @Action(id = "ActionBlockingForWorkflowStopTest", name = "Blocking action for workflow stop test")
+  public static class ActionBlockingForWorkflowStopTest extends ActionBase implements IAction {
+
+    public ActionBlockingForWorkflowStopTest() {
+      super("", "", "ActionBlockingForWorkflowStopTest");
+    }
+
+    @Override
+    public Result execute(Result prevResult, int nr) throws HopException {
+      CountDownLatch entered = blockingEntered;
+      CountDownLatch release = blockingRelease;
+      if (entered != null) {
+        entered.countDown();
+      }
+      if (release != null) {
+        try {
+          if (!release.await(60, TimeUnit.SECONDS)) {
+            throw new HopException("Timed out waiting in blocking test action");
+          }
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new HopException(e);
+        }
+      }
+      Result r = prevResult == null ? new Result() : prevResult.clone();
+      r.setResult(true);
+      r.setNrErrors(0);
+      r.setStopped(false);
+      return r;
+    }
   }
 
-  @Before
-  public void init() {
-    mockedDataBase = mock(Database.class);
-    mockedWorkflow = mock(Workflow.class);
-    mockedVariableSpace = mock(IVariables.class);
-    mockedMetadataProvider = mock(IHopMetadataProvider.class);
-    mockedWorkflowMeta = mock(WorkflowMeta.class);
-    mockedActionMeta = mock(ActionMeta.class);
-    mockedActionStart = mock(ActionStart.class);
-    mockedLogChannel = mock(LogChannel.class);
+  @BeforeAll
+  static void beforeClass() throws HopException, HopPluginException {
+    HopEnvironment.init();
+    PluginRegistry.getInstance()
+        .registerPluginClass(
+            ActionBlockingForWorkflowStopTest.class.getName(),
+            ActionPluginType.class,
+            Action.class);
+  }
+
+  @BeforeEach
+  void before() {
+    if (!HopLogStore.isInitialized()) {
+      HopLogStore.init();
+    }
   }
 
   /**
    * When a workflow is scheduled twice, it gets the same log channel Id and both logs get merged
    */
   @Test
-  public void testTwoWorkflowsGetSameLogChannelId() {
+  void testTwoWorkflowsGetSameLogChannelId() {
     WorkflowMeta meta = mock(WorkflowMeta.class);
 
     IWorkflowEngine<WorkflowMeta> workflow1 = new LocalWorkflowEngine(meta);
@@ -144,20 +169,16 @@ public class WorkflowTest {
     assertEquals(workflow1.getLogChannelId(), workflow2.getLogChannelId());
   }
 
-  /**
-   * Test that workflow stop listeners can be accessed concurrently
-   *
-   * @throws InterruptedException
-   */
+  /** Test that workflow stop listeners can be accessed concurrently */
   @Test
-  public void testExecutionStoppedListenersConcurrentModification() throws InterruptedException {
+  void testExecutionStoppedListenersConcurrentModification() throws InterruptedException {
     CountDownLatch start = new CountDownLatch(1);
     IWorkflowEngine<WorkflowMeta> workflow = new LocalWorkflowEngine();
     WorkflowStopExecutionCaller stopper = new WorkflowStopExecutionCaller(workflow, start);
     WorkflowStoppedListenerAdder adder = new WorkflowStoppedListenerAdder(workflow, start);
     startThreads(stopper, adder, start);
-    assertEquals("All workflow stop listeners is added", count, adder.c);
-    assertEquals("All stop call success", count, stopper.c);
+    assertEquals(count, adder.c, "All workflow stop listeners is added");
+    assertEquals(count, stopper.c, "All stop call success");
   }
 
   private void startThreads(Runnable run1, Runnable run2, CountDownLatch start)
@@ -169,5 +190,53 @@ public class WorkflowTest {
     start.countDown();
     thread1.join();
     thread2.join();
+  }
+
+  /**
+   * When stop is requested while an action is running, that action can still finish with a
+   * successful Result that has stopped=false. The workflow result must still report stopped so
+   * transactional handling can roll back.
+   */
+  @Test
+  void workflowResultReflectsStopWhenStoppedDuringActionExecution() throws Exception {
+    blockingEntered = new CountDownLatch(1);
+    blockingRelease = new CountDownLatch(1);
+    try {
+      WorkflowMeta meta = new WorkflowMeta();
+      meta.setName("workflow-stop-result-test");
+
+      ActionStart start = new ActionStart("START");
+      ActionMeta startMeta = new ActionMeta(start);
+      meta.addAction(startMeta);
+
+      ActionBlockingForWorkflowStopTest blocking = new ActionBlockingForWorkflowStopTest();
+      blocking.setName("blocking");
+      ActionMeta blockingMeta = new ActionMeta(blocking);
+      meta.addAction(blockingMeta);
+
+      ActionDummy neverRun = new ActionDummy();
+      neverRun.setName("never-run");
+      ActionMeta neverRunMeta = new ActionMeta(neverRun);
+      meta.addAction(neverRunMeta);
+
+      meta.addWorkflowHop(new WorkflowHopMeta(startMeta, blockingMeta));
+      WorkflowHopMeta hopToNext = new WorkflowHopMeta(blockingMeta, neverRunMeta);
+      hopToNext.setUnconditional();
+      meta.addWorkflowHop(hopToNext);
+
+      LocalWorkflowEngine engine = new LocalWorkflowEngine(meta);
+      engine.setLogLevel(LogLevel.MINIMAL);
+
+      Thread runner = new Thread(engine::startExecution);
+      runner.start();
+      assertTrue(blockingEntered.await(30, TimeUnit.SECONDS));
+      engine.stopExecution();
+      blockingRelease.countDown();
+      runner.join(60000);
+      assertTrue(engine.getResult().isStopped(), "Result should reflect user stop for rollback");
+    } finally {
+      blockingEntered = null;
+      blockingRelease = null;
+    }
   }
 }

@@ -17,6 +17,7 @@
 
 package org.apache.hop.core.row.value.timestamp;
 
+import java.io.Serial;
 import java.lang.reflect.Method;
 import java.sql.Timestamp;
 import java.text.AttributedCharacterIterator;
@@ -31,8 +32,7 @@ import java.util.Locale;
 
 /** User: Dzmitry Stsiapanau Date: 3/13/14 Time: 6:32 PM */
 public class SimpleTimestampFormat extends SimpleDateFormat {
-
-  private static final long serialVersionUID = -848077738238548608L;
+  @Serial private static final long serialVersionUID = -848077738238548608L;
 
   /** Cached nanosecond positions in specified pattern. */
   private int startNanosecondPatternPosition;
@@ -70,10 +70,10 @@ public class SimpleTimestampFormat extends SimpleDateFormat {
 
   private static final String DEFAULT_MILLISECOND_DATE_FORMAT = "SSS";
 
-  private static final SimpleDateFormat defaultTimestampFormat =
+  private final SimpleDateFormat defaultTimestampFormat =
       new SimpleDateFormat(DEFAULT_TIMESTAMP_FORMAT_FOR_TIMESTAMP, Locale.US);
 
-  private static final SimpleDateFormat defaultMillisecondDateFormat =
+  private final SimpleDateFormat defaultMillisecondDateFormat =
       new SimpleDateFormat(DEFAULT_MILLISECOND_DATE_FORMAT, Locale.US);
 
   /**
@@ -103,7 +103,8 @@ public class SimpleTimestampFormat extends SimpleDateFormat {
       final Class<?>[] paramTypes = new Class<?>[] {localeCategoryClass};
       getDefaultLocaleMethod = localeClass.getMethod("getDefault", paramTypes);
       final java.lang.reflect.Field formatField = localeCategoryClass.getField("FORMAT");
-      // we pass null because the FORMAT is an enumeration constant(the same applies for class
+      // we pass null because the FORMAT is an enumeration constant(the same applies
+      // for class
       // variables)
       formatCategory = formatField.get(null);
     } catch (Exception e) {
@@ -251,7 +252,7 @@ public class SimpleTimestampFormat extends SimpleDateFormat {
     } else {
       dateBuffer = super.format(timestamp, toAppendTo, pos);
       String milliseconds = defaultMillisecondDateFormat.format(timestamp);
-      nan = formatNanoseconds(Integer.valueOf(milliseconds) * Math.pow(10, 6));
+      nan = formatNanoseconds(Integer.parseInt(milliseconds) * Math.pow(10, 6));
     }
 
     int placeholderPosition = replaceHolder(dateBuffer, false);
@@ -314,8 +315,6 @@ public class SimpleTimestampFormat extends SimpleDateFormat {
    * pos</code> is not changed, the error index of <code>pos</code> is set to the index of the
    * character where the error occurred, and null is returned.
    *
-   * <p>
-   *
    * <p>This parsing operation uses the {@link SimpleDateFormat#calendar calendar} to produce a
    * {@code Date}. All of the {@code calendar}'s date-time fields are {@linkplain
    * java.util.Calendar#clear() cleared} before parsing, and the {@code calendar}'s default values
@@ -338,6 +337,9 @@ public class SimpleTimestampFormat extends SimpleDateFormat {
     Date tempDate;
     if (compatibleToSuperPattern) {
       tempDate = super.parse(text, pos);
+      if (tempDate == null) {
+        return null;
+      }
       return new Timestamp(tempDate.getTime());
     }
 

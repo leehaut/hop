@@ -20,13 +20,14 @@ package org.apache.hop.ui.util;
 import java.io.InputStream;
 import java.net.URL;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.FileSystemException;
 import org.apache.hop.core.SwtUniversalImage;
 import org.apache.hop.core.SwtUniversalImageBitmap;
 import org.apache.hop.core.SwtUniversalImageSvg;
 import org.apache.hop.core.exception.HopFileException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.logging.ILogChannel;
 import org.apache.hop.core.logging.LogChannel;
 import org.apache.hop.core.svg.SvgCache;
@@ -108,7 +109,7 @@ public class SwtSvgImageUtil {
   /** Load image from several sources. */
   public static SwtUniversalImage getImageAsResource(Display display, String location) {
     if (location == null) {
-      throw new RuntimeException("No location given to load image resource");
+      throw new HopRuntimeException("No location given to load image resource");
     }
     SwtUniversalImage result = null;
     if (result == null && SvgSupport.isSvgEnabled()) {
@@ -224,8 +225,14 @@ public class SwtSvgImageUtil {
     return loadFromClassLoader(cl, location);
   }
 
-  /** Internal image loading from Hop's user.dir VFS. */
+  /**
+   * Internal image loading from Hop's user.dir VFS. Returns null if base is null or on any
+   * exception (e.g. VFS files-cache not set), so callers can fall back to other loaders.
+   */
   private static SwtUniversalImage loadFromBasedVFS(Display display, String location) {
+    if (base == null) {
+      return null;
+    }
     try {
       FileObject imageFileObject = HopVfs.getFileSystemManager().resolveFile(base, location);
       InputStream s = HopVfs.getInputStream(imageFileObject);
@@ -238,6 +245,11 @@ public class SwtSvgImageUtil {
         IOUtils.closeQuietly(s);
       }
     } catch (FileSystemException ex) {
+      return null;
+    } catch (HopRuntimeException ex) {
+      // e.g. NPE when VFS files-cache is not set (AbstractFileSystem.getFilesCache())
+      log.logDebug(
+          "VFS-based image load failed for [" + location + "], will try other loaders", ex);
       return null;
     }
   }
@@ -270,7 +282,7 @@ public class SwtSvgImageUtil {
       try {
         return new SwtUniversalImageSvg(SvgSupport.loadSvgImage(in));
       } catch (Exception ex) {
-        throw new RuntimeException("Error loading file " + filename, ex);
+        throw new HopRuntimeException("Error loading file " + filename, ex);
       }
     }
   }

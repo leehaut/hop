@@ -18,11 +18,10 @@
 package org.apache.hop.neo4j.perspective;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.Props;
 import org.apache.hop.core.exception.HopConfigException;
@@ -47,15 +46,11 @@ import org.apache.hop.ui.core.widget.TableView;
 import org.apache.hop.ui.core.widget.TreeMemory;
 import org.apache.hop.ui.hopgui.HopGui;
 import org.apache.hop.ui.hopgui.context.IGuiContextHandler;
-import org.apache.hop.ui.hopgui.file.IHopFileType;
 import org.apache.hop.ui.hopgui.file.IHopFileTypeHandler;
-import org.apache.hop.ui.hopgui.file.empty.EmptyHopFileTypeHandler;
 import org.apache.hop.ui.hopgui.file.pipeline.HopGuiPipelineGraph;
 import org.apache.hop.ui.hopgui.file.workflow.HopGuiWorkflowGraph;
 import org.apache.hop.ui.hopgui.perspective.HopPerspectivePlugin;
 import org.apache.hop.ui.hopgui.perspective.IHopPerspective;
-import org.apache.hop.ui.hopgui.perspective.TabItemHandler;
-import org.apache.hop.ui.hopgui.perspective.dataorch.HopDataOrchestrationPerspective;
 import org.apache.hop.ui.util.SwtSvgImageUtil;
 import org.apache.hop.workflow.WorkflowMeta;
 import org.apache.hop.workflow.action.ActionMeta;
@@ -94,7 +89,7 @@ import org.neo4j.driver.types.Path;
     description = "Neo4j Perspective",
     image = "neo4j_logo.svg",
     documentationUrl = "/hop-gui/perspective-neo4j.html")
-@GuiPlugin
+@GuiPlugin(name = "Neo4j")
 public class HopNeo4jPerspective implements IHopPerspective {
 
   public static final Class<?> PKG = HopNeo4jPerspective.class;
@@ -143,21 +138,6 @@ public class HopNeo4jPerspective implements IHopPerspective {
     // Auto-refresh the list
     //
     refreshResults();
-  }
-
-  @Override
-  public IHopFileTypeHandler getActiveFileTypeHandler() {
-    return new EmptyHopFileTypeHandler(); // Not handling anything really
-  }
-
-  @Override
-  public void setActiveFileTypeHandler(IHopFileTypeHandler activeFileTypeHandler) {
-    // Do nothing
-  }
-
-  @Override
-  public List<IHopFileType> getSupportedHopFileTypes() {
-    return Collections.emptyList();
   }
 
   @Override
@@ -541,7 +521,7 @@ public class HopNeo4jPerspective implements IHopPerspective {
     loggingCypher.append("AND   e.type = $type ");
     loggingCypher.append("RETURN e.loggingText ");
 
-    session.readTransaction(
+    session.executeRead(
         tx -> {
           Result result = tx.run(loggingCypher.toString(), loggingParameters);
           while (result.hasNext()) {
@@ -592,7 +572,7 @@ public class HopNeo4jPerspective implements IHopPerspective {
       errorPathCypher.append("ORDER BY size(RELATIONSHIPS(p)) DESC ");
       errorPathCypher.append("LIMIT 10");
 
-      session.readTransaction(
+      session.executeRead(
           tx -> {
             Result pathResult = tx.run(errorPathCypher.toString(), errorPathParams);
 
@@ -824,7 +804,7 @@ public class HopNeo4jPerspective implements IHopPerspective {
       try (Driver driver = connection.getDriver(log, hopGui.getVariables())) {
         try (Session session = connection.getSession(log, driver, hopGui.getVariables())) {
 
-          session.readTransaction(
+          session.executeRead(
               tx -> {
                 Result result = tx.run(resultsCypher.toString(), resultsParameters);
                 while (result.hasNext()) {
@@ -853,8 +833,7 @@ public class HopNeo4jPerspective implements IHopPerspective {
                   Value vExecutionStart = record.get(pos++);
                   item.setText(pos, Const.NVL(vExecutionStart.asString(), "").replace("T", " "));
                   Value vDurationMs = record.get(pos++);
-                  String durationHMS =
-                      LoggingCore.getFancyDurationFromMs(Long.valueOf(vDurationMs.asLong(0)));
+                  String durationHMS = LoggingCore.getFancyDurationFromMs(vDurationMs.asLong(0));
                   item.setText(pos, durationHMS);
 
                   if (errors != 0) {
@@ -873,7 +852,7 @@ public class HopNeo4jPerspective implements IHopPerspective {
           //
           String execCypher =
               "match(e:Execution) where e.type in ['PIPELINE', 'WORKFLOW'] return distinct e.name order by e.name";
-          session.readTransaction(
+          session.executeRead(
               tx -> {
                 List<String> list = new ArrayList<>();
                 Result result = tx.run(execCypher);
@@ -966,7 +945,7 @@ public class HopNeo4jPerspective implements IHopPerspective {
     cypher.append("RETURN p.filename, t.name ");
 
     String[] names =
-        session.readTransaction(
+        session.executeRead(
             tx -> {
               Result statementResult = tx.run(cypher.toString(), params);
               if (!statementResult.hasNext()) {
@@ -1000,8 +979,7 @@ public class HopNeo4jPerspective implements IHopPerspective {
         return;
       }
 
-      HopDataOrchestrationPerspective perspective = HopGui.getDataOrchestrationPerspective();
-      IHopFileTypeHandler typeHandler = perspective.getActiveFileTypeHandler();
+      IHopFileTypeHandler typeHandler = hopGui.getActiveFileTypeHandler();
       if (typeHandler == null || !(typeHandler instanceof HopGuiPipelineGraph)) {
         return;
       }
@@ -1040,7 +1018,7 @@ public class HopNeo4jPerspective implements IHopPerspective {
     cypher.append("RETURN w.filename, a.name ");
 
     String[] names =
-        session.readTransaction(
+        session.executeRead(
             tx -> {
               Result statementResult = tx.run(cypher.toString(), params);
               if (!statementResult.hasNext()) {
@@ -1069,8 +1047,7 @@ public class HopNeo4jPerspective implements IHopPerspective {
     try {
       hopGui.fileDelegate.fileOpen(filename);
       if (StringUtils.isNotEmpty(actionName)) {
-        IHopFileTypeHandler typeHandler =
-            HopGui.getDataOrchestrationPerspective().getActiveFileTypeHandler();
+        IHopFileTypeHandler typeHandler = HopGui.getInstance().getActiveFileTypeHandler();
         if (typeHandler == null || !(typeHandler instanceof HopGuiWorkflowGraph)) {
           return;
         }
@@ -1107,7 +1084,7 @@ public class HopNeo4jPerspective implements IHopPerspective {
     cypher.append("RETURN tr.filename ");
 
     String filename =
-        session.readTransaction(
+        session.executeRead(
             tx -> {
               Result statementResult = tx.run(cypher.toString(), params);
               if (!statementResult.hasNext()) {
@@ -1133,36 +1110,6 @@ public class HopNeo4jPerspective implements IHopPerspective {
             e);
       }
     }
-  }
-
-  @Override
-  public boolean remove(IHopFileTypeHandler typeHandler) {
-    return false; // Nothing to do here
-  }
-
-  @Override
-  public List<TabItemHandler> getItems() {
-    return null;
-  }
-
-  @Override
-  public void navigateToPreviousFile() {
-    // Do nothing
-  }
-
-  @Override
-  public void navigateToNextFile() {
-    // Do nothing
-  }
-
-  @Override
-  public boolean hasNavigationPreviousFile() {
-    return false;
-  }
-
-  @Override
-  public boolean hasNavigationNextFile() {
-    return false;
   }
 
   /**

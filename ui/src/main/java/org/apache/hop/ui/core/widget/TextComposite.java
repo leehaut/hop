@@ -18,7 +18,7 @@
 package org.apache.hop.ui.core.widget;
 
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.ui.core.ConstUi;
@@ -199,8 +199,6 @@ public abstract class TextComposite extends Composite {
    *
    * <p>Indexing is zero based. The range of a selection is from 0..N where N is the number of
    * characters in the widget.
-   *
-   * <p>
    *
    * @param start the start of the range
    * @param end the end of the range

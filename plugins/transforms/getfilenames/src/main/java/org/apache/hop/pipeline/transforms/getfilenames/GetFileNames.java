@@ -227,16 +227,16 @@ public class GetFileNames extends BaseTransform<GetFileNamesMeta, GetFileNamesDa
           extraData[outputIndex++] = data.file.getType().toString();
 
           // exists
-          extraData[outputIndex++] = Boolean.valueOf(data.file.exists());
+          extraData[outputIndex++] = data.file.exists();
 
           // ishidden
-          extraData[outputIndex++] = Boolean.valueOf(data.file.isHidden());
+          extraData[outputIndex++] = data.file.isHidden();
 
           // isreadable
-          extraData[outputIndex++] = Boolean.valueOf(data.file.isReadable());
+          extraData[outputIndex++] = data.file.isReadable();
 
           // iswriteable
-          extraData[outputIndex++] = Boolean.valueOf(data.file.isWriteable());
+          extraData[outputIndex++] = data.file.isWriteable();
 
           // lastmodifiedtime
           extraData[outputIndex++] = new Date(data.file.getContent().getLastModifiedTime());
@@ -244,7 +244,7 @@ public class GetFileNames extends BaseTransform<GetFileNamesMeta, GetFileNamesDa
           // size
           Long size = null;
           if (data.file.getType().equals(FileType.FILE)) {
-            size = Long.valueOf(data.file.getContent().getSize());
+            size = data.file.getContent().getSize();
           }
 
           extraData[outputIndex++] = size;
@@ -264,7 +264,7 @@ public class GetFileNames extends BaseTransform<GetFileNamesMeta, GetFileNamesDa
 
         // See if we need to add the row number to the row...
         if (meta.isIncludeRowNumber() && !Utils.isEmpty(meta.getRowNumberField())) {
-          extraData[outputIndex++] = Long.valueOf(data.rownr + 1);
+          extraData[outputIndex++] = data.rownr + 1;
         }
 
         data.rownr++;
@@ -321,14 +321,18 @@ public class GetFileNames extends BaseTransform<GetFileNamesMeta, GetFileNamesDa
 
     if (!nonExistantFiles.isEmpty()) {
       String message = FileInputList.getRequiredFilesDescription(nonExistantFiles);
-      logBasic("ERROR: Missing " + message);
+      if (isBasic()) {
+        logBasic("ERROR: Missing " + message);
+      }
       throw new HopException("Following required files are missing: " + message);
     }
 
     List<FileObject> nonAccessibleFiles = data.files.getNonAccessibleFiles();
     if (!nonAccessibleFiles.isEmpty()) {
       String message = FileInputList.getRequiredFilesDescription(nonAccessibleFiles);
-      logBasic("WARNING: Not accessible " + message);
+      if (isBasic()) {
+        logBasic("WARNING: Not accessible " + message);
+      }
       throw new HopException("Following required files are not accessible: " + message);
     }
   }

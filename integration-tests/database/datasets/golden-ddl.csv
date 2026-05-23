@@ -1,0 +1,7 @@
+ddl
+"CREATE TABLE DDLTEST
+(
+  id INTEGER
+, namefield VARCHAR(100)
+)
+;"

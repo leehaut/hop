@@ -18,16 +18,19 @@
 package org.apache.hop.pipeline.transforms.sasinput;
 
 import com.epam.parso.Column;
-import com.epam.parso.ColumnFormat;
 import com.epam.parso.SasFileProperties;
 import com.epam.parso.impl.SasFileReaderImpl;
+import com.google.common.annotations.VisibleForTesting;
 import java.io.InputStream;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.ResultFile;
 import org.apache.hop.core.exception.HopException;
+import org.apache.hop.core.io.CountingInputStream;
 import org.apache.hop.core.row.IValueMeta;
 import org.apache.hop.core.row.RowDataUtil;
 import org.apache.hop.core.row.RowMeta;
@@ -35,6 +38,7 @@ import org.apache.hop.core.row.value.ValueMetaDate;
 import org.apache.hop.core.row.value.ValueMetaInteger;
 import org.apache.hop.core.row.value.ValueMetaNumber;
 import org.apache.hop.core.row.value.ValueMetaString;
+import org.apache.hop.core.util.StringUtil;
 import org.apache.hop.core.vfs.HopVfs;
 import org.apache.hop.i18n.BaseMessages;
 import org.apache.hop.pipeline.Pipeline;
@@ -88,6 +92,8 @@ public class SasInput extends BaseTransform<SasInputMeta, SasInputData> {
       //
       data.outputRowMeta = getInputRowMeta().clone();
       meta.getFields(data.outputRowMeta, getTransformName(), null, null, this, metadataProvider);
+
+      data.limit = Const.toLong(resolve(meta.getLimit()), -1);
     }
 
     String rawFilename = getInputRowMeta().getString(fileRowData, meta.getAcceptingField(), null);
@@ -107,7 +113,8 @@ public class SasInput extends BaseTransform<SasInputMeta, SasInputData> {
     // Read the SAS File
     //
     try (InputStream inputStream = HopVfs.getInputStream(filename, variables)) {
-      SasFileReaderImpl sasFileReader = new SasFileReaderImpl(inputStream);
+      CountingInputStream counting = new CountingInputStream(inputStream);
+      SasFileReaderImpl sasFileReader = new SasFileReaderImpl(counting);
       SasFileProperties sasFileProperties = sasFileReader.getSasFileProperties();
 
       logBasic(BaseMessages.getString(PKG, "SASInput.Log.OpenedSASFile") + " : [" + filename + "]");
@@ -116,9 +123,75 @@ public class SasInput extends BaseTransform<SasInputMeta, SasInputData> {
       //
       List<Column> columns = sasFileReader.getColumns();
 
-      // Map this to the columns we want...
+      // Map this to the columns we want.
       //
-      List<Integer> indexes = new ArrayList<>();
+      String metaFilename = resolve(meta.getMetadataFilename());
+      List<Integer> indexes = getColumnIndexes(columns, filename, metaFilename);
+
+      // Now we have the indexes of the output fields to grab.
+      // Let's grab them...
+      //
+      Object[] sasRow;
+      while ((sasRow = sasFileReader.readNext()) != null) {
+        incrementLinesInput();
+        Object[] outputRow = RowDataUtil.createResizedCopy(fileRowData, data.outputRowMeta.size());
+
+        for (int i = 0; i < indexes.size(); i++) {
+          int index = indexes.get(i);
+          Column column = columns.get(index);
+          SasInputField field;
+          if (StringUtil.isEmpty(metaFilename)) {
+            field = meta.getOutputFields().get(i);
+          } else {
+            field = new SasInputField();
+            field.setName(column.getName());
+            field.setLength(column.getFormat().getWidth());
+            field.setPrecision(column.getFormat().getPrecision());
+            field.setType(SasUtil.getHopDataType(column.getType()));
+          }
+
+          Object sasValue = sasRow[index];
+          String fieldName = Const.NVL(field.getRename(), field.getName());
+          int outputIndex = getInputRowMeta().size() + i;
+
+          ConvertedValue converted = convertSasValue(sasValue, fieldName, sasFileProperties);
+          if (converted != null) {
+            IValueMeta inputValueMeta = converted.meta;
+            Object value = converted.value;
+
+            inputValueMeta.setLength(field.getLength());
+            inputValueMeta.setPrecision(field.getPrecision());
+            inputValueMeta.setConversionMask(field.getConversionMask());
+
+            IValueMeta outputValueMeta = data.outputRowMeta.getValueMeta(outputIndex);
+            outputRow[outputIndex] = outputValueMeta.convertData(inputValueMeta, value);
+          }
+        }
+
+        // Send the row on its way...
+        //
+        putRow(data.outputRowMeta, outputRow);
+
+        // One extra row is handled. Do we need to get more?
+        //
+        if (data.limit > 0 && getLinesInput() >= data.limit) {
+          // Stop the while loop reading lines from the SAS file.
+          break;
+        }
+      }
+      dataVolumeIn = (dataVolumeIn != null ? dataVolumeIn : 0L) + counting.getCount();
+    } catch (Exception e) {
+      throw new HopException("Error reading from file " + filename, e);
+    }
+
+    return true;
+  }
+
+  private List<Integer> getColumnIndexes(List<Column> columns, String filename, String metaFilename)
+      throws HopException {
+    List<Integer> indexes = new ArrayList<>();
+
+    if (StringUtil.isEmpty(metaFilename)) {
       for (SasInputField field : meta.getOutputFields()) {
 
         int index = -1;
@@ -134,74 +207,39 @@ public class SasInput extends BaseTransform<SasInputMeta, SasInputData> {
         }
         indexes.add(index);
       }
-
-      // Now we have the indexes of the output fields to grab.
-      // Let's grab them...
+    } else {
+      // Get the column indexes in the same order as in the file.
       //
-      Object[] sasRow;
-      while ((sasRow = sasFileReader.readNext()) != null) {
-        Object[] outputRow = RowDataUtil.createResizedCopy(fileRowData, data.outputRowMeta.size());
-
-        for (int i = 0; i < meta.getOutputFields().size(); i++) {
-          SasInputField field = meta.getOutputFields().get(i);
-          int index = indexes.get(i);
-          Column column = columns.get(index);
-          ColumnFormat columnFormat = column.getFormat();
-          Object sasValue = sasRow[index];
-          Object value = null;
-          IValueMeta inputValueMeta = null;
-          String fieldName = Const.NVL(field.getRename(), field.getName());
-          int outputIndex = getInputRowMeta().size() + i;
-          if (sasValue instanceof byte[] bytes) {
-            inputValueMeta = new ValueMetaString(fieldName);
-            if (sasFileProperties.getEncoding() != null) {
-              value = new String(bytes, sasFileProperties.getEncoding());
-            } else {
-              // TODO: user defined encoding.
-              value = new String(bytes);
-            }
-          }
-          if (sasValue instanceof String) {
-            inputValueMeta = new ValueMetaString(fieldName);
-            value = sasValue;
-          }
-          if (sasValue instanceof Double) {
-            inputValueMeta = new ValueMetaNumber(fieldName);
-            value = sasValue;
-          }
-          if (sasValue instanceof Float) {
-            inputValueMeta = new ValueMetaNumber(fieldName);
-            value = Double.valueOf((double) sasValue);
-          }
-          if (sasValue instanceof Long) {
-            inputValueMeta = new ValueMetaInteger(fieldName);
-            value = sasValue;
-          }
-          if (sasValue instanceof Integer) {
-            inputValueMeta = new ValueMetaInteger(fieldName);
-            value = Long.valueOf((int) sasValue);
-          }
-          if (sasValue instanceof Date) {
-            inputValueMeta = new ValueMetaDate(fieldName);
-            value = sasValue;
-          }
-          if (inputValueMeta != null) {
-            inputValueMeta.setLength(field.getLength());
-            inputValueMeta.setPrecision(field.getPrecision());
-            inputValueMeta.setConversionMask(field.getConversionMask());
-            IValueMeta outputValueMeta = data.outputRowMeta.getValueMeta(outputIndex);
-            outputRow[outputIndex] = outputValueMeta.convertData(inputValueMeta, value);
-          }
-        }
-
-        // Send the row on its way...
-        //
-        putRow(data.outputRowMeta, outputRow);
+      for (int c = 0; c < columns.size(); c++) {
+        indexes.add(c);
       }
-    } catch (Exception e) {
-      throw new HopException("Error reading from file " + filename, e);
     }
-
-    return true;
+    return indexes;
   }
+
+  @VisibleForTesting
+  public ConvertedValue convertSasValue(Object object, String field, SasFileProperties property) {
+    return switch (object) {
+      case byte[] bytes -> {
+        Charset charset =
+            property.getEncoding() != null
+                ? Charset.forName(property.getEncoding())
+                : StandardCharsets.UTF_8;
+
+        String value = new String(bytes, charset);
+        yield new ConvertedValue(new ValueMetaString(field), value);
+      }
+
+      case String s -> new ConvertedValue(new ValueMetaString(field), s);
+      case Double d -> new ConvertedValue(new ValueMetaNumber(field), d);
+      case Float f -> new ConvertedValue(new ValueMetaNumber(field), f);
+      case Long l -> new ConvertedValue(new ValueMetaInteger(field), l);
+      case Integer i -> new ConvertedValue(new ValueMetaInteger(field), (long) i);
+      case Date date -> new ConvertedValue(new ValueMetaDate(field), date);
+      case null, default -> null;
+    };
+  }
+
+  /** class valueMeta, object */
+  public record ConvertedValue(IValueMeta meta, Object value) {}
 }

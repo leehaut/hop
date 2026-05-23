@@ -21,15 +21,16 @@
     <parent>
         <groupId>org.apache.hop</groupId>
         <artifactId>hop</artifactId>
-        <version>2.16.0-SNAPSHOT</version>
+        <version>2.18.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>hop-ui</artifactId>
-    <version>2.16.0-SNAPSHOT</version>
     <packaging>jar</packaging>
     <name>Hop GUI</name>
 
     <properties>
+        <jediterm.version>3.57</jediterm.version>
+        <pty4j.version>0.13.12</pty4j.version>
         <xmlgraphics-commons.version>2.9</xmlgraphics-commons.version>
     </properties>
 
@@ -63,6 +64,34 @@
             <version>${org.eclipse.platform.version}</version>
             <scope>compile</scope>
         </dependency>
+        <!-- JediTerm - JetBrains terminal emulator for POC/testing -->
+        <dependency>
+            <groupId>org.jetbrains.jediterm</groupId>
+            <artifactId>jediterm-core</artifactId>
+            <version>${jediterm.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.jediterm</groupId>
+            <artifactId>jediterm-ui</artifactId>
+            <version>${jediterm.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.jetbrains.pty4j</groupId>
+                    <artifactId>pty4j</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.pty4j</groupId>
+            <artifactId>pty4j</artifactId>
+            <version>${pty4j.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.jetbrains.pty4j</groupId>
+                    <artifactId>purejavacomm</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
         <dependency>
             <groupId>org.apache.hop</groupId>
             <artifactId>hop-core</artifactId>
@@ -87,13 +116,15 @@
             <artifactId>hop-engine</artifactId>
             <version>${project.version}</version>
             <classifier>tests</classifier>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.vintage</groupId>
-            <artifactId>junit-vintage-engine</artifactId>
-            <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <repositories>
+        <!-- JetBrains repository for JediTerm -->
+        <repository>
+            <id>jetbrains-intellij-dependencies</id>
+            <url>https://packages.jetbrains.team/maven/p/ij/intellij-dependencies</url>
+        </repository>
+    </repositories>
 </project>

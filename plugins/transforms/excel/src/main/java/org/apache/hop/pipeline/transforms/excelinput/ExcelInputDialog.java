@@ -23,6 +23,8 @@ import static org.apache.hop.pipeline.transforms.excelinput.ExcelInputMeta.EIShe
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.Props;
@@ -191,8 +193,6 @@ public class ExcelInputDialog extends BaseTransformDialog {
   private Text wLineNrExt;
 
   private final ExcelInputMeta input;
-  private int middle;
-  private int margin;
   private boolean gotEncodings = false;
 
   private Button wAddResult;
@@ -215,52 +215,9 @@ public class ExcelInputDialog extends BaseTransformDialog {
 
   @Override
   public String open() {
-    Shell parent = getParent();
+    createShell(BaseMessages.getString(PKG, "ExcelInputDialog.DialogTitle"));
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX | SWT.MIN);
-    PropsUi.setLook(shell);
-    setShellImage(shell, input);
-
-    FormLayout formLayout = new FormLayout();
-    formLayout.marginWidth = PropsUi.getFormMargin();
-    formLayout.marginHeight = PropsUi.getFormMargin();
-
-    shell.setLayout(formLayout);
-    shell.setText(BaseMessages.getString(PKG, "ExcelInputDialog.DialogTitle"));
-
-    middle = props.getMiddlePct();
-    margin = PropsUi.getMargin();
-
-    // Buttons at the bottom
-    wOk = new Button(shell, SWT.PUSH);
-    wOk.setText(BaseMessages.getString(PKG, "System.Button.OK"));
-    wOk.addListener(SWT.Selection, e -> ok());
-    wPreview = new Button(shell, SWT.PUSH);
-    wPreview.setText(BaseMessages.getString(PKG, "ExcelInputDialog.PreviewRows.Button"));
-    wPreview.addListener(SWT.Selection, e -> preview());
-    wCancel = new Button(shell, SWT.PUSH);
-    wCancel.setText(BaseMessages.getString(PKG, "System.Button.Cancel"));
-    wCancel.addListener(SWT.Selection, e -> cancel());
-    setButtonPositions(new Button[] {wOk, wPreview, wCancel}, margin, null);
-
-    // TransformName line
-    wlTransformName = new Label(shell, SWT.RIGHT);
-    wlTransformName.setText(BaseMessages.getString(PKG, "System.TransformName.Label"));
-    wlTransformName.setToolTipText(BaseMessages.getString(PKG, "System.TransformName.Tooltip"));
-    PropsUi.setLook(wlTransformName);
-    fdlTransformName = new FormData();
-    fdlTransformName.left = new FormAttachment(0, 0);
-    fdlTransformName.top = new FormAttachment(0, margin);
-    fdlTransformName.right = new FormAttachment(middle, -margin);
-    wlTransformName.setLayoutData(fdlTransformName);
-    wTransformName = new Text(shell, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
-    wTransformName.setText(transformName);
-    PropsUi.setLook(wTransformName);
-    fdTransformName = new FormData();
-    fdTransformName.left = new FormAttachment(middle, 0);
-    fdTransformName.top = new FormAttachment(0, margin);
-    fdTransformName.right = new FormAttachment(100, 0);
-    wTransformName.setLayoutData(fdTransformName);
+    buildButtonBar().ok(e -> ok()).preview(e -> preview()).cancel(e -> cancel()).build();
 
     // Status Message
     wlStatusMessage = new Label(shell, SWT.RIGHT);
@@ -335,7 +292,7 @@ public class ExcelInputDialog extends BaseTransformDialog {
 
     // Accepting filenames group
     //
-    Group gAccepting = new Group(wFileComp, SWT.SHADOW_ETCHED_IN);
+    Group gAccepting = new Group(wFileComp, SWT.SHADOW_NONE);
     gAccepting.setText(BaseMessages.getString(PKG, "ExcelInputDialog.AcceptingGroup.Label"));
     FormLayout acceptingLayout = new FormLayout();
     acceptingLayout.marginWidth = 3;
@@ -427,7 +384,7 @@ public class ExcelInputDialog extends BaseTransformDialog {
     FormData fdAccepting = new FormData();
     fdAccepting.left = new FormAttachment(0, 0);
     fdAccepting.right = new FormAttachment(100, 0);
-    fdAccepting.bottom = new FormAttachment(wbShowFiles, -margin * 2);
+    fdAccepting.bottom = new FormAttachment(wbShowFiles, -margin);
     gAccepting.setLayoutData(fdAccepting);
 
     ColumnInfo[] colinfo = new ColumnInfo[5];
@@ -526,7 +483,7 @@ public class ExcelInputDialog extends BaseTransformDialog {
     fdlSheetnameList.right = new FormAttachment(middle, -margin);
     wlSheetnameList.setLayoutData(fdlSheetnameList);
 
-    ColumnInfo[] shinfo = new ColumnInfo[3];
+    ColumnInfo[] shinfo = new ColumnInfo[4];
     shinfo[0] =
         new ColumnInfo(
             BaseMessages.getString(PKG, "ExcelInputDialog.SheetName.Column"),
@@ -542,6 +499,15 @@ public class ExcelInputDialog extends BaseTransformDialog {
             BaseMessages.getString(PKG, "ExcelInputDialog.StartColumn.Column"),
             ColumnInfo.COLUMN_TYPE_TEXT,
             false);
+    shinfo[3] =
+        new ColumnInfo(
+            BaseMessages.getString(PKG, "ExcelInputDialog.IsRegex.Column"),
+            ColumnInfo.COLUMN_TYPE_CCOMBO,
+            new String[] {
+              BaseMessages.getString(PKG, "System.Combo.No"),
+              BaseMessages.getString(PKG, "System.Combo.Yes")
+            },
+            true);
 
     wSheetNameList =
         new TableView(
@@ -808,23 +774,19 @@ public class ExcelInputDialog extends BaseTransformDialog {
     fdIgnoreFields.right = new FormAttachment(100, 0);
     fdIgnoreFields.top = new FormAttachment(wlIgnoreFields, 0, SWT.CENTER);
     wIgnoreFields.setLayoutData(fdIgnoreFields);
-    wIgnoreFields.addListener(SWT.Selection, e -> setFlags());
+    wIgnoreFields.addListener(
+        SWT.Selection,
+        e -> {
+          // If checkbox is being checked (not unchecked), refresh from schema
+          if (wIgnoreFields.getSelection()) {
+            fillFieldsLayoutFromSchema(false);
+          }
+          setFlags();
+        });
 
-    Group wManualSchemaDefinition = new Group(wFieldsComp, SWT.SHADOW_NONE);
-    PropsUi.setLook(wManualSchemaDefinition);
-    wManualSchemaDefinition.setText(
-        BaseMessages.getString(PKG, "ExcelInputDialog.ManualSchemaDefinition.Label"));
-
-    FormLayout manualSchemaDefinitionLayout = new FormLayout();
-    manualSchemaDefinitionLayout.marginWidth = 10;
-    manualSchemaDefinitionLayout.marginHeight = 10;
-    wManualSchemaDefinition.setLayout(manualSchemaDefinitionLayout);
-
-    wbGetFields = new Button(wManualSchemaDefinition, SWT.PUSH | SWT.CENTER);
+    wbGetFields = new Button(wFieldsComp, SWT.PUSH | SWT.CENTER);
     PropsUi.setLook(wbGetFields);
     wbGetFields.setText(BaseMessages.getString(PKG, "ExcelInputDialog.GetFields.Button"));
-
-    setButtonPositions(new Button[] {wbGetFields}, margin, null);
 
     final int FieldsRows = input.getFields().size();
     int fieldsWidth = 600;
@@ -877,7 +839,7 @@ public class ExcelInputDialog extends BaseTransformDialog {
     wFields =
         new TableView(
             variables,
-            wManualSchemaDefinition,
+            wFieldsComp,
             SWT.FULL_SELECTION | SWT.MULTI | SWT.BORDER,
             colinf,
             FieldsRows,
@@ -888,7 +850,7 @@ public class ExcelInputDialog extends BaseTransformDialog {
 
     FormData fdFields = new FormData();
     fdFields.left = new FormAttachment(0, 0);
-    fdFields.top = new FormAttachment(0, 0);
+    fdFields.top = new FormAttachment(wIgnoreFields, margin);
     fdFields.right = new FormAttachment(100, 0);
     fdFields.bottom = new FormAttachment(wbGetFields, -margin);
     wFields.setLayoutData(fdFields);
@@ -900,14 +862,9 @@ public class ExcelInputDialog extends BaseTransformDialog {
     fdFieldsComp.bottom = new FormAttachment(100, 0);
     wFieldsComp.setLayoutData(fdFieldsComp);
 
-    wFieldsComp.layout();
+    setButtonPositions(new Button[] {wbGetFields}, margin, null);
 
-    FormData fdManualSchemaDefinitionComp = new FormData();
-    fdManualSchemaDefinitionComp.left = new FormAttachment(0, 0);
-    fdManualSchemaDefinitionComp.top = new FormAttachment(wIgnoreFields, 0);
-    fdManualSchemaDefinitionComp.right = new FormAttachment(100, 0);
-    fdManualSchemaDefinitionComp.bottom = new FormAttachment(100, 0);
-    wManualSchemaDefinition.setLayoutData(fdManualSchemaDefinitionComp);
+    wFieldsComp.layout();
 
     wFieldsTab.setControl(wFieldsComp);
     PropsUi.setLook(wFieldsComp);
@@ -918,7 +875,7 @@ public class ExcelInputDialog extends BaseTransformDialog {
     fdTabFolder.left = new FormAttachment(0, 0);
     fdTabFolder.top = new FormAttachment(wlStatusMessage, margin);
     fdTabFolder.right = new FormAttachment(100, 0);
-    fdTabFolder.bottom = new FormAttachment(wOk, -2 * margin);
+    fdTabFolder.bottom = new FormAttachment(wOk, -margin);
     wTabFolder.setLayoutData(fdTabFolder);
 
     // Show the files that are selected at this time...
@@ -933,23 +890,30 @@ public class ExcelInputDialog extends BaseTransformDialog {
     getData(input);
     wFields.optWidth(true);
     checkAlerts(); // resyncing after setup
-
+    focusTransformName();
     BaseDialog.defaultShellHandling(shell, c -> ok(), c -> cancel());
 
     return transformName;
   }
 
   private void fillFieldsLayoutFromSchema() {
+    fillFieldsLayoutFromSchema(true);
+  }
+
+  private void fillFieldsLayoutFromSchema(boolean askConfirmation) {
 
     if (!wSchemaDefinition.isDisposed()) {
       final String schemaName = wSchemaDefinition.getText();
 
-      MessageBox mb = new MessageBox(shell, SWT.ICON_QUESTION | SWT.NO | SWT.YES);
-      mb.setMessage(
-          BaseMessages.getString(
-              PKG, "ExcelInputDialog.Load.SchemaDefinition.Message", schemaName));
-      mb.setText(BaseMessages.getString(PKG, "ExcelInputDialog.Load.SchemaDefinition.Title"));
-      int answer = mb.open();
+      int answer = SWT.YES;
+      if (askConfirmation) {
+        MessageBox mb = new MessageBox(shell, SWT.ICON_QUESTION | SWT.NO | SWT.YES);
+        mb.setMessage(
+            BaseMessages.getString(
+                PKG, "ExcelInputDialog.Load.SchemaDefinition.Message", schemaName));
+        mb.setText(BaseMessages.getString(PKG, "ExcelInputDialog.Load.SchemaDefinition.Title"));
+        answer = mb.open();
+      }
 
       if (answer == SWT.YES && !Utils.isEmpty(schemaName)) {
         try {
@@ -960,6 +924,8 @@ public class ExcelInputDialog extends BaseTransformDialog {
             if (r != null) {
               String[] fieldNames = r.getFieldNames();
               if (fieldNames != null) {
+                // Close any active editors to clear cached combo values
+                wFields.closeActiveEditors();
                 wFields.clearAll();
                 for (int i = 0; i < fieldNames.length; i++) {
                   IValueMeta valueMeta = r.getValueMeta(i);
@@ -994,6 +960,10 @@ public class ExcelInputDialog extends BaseTransformDialog {
         wFields.removeEmptyRows();
         wFields.setRowNums();
         wFields.optWidth(true);
+
+        // Force table to redraw to update combo dropdowns with correct values
+        wFields.table.redraw();
+        wFields.table.update();
       }
     }
   }
@@ -1050,7 +1020,7 @@ public class ExcelInputDialog extends BaseTransformDialog {
         try {
           String path =
               wFilenameList.getActiveTableItem().getText(wFilenameList.getActiveTableColumn());
-          FileObject fileObject = HopVfs.getFileObject(path);
+          FileObject fileObject = HopVfs.getFileObject(variables.resolve(path));
 
           SpreadSheetType type =
               SpreadSheetType.getSpreadSheetTypeByDescription(wSpreadSheetType.getText());
@@ -1080,6 +1050,7 @@ public class ExcelInputDialog extends BaseTransformDialog {
 
           if (path != null) {
             wFilenameList.getActiveTableItem().setText(wFilenameList.getActiveTableColumn(), path);
+            checkAlerts();
           }
         } catch (HopFileException e) {
           log.logError("Error selecting file or directory", e);
@@ -1108,6 +1079,13 @@ public class ExcelInputDialog extends BaseTransformDialog {
     wAccFilenames.setSelection(meta.isAcceptingFilenames());
     wSchemaDefinition.setText(Const.NVL(meta.getSchemaDefinition(), ""));
     wIgnoreFields.setSelection(meta.isIgnoreFields());
+
+    // Apply the ignore fields state (fill from schema and disable/enable controls)
+    if (meta.isIgnoreFields()) {
+      fillFieldsLayoutFromSchema(false);
+      setFlags();
+    }
+
     if (meta.getAcceptingField() != null && !meta.getAcceptingField().isEmpty()) {
       wAccField.select(wAccField.indexOf(meta.getAcceptingField()));
     }
@@ -1131,33 +1109,38 @@ public class ExcelInputDialog extends BaseTransformDialog {
     if (isDebug()) {
       logDebug("getting fields info...");
     }
-    for (int i = 0; i < meta.getFields().size(); i++) {
-      ExcelInputField f = meta.getFields().get(i);
-      TableItem item = wFields.table.getItem(i);
-      String field = f.getName();
-      String type = f.getTypeDesc();
-      String length = "" + f.getLength();
-      String prec = "" + f.getPrecision();
-      String trim = f.getTrimType().getDescription();
-      String rep =
-          f.isRepeat()
-              ? BaseMessages.getString(PKG, CONST_COMBO_YES)
-              : BaseMessages.getString(PKG, CONST_COMBO_NO);
-      String format = f.getFormat();
-      String currency = f.getCurrencySymbol();
-      String decimal = f.getDecimalSymbol();
-      String grouping = f.getGroupSymbol();
 
-      item.setText(1, Const.NVL(field, ""));
-      item.setText(2, Const.NVL(type, ""));
-      item.setText(3, Const.NVL(length, ""));
-      item.setText(4, Const.NVL(prec, ""));
-      item.setText(5, Const.NVL(trim, ""));
-      item.setText(6, Const.NVL(rep, ""));
-      item.setText(7, Const.NVL(format, ""));
-      item.setText(8, Const.NVL(currency, ""));
-      item.setText(9, Const.NVL(decimal, ""));
-      item.setText(10, Const.NVL(grouping, ""));
+    // Only populate fields from metadata if NOT ignoring fields (will be filled from schema
+    // instead)
+    if (!meta.isIgnoreFields()) {
+      for (int i = 0; i < meta.getFields().size(); i++) {
+        ExcelInputField f = meta.getFields().get(i);
+        TableItem item = wFields.table.getItem(i);
+        String field = f.getName();
+        String type = f.getTypeDesc();
+        String length = "" + f.getLength();
+        String prec = "" + f.getPrecision();
+        String trim = f.getTrimType().getDescription();
+        String rep =
+            f.isRepeat()
+                ? BaseMessages.getString(PKG, CONST_COMBO_YES)
+                : BaseMessages.getString(PKG, CONST_COMBO_NO);
+        String format = f.getFormat();
+        String currency = f.getCurrencySymbol();
+        String decimal = f.getDecimalSymbol();
+        String grouping = f.getGroupSymbol();
+
+        item.setText(1, Const.NVL(field, ""));
+        item.setText(2, Const.NVL(type, ""));
+        item.setText(3, Const.NVL(length, ""));
+        item.setText(4, Const.NVL(prec, ""));
+        item.setText(5, Const.NVL(trim, ""));
+        item.setText(6, Const.NVL(rep, ""));
+        item.setText(7, Const.NVL(format, ""));
+        item.setText(8, Const.NVL(currency, ""));
+        item.setText(9, Const.NVL(decimal, ""));
+        item.setText(10, Const.NVL(grouping, ""));
+      }
     }
 
     wFields.removeEmptyRows();
@@ -1175,6 +1158,11 @@ public class ExcelInputDialog extends BaseTransformDialog {
       item.setText(1, Const.NVL(sheetname, ""));
       item.setText(2, Const.NVL(startrow, ""));
       item.setText(3, Const.NVL(startcol, ""));
+      item.setText(
+          4,
+          sheet.isRegex()
+              ? BaseMessages.getString(PKG, "System.Combo.Yes")
+              : BaseMessages.getString(PKG, "System.Combo.No"));
     }
     wSheetNameList.optimizeTableView();
 
@@ -1200,9 +1188,6 @@ public class ExcelInputDialog extends BaseTransformDialog {
     wSizeFieldName.setText(Const.NVL(meta.getSizeFieldName(), ""));
 
     setFlags();
-
-    wTransformName.selectAll();
-    wTransformName.setFocus();
   }
 
   private void cancel() {
@@ -1252,6 +1237,8 @@ public class ExcelInputDialog extends BaseTransformDialog {
       sheet.setName(item.getText(1));
       sheet.setStartRow(Const.toInt(item.getText(2), 0));
       sheet.setStartColumn(Const.toInt(item.getText(3), 0));
+      sheet.setRegex(
+          BaseMessages.getString(PKG, "System.Combo.Yes").equalsIgnoreCase(item.getText(4)));
       meta.getSheets().add(sheet);
     }
 
@@ -1799,18 +1786,43 @@ public class ExcelInputDialog extends BaseTransformDialog {
    * @param workbook excel workbook for processing
    * @throws HopPluginException In case something goes wrong
    */
+  /**
+   * Finds the index of the first EISheet entry that matches the given sheet name, taking regex
+   * entries into account. Returns -1 if no match found.
+   */
+  private int findMatchingSheetIndex(String sheetName, ExcelInputMeta meta) {
+    List<ExcelInputMeta.EISheet> sheets = meta.getSheets();
+    for (int i = 0; i < sheets.size(); i++) {
+      ExcelInputMeta.EISheet entry = sheets.get(i);
+      if (entry.isRegex()) {
+        try {
+          if (Pattern.compile(entry.getName()).matcher(sheetName).matches()) {
+            return i;
+          }
+        } catch (PatternSyntaxException ignored) {
+          // invalid regex — skip
+        }
+      } else {
+        if (sheetName.equals(entry.getName())) {
+          return i;
+        }
+      }
+    }
+    return -1;
+  }
+
   private void processingWorkbook(IRowMeta fields, ExcelInputMeta meta, IKWorkbook workbook)
       throws HopPluginException {
     int nrSheets = workbook.getNumberOfSheets();
     for (int j = 0; j < nrSheets; j++) {
       IKSheet sheet = workbook.getSheet(j);
 
-      // See if it's a selected sheet:
+      // See if it's a selected sheet (supports both exact names and regex patterns):
       int sheetIndex;
       if (meta.readAllSheets()) {
         sheetIndex = 0;
       } else {
-        sheetIndex = Const.indexOfString(sheet.getName(), meta.getSheetsNames());
+        sheetIndex = findMatchingSheetIndex(sheet.getName(), meta);
       }
       if (sheetIndex >= 0) {
         // We suppose it's the complete range we're looking for...
@@ -1902,7 +1914,7 @@ public class ExcelInputDialog extends BaseTransformDialog {
       }
 
       // Now select the default!
-      String defEncoding = Const.getEnvironmentVariable("file.encoding", "UTF-8");
+      String defEncoding = Const.getEnvironmentVariable("file.encoding", Const.UTF_8);
       int idx = Const.indexOfString(defEncoding, wEncoding.getItems());
       if (idx >= 0) {
         wEncoding.select(idx);
@@ -1992,14 +2004,14 @@ public class ExcelInputDialog extends BaseTransformDialog {
     PropsUi.setLook(wlInclFilenameField);
     FormData fdlInclFilenameField = new FormData();
     fdlInclFilenameField.left = new FormAttachment(0, 0);
-    fdlInclFilenameField.top = new FormAttachment(wTransformName, margin);
+    fdlInclFilenameField.top = new FormAttachment(wSpacer, margin);
     fdlInclFilenameField.right = new FormAttachment(middle, -margin);
     wlInclFilenameField.setLayoutData(fdlInclFilenameField);
     wInclFilenameField = new Text(wAdditionalFieldsComp, SWT.SINGLE | SWT.LEFT | SWT.BORDER);
     PropsUi.setLook(wInclFilenameField);
     FormData fdInclFilenameField = new FormData();
     fdInclFilenameField.left = new FormAttachment(middle, 0);
-    fdInclFilenameField.top = new FormAttachment(wTransformName, margin);
+    fdInclFilenameField.top = new FormAttachment(wSpacer, margin);
     fdInclFilenameField.right = new FormAttachment(100, 0);
     wInclFilenameField.setLayoutData(fdInclFilenameField);
 
@@ -2203,7 +2215,7 @@ public class ExcelInputDialog extends BaseTransformDialog {
 
     FormData fdAdditionalFieldsComp = new FormData();
     fdAdditionalFieldsComp.left = new FormAttachment(0, 0);
-    fdAdditionalFieldsComp.top = new FormAttachment(wTransformName, margin);
+    fdAdditionalFieldsComp.top = new FormAttachment(wSpacer, margin);
     fdAdditionalFieldsComp.right = new FormAttachment(100, 0);
     fdAdditionalFieldsComp.bottom = new FormAttachment(100, 0);
     wAdditionalFieldsComp.setLayoutData(fdAdditionalFieldsComp);

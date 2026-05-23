@@ -17,11 +17,13 @@
 
 package org.apache.hop.core.exception;
 
+import java.io.Serial;
+import lombok.Getter;
+
 /** This Exception is throws when an error occurs loading plugins. */
 public class HopPluginLoaderException extends HopException {
-  public static final long serialVersionUID = 0x8D8EA0264F7A1C16L;
-
-  private final String pluginId;
+  @Serial private static final long serialVersionUID = 0x8D8EA0264F7A1C16L;
+  @Getter private final String pluginId;
 
   /**
    * Constructs a new throwable with null as its detail message.
@@ -70,12 +72,5 @@ public class HopPluginLoaderException extends HopException {
   public HopPluginLoaderException(String pluginId, String message, Throwable cause) {
     super(message, cause);
     this.pluginId = pluginId;
-  }
-
-  /**
-   * @return The ID of the missing plugin that caused this exception
-   */
-  public String getPluginId() {
-    return pluginId;
   }
 }

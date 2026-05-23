@@ -17,12 +17,12 @@
 
 package org.apache.hop.www.jaxrs;
 
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
 import java.util.ArrayList;
 import java.util.List;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.MediaType;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.engine.IPipelineEngine;
 import org.apache.hop.workflow.WorkflowMeta;
@@ -31,6 +31,10 @@ import org.apache.hop.www.HopServerConfig;
 import org.apache.hop.www.HopServerObjectEntry;
 import org.apache.hop.www.HopServerSingleton;
 
+/**
+ * @deprecated Since 2.18.0
+ */
+@Deprecated(since = "2.18.0")
 @Path("/carte")
 public class HopServerResource {
 

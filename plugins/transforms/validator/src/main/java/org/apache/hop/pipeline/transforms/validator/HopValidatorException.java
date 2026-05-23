@@ -18,7 +18,8 @@
 
 package org.apache.hop.pipeline.transforms.validator;
 
-import org.apache.commons.lang.StringUtils;
+import java.io.Serial;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.exception.HopValueException;
 
 public class HopValidatorException extends HopValueException {
@@ -50,8 +51,7 @@ public class HopValidatorException extends HopValueException {
   private final Validation validatorField;
   private final int code;
   private final String fieldName;
-
-  private static final long serialVersionUID = -212228277329271284L;
+  @Serial private static final long serialVersionUID = -212228277329271284L;
 
   /**
    * Constructs a new Throwable with the specified detail message.

@@ -38,7 +38,6 @@ import org.apache.hop.ui.hopgui.HopGui;
 import org.apache.hop.ui.hopgui.file.workflow.HopWorkflowFileType;
 import org.apache.hop.ui.util.SwtSvgImageUtil;
 import org.apache.hop.ui.workflow.actions.ActionBaseDialog;
-import org.apache.hop.ui.workflow.dialog.WorkflowDialog;
 import org.apache.hop.workflow.WorkflowMeta;
 import org.apache.hop.workflow.action.ActionBase;
 import org.apache.hop.workflow.action.IAction;
@@ -76,12 +75,9 @@ public class ActionWorkflowDialog extends ActionBaseDialog {
 
   @Override
   public IAction open() {
-    Shell parent = getParent();
-    display = parent.getDisplay();
+    display = getParent().getDisplay();
 
-    shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.MIN | SWT.MAX | SWT.RESIZE);
-    PropsUi.setLook(shell);
-    WorkflowDialog.setShellImage(shell, action);
+    createShell(action);
 
     backupChanged = action.hasChanged();
 
@@ -150,10 +146,10 @@ public class ActionWorkflowDialog extends ActionBaseDialog {
 
       String[] existing = wParameters.getItems(1);
 
-      for (int i = 0; i < parameters.length; i++) {
-        if (Const.indexOfString(parameters[i], existing) < 0) {
+      for (String parameter : parameters) {
+        if (Const.indexOfString(parameter, existing) < 0) {
           TableItem item = new TableItem(wParameters.table, SWT.NONE);
-          item.setText(1, parameters[i]);
+          item.setText(1, parameter);
         }
       }
       wParameters.removeEmptyRows();

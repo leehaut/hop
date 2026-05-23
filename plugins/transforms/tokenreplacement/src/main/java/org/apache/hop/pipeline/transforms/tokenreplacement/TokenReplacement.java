@@ -28,17 +28,22 @@ import java.io.Writer;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.Iterator;
-import org.apache.commons.lang.BooleanUtils;
+import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.ResultFile;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopValueException;
+import org.apache.hop.core.io.CountingInputStream;
+import org.apache.hop.core.io.CountingOutputStream;
 import org.apache.hop.core.row.RowDataUtil;
 import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.vfs.HopVfs;
 import org.apache.hop.i18n.BaseMessages;
+import org.apache.hop.lineage.LineageFileIoEmitter;
+import org.apache.hop.lineage.model.FileIoOperation;
 import org.apache.hop.pipeline.Pipeline;
 import org.apache.hop.pipeline.PipelineMeta;
 import org.apache.hop.pipeline.transform.BaseTransform;
@@ -184,10 +189,14 @@ public class TokenReplacement extends BaseTransform<TokenReplacementMeta, TokenR
       if (!HopVfs.fileExists(inputFilename, variables)) {
         throw new HopException("Input file " + inputFilename + " does not exist.");
       }
+      data.currentCountingInputStream =
+          new CountingInputStream(HopVfs.getInputStream(inputFilename, variables));
+      String inputEncoding = Const.NVL(resolve(meta.getOutputFileEncoding()), Const.UTF_8);
       reader =
           new TokenReplacingReader(
               resolver,
-              new InputStreamReader(HopVfs.getInputStream(inputFilename, variables)),
+              new InputStreamReader(
+                  data.currentCountingInputStream, Charset.forName(inputEncoding)),
               resolve(meta.getTokenStartString()),
               resolve(meta.getTokenEndString()));
 
@@ -258,6 +267,22 @@ public class TokenReplacement extends BaseTransform<TokenReplacementMeta, TokenR
       throw new HopException(ex.getMessage(), ex);
     } finally {
       try {
+        if (data.currentCountingInputStream != null) {
+          long bytesIn = data.currentCountingInputStream.getCount();
+          dataVolumeIn = (dataVolumeIn != null ? dataVolumeIn : 0L) + bytesIn;
+          if (meta.getInputType().equalsIgnoreCase("file")
+              && !Utils.isEmpty(inputFilename)
+              && bytesIn > 0) {
+            try {
+              FileObject inFile = HopVfs.getFileObject(inputFilename, variables);
+              LineageFileIoEmitter.emitTransformFileIo(
+                  this, FileIoOperation.READ, inFile, null, bytesIn, true, null);
+            } catch (Exception ignored) {
+              // optional lineage
+            }
+          }
+        }
+        data.currentCountingInputStream = null;
         reader.close();
         if (stringWriter != null) {
           stringWriter.close();
@@ -279,7 +304,7 @@ public class TokenReplacement extends BaseTransform<TokenReplacementMeta, TokenR
 
     putRow(data.outputRowMeta, r); // in case we want it to go further...
     data.rowNumber++;
-    if (checkFeedback(getLinesOutput())) {
+    if (checkFeedback(getLinesOutput()) && isBasic()) {
       logBasic("linenr " + getLinesOutput());
     }
 
@@ -305,7 +330,9 @@ public class TokenReplacement extends BaseTransform<TokenReplacementMeta, TokenR
 
   public void openNewOutputFile(String filename) throws HopException {
     if (data.openFiles.contains(filename)) {
-      logDetailed("File " + filename + " is already open.");
+      if (isDetailed()) {
+        logDetailed("File " + filename + " is already open.");
+      }
       return;
     }
     if (meta.isCreateParentFolder()) {
@@ -320,7 +347,8 @@ public class TokenReplacement extends BaseTransform<TokenReplacementMeta, TokenR
 
     OutputStream writer =
         HopVfs.getOutputStream(filename, meta.isAppendOutputFileName(), variables);
-    OutputStream bufferedWriter = new BufferedOutputStream(writer, 5000);
+    CountingOutputStream countingStream = new CountingOutputStream(writer);
+    OutputStream bufferedWriter = new BufferedOutputStream(countingStream, 5000);
 
     try {
       if (fileExists && meta.isAppendOutputFileName()) {
@@ -331,21 +359,21 @@ public class TokenReplacement extends BaseTransform<TokenReplacementMeta, TokenR
     }
 
     data.openFiles.add(filename);
-    data.openWriters.add(writer);
+    data.openWriters.add(countingStream);
     data.openBufferedWriters.add(bufferedWriter);
   }
 
   public void closeAllOutputFiles() throws HopException {
     try {
+      ArrayList<String> outputNames = new ArrayList<>(data.openFiles);
       Iterator<OutputStream> itWriter = data.openWriters.iterator();
       Iterator<OutputStream> itBufferedWriter = data.openBufferedWriters.iterator();
-      Iterator<String> itFilename = data.openFiles.iterator();
       if (meta.isAddOutputFileNameToResult()) {
-        while (itFilename.hasNext()) {
+        for (String fn : outputNames) {
           ResultFile resultFile =
               new ResultFile(
                   ResultFile.FILE_TYPE_GENERAL,
-                  HopVfs.getFileObject(itFilename.next(), variables),
+                  HopVfs.getFileObject(fn, variables),
                   getTransformMeta().getName(),
                   getTransformName());
           resultFile.setComment(
@@ -362,11 +390,26 @@ public class TokenReplacement extends BaseTransform<TokenReplacementMeta, TokenR
         }
       }
 
+      int outIndex = 0;
       while (itWriter.hasNext()) {
         OutputStream writer = itWriter.next();
         if (writer != null) {
+          if (writer instanceof CountingOutputStream cos) {
+            long written = cos.getCount();
+            dataVolumeOut = (dataVolumeOut != null ? dataVolumeOut : 0L) + written;
+            if (!data.isBeamContext() && written > 0 && outIndex < outputNames.size()) {
+              try {
+                FileObject outFile = HopVfs.getFileObject(outputNames.get(outIndex), variables);
+                LineageFileIoEmitter.emitTransformFileIo(
+                    this, FileIoOperation.WRITE, null, outFile, written, true, null);
+              } catch (Exception ignored) {
+                // optional lineage
+              }
+            }
+          }
           writer.close();
         }
+        outIndex++;
       }
 
       data.openBufferedWriters.clear();

@@ -26,7 +26,6 @@ import org.apache.hop.ui.hopgui.file.IHopFileTypeHandler;
 import org.apache.hop.ui.hopgui.file.empty.EmptyHopFileTypeHandler;
 import org.apache.hop.ui.hopgui.perspective.explorer.ExplorerFile;
 import org.apache.hop.ui.hopgui.perspective.explorer.ExplorerPerspective;
-import org.apache.hop.ui.hopgui.perspective.explorer.file.IExplorerFileType;
 import org.apache.hop.ui.hopgui.perspective.explorer.file.capabilities.FileTypeCapabilities;
 import org.apache.hop.ui.hopgui.perspective.explorer.file.types.text.BaseTextExplorerFileType;
 
@@ -34,9 +33,8 @@ import org.apache.hop.ui.hopgui.perspective.explorer.file.types.text.BaseTextExp
     id = "JsonExplorerFileType",
     name = "JSON File Type",
     description = "JSON file handling in the explorer perspective",
-    image = "json.svg")
-public class JsonExplorerFileType extends BaseTextExplorerFileType<JsonExplorerFileTypeHandler>
-    implements IExplorerFileType<JsonExplorerFileTypeHandler> {
+    image = "json-file.svg")
+public class JsonExplorerFileType extends BaseTextExplorerFileType<JsonExplorerFileTypeHandler> {
 
   public JsonExplorerFileType() {
     super(
@@ -46,6 +44,7 @@ public class JsonExplorerFileType extends BaseTextExplorerFileType<JsonExplorerF
         new String[] {"JSON files"},
         FileTypeCapabilities.getCapabilities(
             IHopFileType.CAPABILITY_SAVE,
+            IHopFileType.CAPABILITY_SAVE_AS,
             IHopFileType.CAPABILITY_CLOSE,
             IHopFileType.CAPABILITY_FILE_HISTORY,
             IHopFileType.CAPABILITY_COPY,

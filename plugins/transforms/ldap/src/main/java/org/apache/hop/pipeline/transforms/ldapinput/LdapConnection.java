@@ -73,6 +73,8 @@ public class LdapConnection {
 
   public static final int STATUS_ADDED = 4;
 
+  public static final int STATUS_REMOVED = 5;
+
   private final ILogChannel log;
 
   private String searchBase;
@@ -377,6 +379,71 @@ public class LdapConnection {
   }
 
   /**
+   * Remove attributes from an LDAP entry. If a value is provided for an attribute, only that
+   * specific value is removed. If the value is empty or null, the entire attribute is removed.
+   *
+   * @param dn Distinguished Name of the entry to modify
+   * @param attributes attribute names to remove
+   * @param values values to remove (null/empty means remove entire attribute)
+   * @param multValuedSeparator separator for multi-valued attributes
+   * @param checkEntry if true, throw an exception when the entry is not found
+   * @return status: STATUS_REMOVED or STATUS_SKIPPED
+   * @throws HopException
+   */
+  public int removeAttribute(
+      String dn,
+      String[] attributes,
+      String[] values,
+      String multValuedSeparator,
+      boolean checkEntry)
+      throws HopException {
+    try {
+      int nrAttributes = attributes.length;
+      ModificationItem[] mods = new ModificationItem[nrAttributes];
+      for (int i = 0; i < nrAttributes; i++) {
+        Attribute mod;
+        if (!Utils.isEmpty(values[i])) {
+          String value = values[i].trim();
+          if (multValuedSeparator != null && value.contains(multValuedSeparator)) {
+            mod = new BasicAttribute(attributes[i]);
+            for (String singleValue : value.split(multValuedSeparator)) {
+              mod.add(singleValue);
+            }
+          } else {
+            mod = new BasicAttribute(attributes[i], value);
+          }
+        } else {
+          mod = new BasicAttribute(attributes[i]);
+        }
+        if (log.isDebug()) {
+          log.logDebug(
+              BaseMessages.getString(
+                  classFromResourcesPackage,
+                  "LdapConnection.RemoveAttribute.Attribute",
+                  attributes[i],
+                  Utils.isEmpty(values[i]) ? "(all values)" : values[i]));
+        }
+        mods[i] = new ModificationItem(DirContext.REMOVE_ATTRIBUTE, mod);
+      }
+      getInitialContext().modifyAttributes(dn, mods);
+      return STATUS_REMOVED;
+    } catch (NameNotFoundException n) {
+      if (checkEntry) {
+        throw new HopException(
+            BaseMessages.getString(
+                classFromResourcesPackage, CONST_LDAP_CONNECTION_ERROR_DELETING_NAME_NOT_FOUND, dn),
+            n);
+      }
+      return STATUS_SKIPPED;
+    } catch (Exception e) {
+      throw new HopException(
+          BaseMessages.getString(
+              classFromResourcesPackage, "LdapConnection.Error.RemoveAttribute", dn),
+          e);
+    }
+  }
+
+  /**
    * Insert record in LDAP based on DN
    *
    * @param dn : Distinguished Name (Key for lookup)
@@ -577,8 +644,8 @@ public class LdapConnection {
           // examine response controls
           Control[] rc = getInitialContext().getResponseControls();
           if (rc != null) {
-            for (int i = 0; i < rc.length; i++) {
-              if (rc[i] instanceof PagedResultsResponseControl pagedResultsResponseControl) {
+            for (Control control : rc) {
+              if (control instanceof PagedResultsResponseControl pagedResultsResponseControl) {
                 cookie = pagedResultsResponseControl.getCookie();
               }
             }
@@ -716,8 +783,8 @@ public class LdapConnection {
    */
   private static String byteToHexEncode(byte[] inArr) {
     StringBuilder guid = new StringBuilder();
-    for (int i = 0; i < inArr.length; i++) {
-      StringBuilder dblByte = new StringBuilder(Integer.toHexString(inArr[i] & 0xff));
+    for (byte b : inArr) {
+      StringBuilder dblByte = new StringBuilder(Integer.toHexString(b & 0xff));
       if (dblByte.length() == 1) {
         guid.append("0");
       }

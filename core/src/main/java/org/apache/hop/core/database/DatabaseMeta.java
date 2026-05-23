@@ -28,11 +28,14 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
-import org.apache.commons.lang.StringUtils;
+import lombok.Getter;
+import lombok.Setter;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.RowMetaAndData;
 import org.apache.hop.core.exception.HopDatabaseException;
 import org.apache.hop.core.exception.HopPluginException;
+import org.apache.hop.core.exception.HopRuntimeException;
 import org.apache.hop.core.exception.HopXmlException;
 import org.apache.hop.core.logging.ILogChannel;
 import org.apache.hop.core.logging.LogChannel;
@@ -60,10 +63,11 @@ import org.apache.hop.metadata.api.IHopMetadataProvider;
 @HopMetadata(
     key = "rdbms",
     name = "i18n::DatabaseMeta.name",
-    description = "i18n::DatabaseMeta.Description",
+    description = "i18n::DatabaseMeta.description",
     image = "ui/images/database.svg",
     documentationUrl = "/metadata-types/rdbms-connection.html",
-    hopMetadataPropertyType = HopMetadataPropertyType.RDBMS_CONNECTION)
+    hopMetadataPropertyType = HopMetadataPropertyType.RDBMS_CONNECTION,
+    supportsGlobalReplace = true)
 public class DatabaseMeta extends HopMetadataBase implements Cloneable, IHopMetadata {
   private static final Class<?> PKG = Database.class;
 
@@ -77,6 +81,8 @@ public class DatabaseMeta extends HopMetadataBase implements Cloneable, IHopMeta
   public static final Comparator<DatabaseMeta> comparator =
       (DatabaseMeta dbm1, DatabaseMeta dbm2) -> dbm1.getName().compareToIgnoreCase(dbm2.getName());
 
+  @Getter
+  @Setter
   @HopMetadataProperty(key = "rdbms")
   private IDatabase iDatabase;
 
@@ -191,22 +197,6 @@ public class DatabaseMeta extends HopMetadataBase implements Cloneable, IHopMeta
   }
 
   /**
-   * @return the system dependend database interface for this database metadata definition
-   */
-  public IDatabase getIDatabase() {
-    return iDatabase;
-  }
-
-  /**
-   * Set the system dependend database interface for this database metadata definition
-   *
-   * @param iDatabase the system dependend database interface
-   */
-  public void setIDatabase(IDatabase iDatabase) {
-    this.iDatabase = iDatabase;
-  }
-
-  /**
    * Search for the right type of IDatabase object and clone it.
    *
    * @param databaseType the type of IDatabase to look for (description)
@@ -285,7 +275,7 @@ public class DatabaseMeta extends HopMetadataBase implements Cloneable, IHopMeta
     try {
       iDatabase = getIDatabase(type);
     } catch (HopDatabaseException kde) {
-      throw new RuntimeException("Database type not found!", kde);
+      throw new HopRuntimeException("Database type not found!", kde);
     }
 
     setName(name);
@@ -305,7 +295,7 @@ public class DatabaseMeta extends HopMetadataBase implements Cloneable, IHopMeta
     try {
       iDatabase = getIDatabase(type);
     } catch (HopDatabaseException kde) {
-      throw new RuntimeException("Database type [" + type + "] not found!", kde);
+      throw new HopRuntimeException("Database type [" + type + "] not found!", kde);
     }
 
     setAccessType(oldInterface.getAccessType());
@@ -350,8 +340,6 @@ public class DatabaseMeta extends HopMetadataBase implements Cloneable, IHopMeta
    * <p>TYPE_ACCESS_NATIVE
    *
    * <p>TYPE_ACCESS_OCI
-   *
-   * <p>
    *
    * @return The type of database access.
    */
@@ -884,7 +872,7 @@ public class DatabaseMeta extends HopMetadataBase implements Cloneable, IHopMeta
   private static final Future<Map<String, IDatabase>> createDatabaseInterfacesMap() {
     return ExecutorUtil.getExecutor()
         .submit(
-            new Callable<Map<String, IDatabase>>() {
+            new Callable<>() {
               private Map<String, IDatabase> doCreate() {
                 ILogChannel log = LogChannel.GENERAL;
                 PluginRegistry registry = PluginRegistry.getInstance();
@@ -932,10 +920,10 @@ public class DatabaseMeta extends HopMetadataBase implements Cloneable, IHopMeta
       clearDatabaseInterfacesMap();
       // doCreate() above doesn't declare any exceptions so anything that comes out SHOULD be a
       // runtime exception
-      if (e instanceof RuntimeException runtimeException) {
+      if (e instanceof HopRuntimeException runtimeException) {
         throw runtimeException;
       } else {
-        throw new RuntimeException(e);
+        throw new HopRuntimeException(e);
       }
     }
   }
@@ -2008,8 +1996,7 @@ public class DatabaseMeta extends HopMetadataBase implements Cloneable, IHopMeta
       return null;
     }
 
-    for (int i = 0; i < databases.size(); i++) {
-      DatabaseMeta ci = databases.get(i);
+    for (DatabaseMeta ci : databases) {
       if (ci.getName().trim().equalsIgnoreCase(dbname.trim())) {
         return ci;
       }
@@ -2329,5 +2316,71 @@ public class DatabaseMeta extends HopMetadataBase implements Cloneable, IHopMeta
    */
   public boolean isHideUrlInTestConnection() {
     return iDatabase.isHideUrlInTestConnection();
+  }
+
+  // SSH Tunnel delegation methods
+
+  public boolean isSshTunnelEnabled() {
+    return iDatabase.isSshTunnelEnabled();
+  }
+
+  public void setSshTunnelEnabled(boolean enabled) {
+    iDatabase.setSshTunnelEnabled(enabled);
+  }
+
+  public String getSshTunnelHost() {
+    return iDatabase.getSshTunnelHost();
+  }
+
+  public void setSshTunnelHost(String host) {
+    iDatabase.setSshTunnelHost(host);
+  }
+
+  public String getSshTunnelPort() {
+    return iDatabase.getSshTunnelPort();
+  }
+
+  public void setSshTunnelPort(String port) {
+    iDatabase.setSshTunnelPort(port);
+  }
+
+  public String getSshTunnelUsername() {
+    return iDatabase.getSshTunnelUsername();
+  }
+
+  public void setSshTunnelUsername(String username) {
+    iDatabase.setSshTunnelUsername(username);
+  }
+
+  public String getSshTunnelPassword() {
+    return iDatabase.getSshTunnelPassword();
+  }
+
+  public void setSshTunnelPassword(String password) {
+    iDatabase.setSshTunnelPassword(password);
+  }
+
+  public boolean isSshTunnelUsePrivateKey() {
+    return iDatabase.isSshTunnelUsePrivateKey();
+  }
+
+  public void setSshTunnelUsePrivateKey(boolean usePrivateKey) {
+    iDatabase.setSshTunnelUsePrivateKey(usePrivateKey);
+  }
+
+  public String getSshTunnelPrivateKeyFile() {
+    return iDatabase.getSshTunnelPrivateKeyFile();
+  }
+
+  public void setSshTunnelPrivateKeyFile(String privateKeyFile) {
+    iDatabase.setSshTunnelPrivateKeyFile(privateKeyFile);
+  }
+
+  public String getSshTunnelPassphrase() {
+    return iDatabase.getSshTunnelPassphrase();
+  }
+
+  public void setSshTunnelPassphrase(String passphrase) {
+    iDatabase.setSshTunnelPassphrase(passphrase);
   }
 }

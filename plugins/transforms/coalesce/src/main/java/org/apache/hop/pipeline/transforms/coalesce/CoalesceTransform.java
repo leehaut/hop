@@ -19,7 +19,7 @@ package org.apache.hop.pipeline.transforms.coalesce;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.exception.HopValueException;
 import org.apache.hop.core.row.IRowMeta;
@@ -150,7 +150,7 @@ public class CoalesceTransform extends BaseTransform<CoalesceMeta, CoalesceData>
     }
 
     // log progress if it is time to to so
-    if (checkFeedback(getLinesRead())) {
+    if (checkFeedback(getLinesRead()) && isBasic()) {
       logBasic("Line nr " + getLinesRead());
     }
 

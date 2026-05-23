@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.Getter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.Const;
 import org.apache.hop.core.Props;
 import org.apache.hop.core.gui.plugin.GuiRegistry;
@@ -40,29 +40,41 @@ import org.apache.hop.ui.core.PropsUi;
 import org.apache.hop.ui.core.widget.svg.SvgLabelFacade;
 import org.apache.hop.ui.core.widget.svg.SvgLabelListener;
 import org.apache.hop.ui.hopgui.TextSizeUtilFacade;
+import org.apache.hop.ui.hopgui.ToolbarFacade;
 import org.apache.hop.ui.hopgui.file.IHopFileType;
+import org.apache.hop.ui.hopgui.file.IHopFileTypeHandler;
 import org.apache.hop.ui.util.EnvironmentUtils;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CLabel;
+import org.eclipse.swt.events.PaintEvent;
+import org.eclipse.swt.events.PaintListener;
 import org.eclipse.swt.graphics.Color;
+import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Image;
+import org.eclipse.swt.layout.GridData;
+import org.eclipse.swt.layout.GridLayout;
+import org.eclipse.swt.layout.RowData;
 import org.eclipse.swt.widgets.Button;
+import org.eclipse.swt.widgets.Canvas;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Listener;
+import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.ToolBar;
 import org.eclipse.swt.widgets.ToolItem;
 
 /** This class contains the widgets for the GUI elements of a GUI Plugin */
-public class GuiToolbarWidgets extends BaseGuiWidgets {
+public class GuiToolbarWidgets extends BaseGuiWidgets implements IToolbarWidgetRegistrar {
 
   public static final String CONST_TOOLBAR_ITEM_WITH_ID = "toolbar item with id '";
 
   private Map<String, GuiToolbarItem> guiToolBarMap;
   @Getter private Map<String, Control> widgetsMap;
   private Map<String, ToolItem> toolItemMap;
+  private Map<String, Label> textLabelMap; // For web/RWT: stores text labels separately
   private List<String> removeToolItems;
   private Color itemBackgroundColor;
 
@@ -71,18 +83,30 @@ public class GuiToolbarWidgets extends BaseGuiWidgets {
     guiToolBarMap = new HashMap<>();
     widgetsMap = new HashMap<>();
     toolItemMap = new HashMap<>();
+    textLabelMap = new HashMap<>();
     removeToolItems = new ArrayList<>();
   }
 
-  public void createToolbarWidgets(Composite parent, String root, List<String> diabledToolItems) {
-    this.removeToolItems = diabledToolItems;
-    createToolbarWidgets(parent, root);
+  /**
+   * Create a toolbar parent control. Delegates to {@link ToolbarFacade}; on desktop returns a
+   * ToolBar, on Hop Web (RAP) returns a Composite with RowLayout (wrap) so items wrap. Prefer
+   * {@link ToolbarFacade#createToolbarContainer(Composite, int)} with {@link
+   * #createToolbarWidgets(IToolbarContainer, String)} for a single code path.
+   *
+   * @param parent the parent composite
+   * @param style SWT style (e.g. SWT.WRAP | SWT.LEFT | SWT.HORIZONTAL)
+   * @return the control to use for layout (container.getControl())
+   */
+  public static Control createToolbarParent(Composite parent, int style) {
+    return ToolbarFacade.createToolbar(parent, style);
   }
 
-  public void createToolbarWidgets(Composite parent, String root) {
-
-    // Find the GUI Elements for the given toolbar root...
-    //
+  /**
+   * Single-path toolbar creation using a container (from {@link
+   * ToolbarFacade#createToolbarContainer}). No branching on environment; the container
+   * implementation handles ToolBar vs web Composite.
+   */
+  public void createToolbarWidgets(IToolbarContainer container, String root) {
     List<GuiToolbarItem> toolbarItems = GuiRegistry.getInstance().findGuiToolbarItems(root);
     if (toolbarItems.isEmpty()) {
       LogChannel.UI.logError("Create widgets: no GUI toolbar items found for root: " + root);
@@ -91,23 +115,43 @@ public class GuiToolbarWidgets extends BaseGuiWidgets {
 
     Collections.sort(toolbarItems);
 
-    // Loop over the toolbar items, create and remember the widgets...
-    //
     for (GuiToolbarItem toolbarItem : toolbarItems) {
       boolean add = lookupToolbarItemFilter(toolbarItem, root);
       if (add && !removeToolItems.contains(toolbarItem.getId())) {
-        addToolbarWidgets(parent, toolbarItem);
+        guiToolBarMap.put(toolbarItem.getId(), toolbarItem);
+        container.addItem(toolbarItem, this);
       }
     }
 
-    // Force re-layout
-    //
-    parent.layout(true, true);
-    parent.pack();
+    Control control = container.getControl();
+    if (control instanceof Composite composite) {
+      composite.layout(true, true);
+    }
+    control.pack();
+    addDeRegisterGuiPluginObjectListener(control);
+  }
 
-    // Clean up when the parent is disposed
-    //
-    addDeRegisterGuiPluginObjectListener(parent);
+  /**
+   * Same as {@link #createToolbarWidgets(IToolbarContainer, String)} but excludes the given item
+   * ids from the toolbar.
+   */
+  public void createToolbarWidgets(
+      IToolbarContainer container, String root, List<String> disabledToolItems) {
+    this.removeToolItems = disabledToolItems != null ? disabledToolItems : new ArrayList<>();
+    createToolbarWidgets(container, root);
+  }
+
+  @Override
+  public void addItem(GuiToolbarItem item, Composite parent) {
+    if (item.isIgnored()) {
+      return;
+    }
+    // Switch between Hop GUI and Hop Web toolbars
+    if (parent instanceof ToolBar toolBar) {
+      addToolbarWidgetsToToolBar(toolBar, item);
+    } else {
+      addToolbarWidgetsToWebComposite(parent, item);
+    }
   }
 
   private boolean lookupToolbarItemFilter(GuiToolbarItem toolbarItem, String root) {
@@ -143,35 +187,18 @@ public class GuiToolbarWidgets extends BaseGuiWidgets {
     return show;
   }
 
-  private void addToolbarWidgets(Composite parent, GuiToolbarItem toolbarItem) {
-    if (toolbarItem.isIgnored()) {
-      return;
-    }
-
-    // We might need it later...
-    //
-    guiToolBarMap.put(toolbarItem.getId(), toolbarItem);
-
-    if (!(parent instanceof ToolBar toolBar)) {
-      throw new RuntimeException(
-          "We can only add toolbar items to a toolbar, not class " + parent.getClass().getName());
-    }
-
-    // We want to add a separator if the annotation asked for it
-    // We also want to add a separator in case the toolbar element type isn't a button
-    //
+  /** ToolBar (desktop) path: add one item to an SWT ToolBar. */
+  private void addToolbarWidgetsToToolBar(ToolBar toolBar, GuiToolbarItem toolbarItem) {
     if (toolbarItem.isAddingSeparator()) {
       new ToolItem(toolBar, SWT.SEPARATOR);
     }
 
-    // Add a label in front of the item
-    //
     if (toolbarItem.getType() != GuiToolbarElementType.LABEL
         && toolbarItem.getType() != GuiToolbarElementType.CHECKBOX
         && StringUtils.isNotEmpty(toolbarItem.getLabel())) {
       ToolItem labelSeparator = new ToolItem(toolBar, SWT.SEPARATOR);
       CLabel label =
-          new CLabel(parent, SWT.CENTER | (toolbarItem.isAlignRight() ? SWT.RIGHT : SWT.LEFT));
+          new CLabel(toolBar, SWT.CENTER | (toolbarItem.isAlignRight() ? SWT.RIGHT : SWT.LEFT));
       label.setText(Const.NVL(toolbarItem.getLabel(), ""));
       label.setToolTipText(Const.NVL(toolbarItem.getToolTip(), ""));
       PropsUi.setLook(label, Props.WIDGET_STYLE_TOOLBAR);
@@ -180,13 +207,10 @@ public class GuiToolbarWidgets extends BaseGuiWidgets {
       labelSeparator.setControl(label);
     }
 
-    // Add the GUI element
-    //
     switch (toolbarItem.getType()) {
       case LABEL:
         addToolbarLabel(toolbarItem, toolBar);
         break;
-
       case BUTTON:
         if (EnvironmentUtils.getInstance().isWeb()) {
           addWebToolbarButton(toolbarItem, toolBar);
@@ -194,17 +218,233 @@ public class GuiToolbarWidgets extends BaseGuiWidgets {
           addToolbarButton(toolbarItem, toolBar);
         }
         break;
-
       case COMBO:
         addToolbarCombo(toolbarItem, toolBar);
         break;
-
       case CHECKBOX:
         addToolbarCheckbox(toolbarItem, toolBar);
         break;
-
+      case TEXT:
+        addToolbarText(toolbarItem, toolBar);
+        break;
       default:
         break;
+    }
+  }
+
+  /** Add toolbar items to a web Composite (Hop Web); no ToolItems, controls wrap by RowLayout. */
+  private void addToolbarWidgetsToWebComposite(Composite parent, GuiToolbarItem toolbarItem) {
+    if (toolbarItem.isAddingSeparator()) {
+      addWebToolbarSeparator(parent);
+    }
+
+    if (toolbarItem.getType() != GuiToolbarElementType.LABEL
+        && toolbarItem.getType() != GuiToolbarElementType.CHECKBOX
+        && StringUtils.isNotEmpty(toolbarItem.getLabel())) {
+      CLabel label =
+          new CLabel(parent, SWT.CENTER | (toolbarItem.isAlignRight() ? SWT.RIGHT : SWT.LEFT));
+      label.setText(Const.NVL(toolbarItem.getLabel(), ""));
+      label.setToolTipText(Const.NVL(toolbarItem.getToolTip(), ""));
+      PropsUi.setLook(label, Props.WIDGET_STYLE_TOOLBAR);
+      label.pack();
+    }
+
+    switch (toolbarItem.getType()) {
+      case LABEL:
+        addWebToolbarLabel(toolbarItem, parent);
+        break;
+      case BUTTON:
+        addWebToolbarButtonToComposite(toolbarItem, parent);
+        break;
+      case COMBO:
+        addWebToolbarCombo(toolbarItem, parent);
+        break;
+      case CHECKBOX:
+        addWebToolbarCheckbox(toolbarItem, parent);
+        break;
+      case TEXT:
+        addWebToolbarText(toolbarItem, parent);
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Vertical separator with groove look for Hop Web toolbar (matches desktop ToolItem SEPARATOR).
+   * Uses toolbar background so no visible strip; draws groove full height with no top/bottom
+   * margin.
+   */
+  private void addWebToolbarSeparator(Composite parent) {
+    int width = 6;
+    int height = (int) (ConstUi.SMALL_ICON_SIZE * PropsUi.getNativeZoomFactor()) + 6;
+    Canvas canvas = new Canvas(parent, SWT.NONE);
+    canvas.setLayoutData(new RowData(width, height));
+    canvas.setBackground(parent.getBackground());
+    PropsUi.setLook(canvas, Props.WIDGET_STYLE_TOOLBAR);
+    canvas.addPaintListener(
+        new PaintListener() {
+          @Override
+          public void paintControl(PaintEvent e) {
+            GC gc = e.gc;
+            Display display = e.display;
+            Color highlight = display.getSystemColor(SWT.COLOR_WIDGET_LIGHT_SHADOW);
+            Color shadow = display.getSystemColor(SWT.COLOR_WIDGET_NORMAL_SHADOW);
+            int w = e.width;
+            int h = e.height;
+            int x = w / 2 - 1;
+            gc.setForeground(highlight);
+            gc.drawLine(x, 0, x, h - 1);
+            gc.setForeground(shadow);
+            gc.drawLine(x + 1, 0, x + 1, h - 1);
+          }
+        });
+  }
+
+  private void addWebToolbarLabel(GuiToolbarItem toolbarItem, Composite parent) {
+    CLabel label =
+        new CLabel(parent, SWT.CENTER | (toolbarItem.isAlignRight() ? SWT.RIGHT : SWT.LEFT));
+    label.setText(Const.NVL(toolbarItem.getLabel(), ""));
+    label.setToolTipText(Const.NVL(toolbarItem.getToolTip(), ""));
+    PropsUi.setLook(label, Props.WIDGET_STYLE_TOOLBAR);
+    label.pack();
+    widgetsMap.put(toolbarItem.getId(), label);
+    Listener listener = getListener(toolbarItem);
+    label.addListener(SWT.MouseUp, listener);
+  }
+
+  private void addWebToolbarCombo(GuiToolbarItem toolbarItem, Composite parent) {
+    Combo combo =
+        new Combo(
+            parent,
+            SWT.SINGLE
+                | SWT.CENTER
+                | (toolbarItem.isAlignRight() ? SWT.RIGHT : SWT.LEFT)
+                | (toolbarItem.isReadOnly() ? SWT.READ_ONLY : SWT.NONE));
+    combo.setToolTipText(Const.NVL(toolbarItem.getToolTip(), ""));
+    combo.setItems(getComboItems(toolbarItem));
+    PropsUi.setLook(combo, Props.WIDGET_STYLE_TOOLBAR);
+    combo.pack();
+    int width = calculateComboWidth(combo) + toolbarItem.getExtraWidth();
+    combo.setLayoutData(new RowData(width, SWT.DEFAULT));
+    Listener listener = getListener(toolbarItem);
+    combo.addListener(SWT.Selection, listener);
+    combo.addListener(SWT.DefaultSelection, listener);
+    widgetsMap.put(toolbarItem.getId(), combo);
+  }
+
+  private void addWebToolbarText(GuiToolbarItem toolbarItem, Composite parent) {
+    Text text =
+        new Text(
+            parent,
+            SWT.SINGLE
+                | SWT.BORDER
+                | (toolbarItem.isAlignRight() ? SWT.RIGHT : SWT.LEFT)
+                | (toolbarItem.isReadOnly() ? SWT.READ_ONLY : SWT.NONE));
+    text.setText(Const.NVL(toolbarItem.getDefaultText(), ""));
+    text.setToolTipText(Const.NVL(toolbarItem.getToolTip(), ""));
+    PropsUi.setLook(text, Props.WIDGET_STYLE_TOOLBAR);
+    text.pack();
+    int width = 200 + toolbarItem.getExtraWidth();
+    text.setLayoutData(new RowData(width, SWT.DEFAULT));
+    Listener listener = getListener(toolbarItem);
+    text.addListener(SWT.Selection, listener);
+    text.addListener(SWT.DefaultSelection, listener);
+    widgetsMap.put(toolbarItem.getId(), text);
+  }
+
+  private void addWebToolbarCheckbox(GuiToolbarItem toolbarItem, Composite parent) {
+    Button checkbox =
+        new Button(parent, SWT.CHECK | (toolbarItem.isAlignRight() ? SWT.RIGHT : SWT.LEFT));
+    checkbox.setToolTipText(Const.NVL(toolbarItem.getToolTip(), ""));
+    checkbox.setText(Const.NVL(toolbarItem.getLabel(), ""));
+    PropsUi.setLook(checkbox, Props.WIDGET_STYLE_TOOLBAR);
+    checkbox.pack();
+    checkbox.setLayoutData(
+        new RowData(checkbox.getSize().x + toolbarItem.getExtraWidth(), SWT.DEFAULT));
+    Listener listener = getListener(toolbarItem);
+    checkbox.addListener(SWT.Selection, listener);
+    widgetsMap.put(toolbarItem.getId(), checkbox);
+  }
+
+  private void addWebToolbarButtonToComposite(GuiToolbarItem toolbarItem, Composite parent) {
+    Composite composite = new Composite(parent, SWT.NONE);
+    GridLayout layout = new GridLayout(2, false);
+    layout.marginWidth = 0;
+    layout.marginHeight = 0;
+    layout.horizontalSpacing = 4;
+    layout.verticalSpacing = 0;
+    composite.setLayout(layout);
+    PropsUi.setLook(composite, Props.WIDGET_STYLE_TOOLBAR);
+
+    Label imageLabel = new Label(composite, SWT.NONE);
+    if (StringUtils.isNotEmpty(toolbarItem.getToolTip())) {
+      imageLabel.setToolTipText(toolbarItem.getToolTip());
+      composite.setToolTipText(toolbarItem.getToolTip());
+    }
+    Listener listener = SvgLabelListener.getInstance();
+    Listener toolbarListener = getListener(toolbarItem);
+
+    imageLabel.addListener(SWT.MouseDown, listener);
+    imageLabel.addListener(SWT.Hide, listener);
+    imageLabel.addListener(SWT.Show, listener);
+    imageLabel.addListener(SWT.MouseEnter, listener);
+    imageLabel.addListener(SWT.MouseExit, listener);
+    imageLabel.addListener(SWT.MouseUp, toolbarListener);
+    composite.addListener(SWT.MouseUp, toolbarListener);
+
+    int size =
+        (int)
+            (ConstUi.SMALL_ICON_SIZE * PropsUi.getNativeZoomFactor() + toolbarItem.getExtraWidth());
+
+    String imageFilename = findImageFilename(toolbarItem);
+    String uniqueId = instanceId + "-" + toolbarItem.getId();
+    imageLabel.setData("org.eclipse.rap.rwt.customVariant", "toolbarIcon");
+    SvgLabelFacade.setData(uniqueId, imageLabel, imageFilename, size);
+    composite.setData("iconSize", size);
+    composite.setData("uniqueId", uniqueId);
+    // Copy props to composite so client script (svg-label.js) has props.id when event.widget is the
+    // composite
+    composite.setData("props", imageLabel.getData("props"));
+
+    GridData imageData = new GridData(SWT.LEFT, SWT.CENTER, false, false);
+    imageData.widthHint = size;
+    imageData.heightHint = size;
+    imageLabel.setLayoutData(imageData);
+
+    Label textLabel = new Label(composite, SWT.NONE);
+    textLabel.setText("");
+    PropsUi.setLook(textLabel, Props.WIDGET_STYLE_TOOLBAR);
+    if (StringUtils.isNotEmpty(toolbarItem.getToolTip())) {
+      textLabel.setToolTipText(toolbarItem.getToolTip());
+    }
+    textLabel.addListener(SWT.MouseUp, toolbarListener);
+    GridData textData = new GridData(SWT.LEFT, SWT.CENTER, false, false);
+    textLabel.setLayoutData(textData);
+    textLabel.setVisible(false);
+
+    composite.pack();
+    composite.setLayoutData(new RowData(composite.getSize().x, composite.getSize().y));
+
+    widgetsMap.put(toolbarItem.getId(), composite);
+    textLabelMap.put(toolbarItem.getId(), textLabel);
+
+    setToolItemKeyboardShortcutForComposite(composite, toolbarItem);
+  }
+
+  private void setToolItemKeyboardShortcutForComposite(
+      Composite composite, GuiToolbarItem guiToolbarItem) {
+    KeyboardShortcut shortcut =
+        GuiRegistry.getInstance()
+            .findKeyboardShortcut(
+                guiToolbarItem.getListenerClass(),
+                guiToolbarItem.getListenerMethod(),
+                Const.isOSX());
+    if (shortcut != null) {
+      String tip = Const.NVL(guiToolbarItem.getToolTip(), "");
+      String shortcutText = ShortcutDisplayUtil.getShortcutDisplayString(shortcut);
+      if (!shortcutText.isEmpty()) {
+        composite.setToolTipText(tip + " (" + shortcutText + ')');
+      }
     }
   }
 
@@ -235,7 +475,7 @@ public class GuiToolbarWidgets extends BaseGuiWidgets {
                 | (toolbarItem.isReadOnly() ? SWT.READ_ONLY : SWT.NONE));
     combo.setToolTipText(Const.NVL(toolbarItem.getToolTip(), ""));
     combo.setItems(getComboItems(toolbarItem));
-    PropsUi.setLook(combo);
+    PropsUi.setLook(combo, Props.WIDGET_STYLE_TOOLBAR);
     combo.pack();
     comboSeparator.setWidth(
         calculateComboWidth(combo)
@@ -250,13 +490,38 @@ public class GuiToolbarWidgets extends BaseGuiWidgets {
     PropsUi.setLook(combo, Props.WIDGET_STYLE_TOOLBAR);
   }
 
+  private void addToolbarText(GuiToolbarItem toolbarItem, ToolBar toolBar) {
+    ToolItem textSeparator = new ToolItem(toolBar, SWT.SEPARATOR | SWT.BOTTOM);
+    Text text =
+        new Text(
+            toolBar,
+            SWT.SINGLE
+                | SWT.BORDER
+                | (toolbarItem.isAlignRight() ? SWT.RIGHT : SWT.LEFT)
+                | (toolbarItem.isReadOnly() ? SWT.READ_ONLY : SWT.NONE));
+    text.setText(Const.NVL(toolbarItem.getDefaultText(), ""));
+    text.setToolTipText(Const.NVL(toolbarItem.getToolTip(), ""));
+    PropsUi.setLook(text, Props.WIDGET_STYLE_TOOLBAR);
+    text.pack();
+    // extra room for widget decorations
+    textSeparator.setWidth(200 + toolbarItem.getExtraWidth());
+    textSeparator.setControl(text);
+
+    Listener listener = getListener(toolbarItem);
+    text.addListener(SWT.Selection, listener);
+    text.addListener(SWT.DefaultSelection, listener);
+    toolItemMap.put(toolbarItem.getId(), textSeparator);
+    widgetsMap.put(toolbarItem.getId(), text);
+    PropsUi.setLook(text, Props.WIDGET_STYLE_TOOLBAR);
+  }
+
   private void addToolbarCheckbox(GuiToolbarItem toolbarItem, ToolBar toolBar) {
     ToolItem checkboxSeparator = new ToolItem(toolBar, SWT.SEPARATOR);
     Button checkbox =
         new Button(toolBar, SWT.CHECK | (toolbarItem.isAlignRight() ? SWT.RIGHT : SWT.LEFT));
     checkbox.setToolTipText(Const.NVL(toolbarItem.getToolTip(), ""));
     checkbox.setText(Const.NVL(toolbarItem.getLabel(), ""));
-    PropsUi.setLook(checkbox);
+    PropsUi.setLook(checkbox, Props.WIDGET_STYLE_TOOLBAR);
     checkbox.pack();
     checkboxSeparator.setWidth(
         checkbox.getSize().x + toolbarItem.getExtraWidth()); // extra room for widget decorations
@@ -280,6 +545,7 @@ public class GuiToolbarWidgets extends BaseGuiWidgets {
     Listener listener = getListener(toolbarItem);
     item.addListener(SWT.Selection, listener);
     toolItemMap.put(toolbarItem.getId(), item);
+    widgetsMap.put(toolbarItem.getId(), item.getParent());
     setToolItemKeyboardShortcut(item, toolbarItem);
   }
 
@@ -317,18 +583,38 @@ public class GuiToolbarWidgets extends BaseGuiWidgets {
   private void addWebToolbarButton(GuiToolbarItem toolbarItem, ToolBar toolBar) {
     ToolItem item = new ToolItem(toolBar, SWT.SEPARATOR);
 
-    Label label = new Label(toolBar, SWT.NONE);
+    // Create a Composite to hold both the image and text label
+    Composite composite = new Composite(toolBar, SWT.NONE);
+    GridLayout layout = new GridLayout(2, false);
+    layout.marginWidth = 0;
+    layout.marginHeight = 0;
+    layout.horizontalSpacing = 4;
+    layout.verticalSpacing = 0;
+    composite.setLayout(layout);
+    PropsUi.setLook(composite, Props.WIDGET_STYLE_TOOLBAR);
+
+    // Create the image label
+    Label imageLabel = new Label(composite, SWT.NONE);
     if (StringUtils.isNotEmpty(toolbarItem.getToolTip())) {
-      label.setToolTipText(toolbarItem.getToolTip());
+      imageLabel.setToolTipText(toolbarItem.getToolTip());
+      composite.setToolTipText(toolbarItem.getToolTip());
     }
     Listener listener = SvgLabelListener.getInstance();
-    label.addListener(SWT.MouseDown, listener);
-    label.addListener(SWT.Hide, listener);
-    label.addListener(SWT.Show, listener);
-    label.addListener(SWT.MouseEnter, listener);
-    label.addListener(SWT.MouseExit, listener);
-    label.addListener(SWT.MouseDown, getListener(toolbarItem));
-    label.pack();
+    Listener toolbarListener = getListener(toolbarItem);
+
+    // Add SVG listeners to image label
+    imageLabel.addListener(SWT.MouseDown, listener);
+    imageLabel.addListener(SWT.Hide, listener);
+    imageLabel.addListener(SWT.Show, listener);
+    imageLabel.addListener(SWT.MouseEnter, listener);
+    imageLabel.addListener(SWT.MouseExit, listener);
+
+    // Also add the toolbar click handler to the image label (MouseUp to match ToolItem.Selection
+    // and avoid menu dismiss on RAP)
+    imageLabel.addListener(SWT.MouseUp, toolbarListener);
+
+    // Make the entire composite clickable (image + text)
+    composite.addListener(SWT.MouseUp, toolbarListener);
 
     // Take into account zooming and the extra room for widget decorations
     //
@@ -337,11 +623,45 @@ public class GuiToolbarWidgets extends BaseGuiWidgets {
             (ConstUi.SMALL_ICON_SIZE * PropsUi.getNativeZoomFactor() + toolbarItem.getExtraWidth());
 
     String imageFilename = findImageFilename(toolbarItem);
-    SvgLabelFacade.setData(toolbarItem.getId(), label, imageFilename, size);
-    item.setWidth(size);
-    item.setControl(label);
+    // Create a unique DOM element ID by combining instance ID with toolbar item ID
+    // This prevents ID collisions when multiple tabs have the same toolbar items
+    String uniqueId = instanceId + "-" + toolbarItem.getId();
+    if (EnvironmentUtils.getInstance().isWeb()) {
+      imageLabel.setData("org.eclipse.rap.rwt.customVariant", "toolbarIcon");
+    }
+    SvgLabelFacade.setData(uniqueId, imageLabel, imageFilename, size);
+    // Store so setToolbarItemImage() can update the icon when toggling state (e.g. show/hide
+    // selected)
+    composite.setData("iconSize", size);
+    composite.setData("uniqueId", uniqueId);
+    // Copy props to composite so client script (svg-label.js) has props.id when event.widget is the
+    // composite
+    composite.setData("props", imageLabel.getData("props"));
 
-    widgetsMap.put(toolbarItem.getId(), label);
+    GridData imageData = new GridData(SWT.LEFT, SWT.CENTER, false, false);
+    imageData.widthHint = size;
+    imageData.heightHint = size;
+    imageLabel.setLayoutData(imageData);
+
+    // Create the text label (initially empty, will be set later if needed)
+    Label textLabel = new Label(composite, SWT.NONE);
+    textLabel.setText("");
+    PropsUi.setLook(textLabel, Props.WIDGET_STYLE_TOOLBAR);
+    if (StringUtils.isNotEmpty(toolbarItem.getToolTip())) {
+      textLabel.setToolTipText(toolbarItem.getToolTip());
+    }
+    // Make text label part of the clickable button
+    textLabel.addListener(SWT.MouseUp, toolbarListener);
+    GridData textData = new GridData(SWT.LEFT, SWT.CENTER, false, false);
+    textLabel.setLayoutData(textData);
+    textLabel.setVisible(false); // Hidden until text is set
+
+    composite.pack();
+    item.setWidth(composite.getSize().x);
+    item.setControl(composite);
+
+    widgetsMap.put(toolbarItem.getId(), composite);
+    textLabelMap.put(toolbarItem.getId(), textLabel);
     toolItemMap.put(toolbarItem.getId(), item);
   }
 
@@ -359,7 +679,10 @@ public class GuiToolbarWidgets extends BaseGuiWidgets {
                 guiToolbarItem.getListenerMethod(),
                 Const.isOSX());
     if (shortcut != null) {
-      toolItem.setToolTipText(toolItem.getToolTipText() + " (" + shortcut + ')');
+      String shortcutText = ShortcutDisplayUtil.getShortcutDisplayString(shortcut);
+      if (!shortcutText.isEmpty()) {
+        toolItem.setToolTipText(toolItem.getToolTipText() + " (" + shortcutText + ')');
+      }
     }
   }
 
@@ -390,14 +713,40 @@ public class GuiToolbarWidgets extends BaseGuiWidgets {
   }
 
   public void enableToolbarItem(String id, boolean enabled) {
+    Control control = widgetsMap.get(id);
     ToolItem toolItem = toolItemMap.get(id);
-    if (toolItem == null || toolItem.isDisposed()) {
+
+    // Web composite mode (Hop Web): no ToolItem, enable/disable the control only
+    if (toolItem == null) {
+      if (control != null && !control.isDisposed()) {
+        if (control instanceof Composite composite) {
+          Control[] children = composite.getChildren();
+          if (children.length > 0 && children[0] instanceof Label imageLabel) {
+            String uniqueId = instanceId + "-" + id;
+            SvgLabelFacade.enable(null, uniqueId, imageLabel, enabled);
+          }
+          composite.setEnabled(enabled);
+        } else {
+          control.setEnabled(enabled);
+        }
+      }
+      return;
+    }
+    if (toolItem.isDisposed()) {
       return;
     }
     if (EnvironmentUtils.getInstance().isWeb()) {
-      //
-      Label label = (Label) widgetsMap.get(id);
-      SvgLabelFacade.enable(toolItem, id, label, enabled);
+      if (control instanceof Composite composite) {
+        Control[] children = composite.getChildren();
+        if (children.length > 0 && children[0] instanceof Label imageLabel) {
+          String uniqueId = instanceId + "-" + id;
+          SvgLabelFacade.enable(toolItem, uniqueId, imageLabel, enabled);
+        }
+        composite.setEnabled(enabled);
+      }
+      if (enabled != toolItem.isEnabled()) {
+        toolItem.setEnabled(enabled);
+      }
     } else {
       if (enabled != toolItem.isEnabled()) {
         toolItem.setEnabled(enabled);
@@ -415,7 +764,12 @@ public class GuiToolbarWidgets extends BaseGuiWidgets {
    * @return The toolbar item or null if nothing is found
    */
   public ToolItem enableToolbarItem(IHopFileType fileType, String id, String permission) {
-    return enableToolbarItem(fileType, id, permission, true);
+    return enableToolbarItem(fileType, null, id, permission, true);
+  }
+
+  public ToolItem enableToolbarItem(
+      IHopFileType fileType, IHopFileTypeHandler handler, String id, String permission) {
+    return enableToolbarItem(fileType, handler, id, permission, true);
   }
 
   /**
@@ -430,17 +784,45 @@ public class GuiToolbarWidgets extends BaseGuiWidgets {
    */
   public ToolItem enableToolbarItem(
       IHopFileType fileType, String id, String permission, boolean active) {
+    return enableToolbarItem(fileType, null, id, permission, active);
+  }
+
+  /**
+   * Enable or disable toolbar item based on capability. When handler is non-null, uses handler's
+   * hasCapability (so handlers can disable e.g. Save for binary raw view); otherwise uses file
+   * type.
+   */
+  public ToolItem enableToolbarItem(
+      IHopFileType fileType,
+      IHopFileTypeHandler handler,
+      String id,
+      String permission,
+      boolean active) {
     ToolItem item = findToolItem(id);
-    if (item == null || item.isDisposed()) {
+    boolean hasCapability =
+        handler != null ? handler.hasCapability(permission) : fileType.hasCapability(permission);
+    boolean enable = hasCapability && active;
+
+    if (item == null) {
+      // Web composite mode: no ToolItem, enable/disable the control only
+      enableToolbarItem(id, enable);
       return null;
     }
-    boolean hasCapability = fileType.hasCapability(permission);
-    boolean enabled = hasCapability && active;
-    if (enabled != item.isEnabled()) {
-      boolean enable = hasCapability && active;
+    if (item.isDisposed()) {
+      return null;
+    }
+    if (enable != item.isEnabled()) {
       if (EnvironmentUtils.getInstance().isWeb()) {
-        Label label = (Label) widgetsMap.get(id);
-        SvgLabelFacade.enable(null, id, label, enable);
+        Control control = widgetsMap.get(id);
+        if (control instanceof Composite composite) {
+          Control[] children = composite.getChildren();
+          if (children.length > 0 && children[0] instanceof Label imageLabel) {
+            String uniqueId = instanceId + "-" + id;
+            SvgLabelFacade.enable(null, uniqueId, imageLabel, enable);
+          }
+          composite.setEnabled(enable);
+        }
+        item.setEnabled(enable);
       } else {
         item.setEnabled(enable);
       }
@@ -450,6 +832,157 @@ public class GuiToolbarWidgets extends BaseGuiWidgets {
 
   public ToolItem findToolItem(String id) {
     return toolItemMap.get(id);
+  }
+
+  /**
+   * Return the Control to use for positioning a popup menu for the given toolbar item. A ToolItem
+   * is not a Control, and getControl() is only set for SEPARATOR items (the wrapped label/widget).
+   * For BUTTON items we store the composite (image+text) in widgetsMap; use that for menu
+   * positioning.
+   *
+   * @param id toolbar item id (e.g. {@code ID_TOOLBAR_ITEM_PROJECT})
+   * @return the Control to use for getBounds() / toDisplay(), or null if not found
+   */
+  public Control getControlForMenu(String id) {
+    return widgetsMap.get(id);
+  }
+
+  /**
+   * Set the image of a toolbar item by path. Use this when toggling between two icons (e.g. show
+   * only selected / show all). In desktop SWT this sets the ToolItem's image; in web RWT this
+   * updates the SVG in the label so the icon change is visible.
+   *
+   * @param id the toolbar item id (from @GuiToolbarElement)
+   * @param imagePath the image path (e.g. "ui/images/show-selected.svg")
+   */
+  public void setToolbarItemImage(String id, String imagePath) {
+    if (StringUtils.isEmpty(imagePath)) {
+      return;
+    }
+    Control control = widgetsMap.get(id);
+    ToolItem toolItem = toolItemMap.get(id);
+
+    if (EnvironmentUtils.getInstance().isWeb()
+        && control instanceof Composite composite
+        && !composite.isDisposed()) {
+      Control[] children = composite.getChildren();
+      if (children.length > 0 && children[0] instanceof Label imageLabel) {
+        String uniqueId = (String) composite.getData("uniqueId");
+        if (uniqueId != null) {
+          SvgLabelFacade.updateImageSource(uniqueId, imageLabel, imagePath);
+        }
+      }
+      return;
+    }
+    if (toolItem == null || toolItem.isDisposed()) {
+      return;
+    }
+    Image image = GuiResource.getInstance().getImage(imagePath);
+    if (image != null) {
+      toolItem.setImage(image);
+    }
+  }
+
+  /**
+   * Set the tooltip on a toolbar item. Works for both ToolBar (desktop) and web Composite (Hop
+   * Web).
+   *
+   * <p>On desktop, for plain toolbar buttons the stored control is the ToolBar (parent of the
+   * ToolItem). Setting the toolbar's tooltip would overwrite a shared control and on Windows can
+   * break all other toolbar item tooltips when one is updated. We only set the ToolItem's tooltip
+   * in that case. On Windows we also defer the update via asyncExec to avoid native tooltip state
+   * corruption when tooltips are changed in response to a button press.
+   *
+   * @param id the toolbar item id (from @GuiToolbarElement)
+   * @param tooltip the tooltip text
+   */
+  public void setToolbarItemToolTip(String id, String tooltip) {
+    Control control = widgetsMap.get(id);
+    ToolItem toolItem = toolItemMap.get(id);
+    String safeTip = Const.NVL(tooltip, "");
+
+    Runnable update =
+        () -> {
+          if (control != null && !control.isDisposed()) {
+            // Do not set tooltip on the ToolBar when control is the ToolItem's parent (desktop
+            // toolbar buttons store item.getParent()). Setting the bar's tooltip overwrites a
+            // shared control and breaks other items' tooltips on Windows.
+            if (toolItem == null || control != toolItem.getParent()) {
+              control.setToolTipText(safeTip);
+            }
+          }
+          if (toolItem != null && !toolItem.isDisposed()) {
+            toolItem.setToolTipText(safeTip);
+          }
+        };
+
+    if (Const.isWindows()) {
+      Display display = Display.getCurrent();
+      if (display != null && !display.isDisposed()) {
+        display.asyncExec(update);
+        return;
+      }
+    }
+    update.run();
+  }
+
+  /**
+   * Set text on a toolbar item. Handles both SWT (desktop) and RWT (web) environments. In SWT, sets
+   * text directly on the ToolItem. In RWT, updates the separate text Label next to the image.
+   *
+   * @param id The ID of the toolbar item
+   * @param text The text to set
+   */
+  public void setToolbarItemText(String id, String text) {
+    Label textLabel = textLabelMap.get(id);
+    Composite composite = widgetsMap.get(id) instanceof Composite c ? c : null;
+    ToolItem toolItem = toolItemMap.get(id);
+
+    if (EnvironmentUtils.getInstance().isWeb() && (textLabel != null || composite != null)) {
+      if (textLabel != null && !textLabel.isDisposed()) {
+        String textToSet = Const.NVL(text, "");
+        textLabel.setText(textToSet);
+        textLabel.setVisible(!Utils.isEmpty(textToSet));
+      }
+      if (composite != null && !composite.isDisposed()) {
+        composite.pack();
+        int extraMargin = !Utils.isEmpty(Const.NVL(text, "")) ? 10 : 0;
+        if (toolItem != null && !toolItem.isDisposed()) {
+          toolItem.setWidth(composite.getSize().x + extraMargin);
+          ToolBar toolbar = toolItem.getParent();
+          if (toolbar != null && !toolbar.isDisposed()) {
+            toolbar.layout(true, true);
+          }
+        } else {
+          composite.setLayoutData(
+              new RowData(composite.getSize().x + extraMargin, composite.getSize().y));
+          composite.getParent().layout(true, true);
+        }
+      }
+      return;
+    }
+    if (toolItem != null && !toolItem.isDisposed()) {
+      toolItem.setText(Const.NVL(text, ""));
+    }
+  }
+
+  /**
+   * Get text from a toolbar item. Handles both SWT (desktop) and RWT (web) environments. In SWT,
+   * gets text directly from the ToolItem. In RWT, gets text from the separate text Label.
+   *
+   * @param id The ID of the toolbar item
+   * @return The text on the toolbar item, or empty string if not found
+   */
+  public String getToolbarItemText(String id) {
+    Label textLabel = textLabelMap.get(id);
+    if (textLabel != null && !textLabel.isDisposed()) {
+      return Const.NVL(textLabel.getText(), "");
+    }
+    ToolItem toolItem = toolItemMap.get(id);
+    if (toolItem != null && !toolItem.isDisposed()) {
+      return Const.NVL(toolItem.getText(), "");
+    }
+    return "";
   }
 
   public void refreshComboItemList(String id) {

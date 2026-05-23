@@ -17,17 +17,17 @@
 
 package org.apache.hop.www;
 
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import java.io.Serial;
 import org.apache.hop.i18n.BaseMessages;
 
 public class GetRootServlet extends BaseHttpServlet implements IHopServerPlugin {
   private static final Class<?> PKG = GetRootServlet.class;
-
-  private static final long serialVersionUID = 3634806745372015720L;
+  @Serial private static final long serialVersionUID = 3634806745372015720L;
   public static final String CONTEXT_PATH = "/";
 
   public GetRootServlet() {
@@ -38,7 +38,7 @@ public class GetRootServlet extends BaseHttpServlet implements IHopServerPlugin 
   public void doGet(HttpServletRequest request, HttpServletResponse response)
       throws ServletException, IOException {
     if (isJettyMode() && !request.getRequestURI().equals(CONTEXT_PATH)) {
-      response.sendError(HttpServletResponse.SC_NOT_FOUND);
+      sendSafeError(response, HttpServletResponse.SC_NOT_FOUND, "Not found.");
       return;
     }
 
@@ -49,7 +49,10 @@ public class GetRootServlet extends BaseHttpServlet implements IHopServerPlugin 
     response.setContentType("text/html;charset=UTF-8");
     response.setStatus(HttpServletResponse.SC_OK);
 
-    PrintWriter out = response.getWriter();
+    PrintWriter out = getSafeWriter(response);
+    if (out == null) {
+      return;
+    }
 
     out.println("<HTML>");
     out.println(

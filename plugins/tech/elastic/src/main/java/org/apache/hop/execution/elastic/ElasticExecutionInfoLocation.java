@@ -29,7 +29,7 @@ import java.util.Date;
 import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hop.core.exception.HopException;
 import org.apache.hop.core.gui.plugin.GuiElementType;
 import org.apache.hop.core.gui.plugin.GuiPlugin;
@@ -38,6 +38,7 @@ import org.apache.hop.core.util.Utils;
 import org.apache.hop.core.variables.IVariables;
 import org.apache.hop.execution.ExecutionInfoLocation;
 import org.apache.hop.execution.IExecutionInfoLocation;
+import org.apache.hop.execution.IExecutionSelector;
 import org.apache.hop.execution.caching.BaseCachingExecutionInfoLocation;
 import org.apache.hop.execution.caching.CacheEntry;
 import org.apache.hop.execution.caching.DatedId;
@@ -243,8 +244,8 @@ public class ElasticExecutionInfoLocation extends BaseCachingExecutionInfoLocati
 
       // Delete all the hits (in case some duplicates were introduced)
       //
-      for (int i = 0; i < jHits.size(); i++) {
-        JSONObject jHit = (JSONObject) jHits.get(i);
+      for (Object hit : jHits) {
+        JSONObject jHit = (JSONObject) hit;
         String elasticId = (String) jHit.get("_id");
 
         URI deleteUri = uri.resolve(actualIndexName + "/_doc/" + elasticId);
@@ -341,7 +342,8 @@ public class ElasticExecutionInfoLocation extends BaseCachingExecutionInfoLocati
   }
 
   @Override
-  protected void retrieveIds(boolean includeChildren, Set<DatedId> ids, int limit)
+  protected void retrieveIds(
+      boolean includeChildren, Set<DatedId> ids, int limit, IExecutionSelector selector)
       throws HopException {
     // Get all the IDs from Elastic if we don't have it in the cache.
     //
