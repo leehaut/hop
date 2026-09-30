@@ -353,10 +353,16 @@ public class TableInput extends BaseTransform<TableInputMeta, TableInputData> {
     super.dispose();
   }
 
-  /** Stop the running query */
+  /**
+   * Stop the running query.
+   *
+   * <p>{@link Pipeline#stopTransform} marks this transform stopped before calling {@code
+   * stopRunning()}. Do not return early on {@link #isStopped()}: that skips {@code cancelQuery()}
+   * and leaves the statement running on the database.
+   */
   @Override
   public synchronized void stopRunning() throws HopException {
-    if (this.isStopped() || data.isDisposed()) {
+    if (data.isDisposed()) {
       return;
     }
 

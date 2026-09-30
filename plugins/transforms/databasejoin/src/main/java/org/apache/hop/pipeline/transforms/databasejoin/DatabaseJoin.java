@@ -269,28 +269,26 @@ public class DatabaseJoin extends BaseTransform<DatabaseJoinMeta, DatabaseJoinDa
   }
 
   /**
-   * Stop the running query In the Database Join transform data.isCancelled is checked before
-   * synchronization and set after synchronization is completed.
+   * Stop the running query.
    *
-   * <p>To cancel a prepared statement we need a valid database connection which we do not have if
-   * disposed has already been called
+   * <p>{@link Pipeline#stopTransform} marks this transform stopped before calling {@code
+   * stopRunning()}. Do not return early on {@link #isStopped()}.
+   *
+   * <p>{@code lookupValues} holds {@code dbLock} for the whole fetch. {@code Statement.cancel()}
+   * has to run on this thread while that fetch is blocked, so it is called without the lock. Cancel
+   * is skipped once {@code dispose()} has dropped the connection.
    */
   @Override
   public void stopRunning() throws HopException {
-    if (this.isStopped() || data.isDisposed()) {
+    if (data.isDisposed()) {
       return;
     }
 
-    dbLock.lock();
+    setStopped(true);
 
-    try {
-      if (data.db != null && data.db.getConnection() != null && !data.isCanceled) {
-        data.db.cancelStatement(data.pstmt);
-        setStopped(true);
-        data.isCanceled = true;
-      }
-    } finally {
-      dbLock.unlock();
+    if (data.db != null && data.db.getConnection() != null && !data.isCanceled) {
+      data.db.cancelStatement(data.pstmt);
+      data.isCanceled = true;
     }
   }
 
